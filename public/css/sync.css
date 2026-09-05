@@ -1,0 +1,59 @@
+ .sync-mode-toggle {
+     display: inline-flex;
+     align-items: center;
+     border: 1px solid #e2e8f0;
+     background: #ffffff;
+     border-radius: 16px;
+     padding: 4px;
+     gap: 4px;
+ }
+ 
+ .sync-mode-btn {
+     display: inline-flex;
+     align-items: center;
+     gap: 8px;
+     padding: 10px 12px;
+     border-radius: 12px;
+     font-size: 10px;
+     font-weight: 900;
+     text-transform: uppercase;
+     letter-spacing: 0.12em;
+     color: #64748b;
+     background: transparent;
+     border: 1px solid transparent;
+     transition: all 0.15s ease;
+ }
+ 
+ .sync-mode-btn:hover {
+     background: #f8fafc;
+     color: #334155;
+ }
+ 
+ .sync-mode-btn.is-active {
+     background: #4A0A15;
+     color: #ffffff;
+     border-color: rgba(234, 179, 8, 0.55);
+ }
+ 
+ .sync-dashboard-card.is-active {
+     border-color: rgba(234, 179, 8, 0.55);
+     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.07);
+ }
+ 
+ .sync-table-scroll::-webkit-scrollbar {
+     height: 8px;
+     width: 8px;
+ }
+ 
+ .sync-table-scroll::-webkit-scrollbar-track {
+     background: transparent;
+ }
+ 
+ .sync-table-scroll::-webkit-scrollbar-thumb {
+     background: #e2e8f0;
+     border-radius: 999px;
+ }
+ 
+ .sync-table-scroll::-webkit-scrollbar-thumb:hover {
+     background: #cbd5e1;
+ }

@@ -1,0 +1,129 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e2]:
+    - complementary [ref=f6e3]:
+      - button "Toggle Sidebar" [ref=f6e5] [cursor=pointer]:
+        - img [ref=f6e299]
+      - generic [ref=f6e8]:
+        - link "Dashboard" [ref=f6e10] [cursor=pointer]:
+          - /url: http://localhost/hatdog/public/admin/dashboard
+          - img [ref=f6e301]
+        - generic [ref=f6e16]:
+          - button "System Security" [ref=f6e17] [cursor=pointer]:
+            - img [ref=f6e306]
+          - generic:
+            - link "USM (Admin Access Only)" [ref=f6e22] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/usm
+            - link "Archived" [ref=f6e27] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/archived
+            - link "Data Sync" [ref=f6e32] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/datasync
+            - link "Audit Trail" [ref=f6e39] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/audit-trail
+        - generic [ref=f6e44]:
+          - button "Master List" [ref=f6e45] [cursor=pointer]:
+            - img [ref=f6e319]
+          - generic:
+            - link "Product Master List" [ref=f6e51] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/product
+            - link "Online Product Config" [ref=f6e57] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/online-product-config
+            - link "Supplier Master List" [ref=f6e64] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/supplier
+            - link "Customer Master List" [ref=f6e71] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/customer
+            - link "Forwarder Master List" [ref=f6e78] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/forwarder
+        - generic [ref=f6e82]:
+          - button "Inventory Management" [ref=f6e83] [cursor=pointer]:
+            - img [ref=f6e339]
+          - generic:
+            - link "Inventory Adjustment" [ref=f6e95] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/adjustment
+            - link "Junk Items" [ref=f6e98] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/sales-junk
+            - link "Convert Items" [ref=f6e103] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/item-convert
+        - generic [ref=f6e111]:
+          - button "Purchasing" [ref=f6e112] [cursor=pointer]:
+            - img [ref=f6e356]
+          - generic:
+            - link "Purchase Entry" [ref=f6e118] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/viber-list
+            - link "Purchasing Note" [ref=f6e123] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-note
+            - link "Purchase Order" [ref=f6e128] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-order
+            - link "Purchase Return" [ref=f6e133] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-return
+        - generic [ref=f6e138]:
+          - button "Sales" [ref=f6e139] [cursor=pointer]:
+            - img [ref=f6e368]
+          - generic:
+            - link "Sales Note" [ref=f6e144] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-note
+            - link "Sales Order" [ref=f6e149] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-order
+            - link "Consignment Invoice" [ref=f6e155] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/consignment-invoice
+            - link "Sales Return" [ref=f6e162] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-return
+            - link "Waybill" [ref=f6e167] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/waybill
+        - generic [ref=f6e171]:
+          - button "Accounting" [ref=f6e172] [cursor=pointer]:
+            - img [ref=f6e383]
+          - generic:
+            - link "Payments" [ref=f6e176] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/payments
+            - link "Payable Cheque Voucher" [ref=f6e180] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/accounting/payable-cheque-voucher
+            - link "Expense Cheque Voucher" [ref=f6e185] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/accounting/expense-cheque-voucher
+        - generic [ref=f6e190]:
+          - button "Reports" [ref=f6e191] [cursor=pointer]:
+            - img [ref=f6e390]
+          - generic:
+            - link "Sales Reports" [ref=f6e197] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/sales-report
+            - link "Inventory Reports" [ref=f6e201] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/inventory-reports
+            - link "Accounts Receivable Reports" [ref=f6e209] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/accounts-receivable
+            - link "Cost Report" [ref=f6e214] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/cost-report
+    - main [ref=f6e219]:
+      - generic [ref=f6e220]:
+        - generic [ref=f6e222]:
+          - generic:
+            - img
+          - img [ref=f6e403]
+          - generic [ref=f6e225]: Mon, Jul 6, 2026 | 02:17:08 PM
+        - generic [ref=f6e226]:
+          - button "1 Pumpkin basket notification" [ref=f6e405] [cursor=pointer]:
+            - generic [ref=f6e406]: "1"
+            - img "Pumpkin basket notification"
+          - button "Kid The Death Kid The Death Employee" [ref=f6e231] [cursor=pointer]:
+            - img "Kid The Death" [ref=f6e232]
+            - generic [ref=f6e233]
+      - generic [ref=f6e236]:
+        - generic [ref=f6e238]:
+          - navigation "Breadcrumb" [ref=f6e239]:
+            - generic [ref=f6e240]: Portal
+            - generic [ref=f6e241]: /
+            - generic [ref=f6e242]: Reports / Cost Report
+          - heading "Cost Report" [level=1] [ref=f6e243]
+        - generic [ref=f6e245]:
+          - generic [ref=f6e247]:
+            - radio "Cost Report" [checked] [ref=f6e248]
+            - text: Cost Report
+          - generic [ref=f6e249]:
+            - heading "filter by" [level=3] [ref=f6e250]
+            - generic [ref=f6e253]
+            - heading "Sales Date Range (3 dropdown annual date up to 3000)" [level=3] [ref=f6e278]
+            - generic [ref=f6e281]
+            - button "Print" [ref=f6e292] [cursor=pointer]
+      - generic:
+        - img
+        - generic: Operation Successful
+  - generic "Pumpkin basket" [ref=f6e298]:
+    - img

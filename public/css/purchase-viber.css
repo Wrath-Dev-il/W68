@@ -1,0 +1,77 @@
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+.viber-modal-overlay {
+    background: rgba(30, 10, 15, 0.55);
+    backdrop-filter: blur(4px);
+}
+.viber-scroll::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+.viber-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+.viber-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
+}
+.viber-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+tr.viber-row-rollback td,
+tr.viber-row-rollback td span,
+tr.viber-row-rollback td .inline-edit-input {
+    color: #1d4ed8 !important;
+    font-weight: 600;
+}
+
+tr.viber-row-duplicate {
+    background-color: #3b0a0a !important;
+    color: #facc15 !important;
+}
+tr.viber-row-duplicate td {
+    color: #facc15 !important;
+}
+tr.viber-row-duplicate td .inline-edit-input {
+    color: #facc15 !important;
+}
+tr.viber-row-duplicate-has-pn {
+    background-color: #3b0a0a !important;
+    color: #22c55e !important;
+}
+tr.viber-row-duplicate-has-pn td {
+    color: #22c55e !important;
+}
+tr.viber-row-duplicate-has-pn td .inline-edit-input {
+    color: #22c55e !important;
+}
+tr.viber-row-has-pn {
+    background-color: #14532d !important;
+    color: #f0fdf4 !important;
+}
+tr.viber-row-has-pn td {
+    color: #f0fdf4 !important;
+}
+tr.viber-row-has-pn td .inline-edit-input {
+    color: #f0fdf4 !important;
+}
+.inline-edit-input {
+    background: transparent;
+}
+.inline-edit-input:focus {
+    background: white;
+}
+.inline-save-btn {
+    flex-shrink: 0;
+}
+.inline-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — w68 Autoparts & Service Center</title>
+  <meta name="description" content="Sign in to w68 Autoparts & Service Center — secure access to your account." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --maroon:        #3a0a0a;
+      --maroon-dark:   #2a0606;
+      --maroon-light:  #5c1515;
+      --yellow:        #d4a017;
+      --yellow-light:  #f0c040;
+      --yellow-glow:   rgba(212, 160, 23, 0.35);
+      --gold:          #c9952e;
+      --input-bg:      rgba(255, 255, 255, 0.06);
+      --input-border:  rgba(212, 160, 23, 0.30);
+      --text-primary:  #fff5e0;
+      --text-muted:    rgba(255, 245, 224, 0.55);
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background: #0a0a0a;
+      /* Custom Wrench Cursor as default */
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M2 10 C2 5, 7 2, 11 5 L8.5 8 C8 8.5, 8 9.5, 8.5 10 C9 10.5, 10 10.5, 10.5 10 L13 7.5 C15.5 11.5, 12 15, 9.5 15 L22 27.5 C23.5 29, 26 29, 27.5 27.5 C29 26, 29 23.5, 27.5 22 L15 9.5' fill='%23d4a017' stroke='%233a0a0a' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 2 10, auto;
+    }
+
+    /* Custom Steering Wheel / Gear Cursor for interactive elements */
+    a, button, [role="button"], input, select, textarea, .dot {
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23f0c040' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%233a0a0a' stroke='%23f0c040' stroke-width='1.5'/%3E%3Cline x1='16' y1='4' x2='16' y2='28' stroke='%23f0c040' stroke-width='2'/%3E%3Cline x1='4' y1='16' x2='28' y2='16' stroke='%23f0c040' stroke-width='2'/%3E%3C/svg%3E") 16 16, pointer;
+    }
+
+    /* ── Background Slideshow ────────────────────────────── */
+    .bg-slideshow {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .bg-slide {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 1.2s ease-in-out;
+      will-change: opacity;
+    }
+    .bg-slide.active {
+      opacity: 1;
+    }
+    .bg-slide:nth-child(1) { background-image: url('build/assets/images/login-background.gif'); }
+    .bg-slide:nth-child(2) { background-image: url('build/assets/images/login-background2.gif'); }
+    .bg-slide:nth-child(3) { background-image: url('build/assets/images/login-background3.gif'); }
+
+    /* dark vignette overlay */
+    .bg-overlay {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 40%, rgba(30,5,5,0.65) 75%, rgba(42,6,6,0.88) 100%);
+      z-index: 1;
+    }
+
+    /* ── Page Layout ─────────────────────────────────────── */
+    .page-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+      min-height: 100vh;
+    }
+
+    /* Left side — background visible area */
+    .left-side {
+      flex: 1;
+      position: relative;
+    }
+
+    /* ── Dot Indicators ──────────────────────────────────── */
+    .slide-dots {
+      position: fixed;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-80%);
+      display: flex;
+      gap: 14px;
+      z-index: 20;
+    }
+    .slide-dots .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 2px solid var(--yellow);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(.4,0,.2,1);
+      position: relative;
+    }
+    .slide-dots .dot::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: var(--yellow-glow);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .slide-dots .dot.active {
+      background: var(--yellow-light);
+      border-color: var(--yellow-light);
+      box-shadow: 0 0 12px var(--yellow-glow), 0 0 24px rgba(212,160,23,0.15);
+    }
+    .slide-dots .dot.active::after {
+      opacity: 1;
+      animation: dot-pulse 2s ease-in-out infinite;
+    }
+    .slide-dots .dot:hover:not(.active) {
+      background: rgba(212,160,23,0.3);
+    }
+    @keyframes dot-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50%      { transform: scale(1.5); opacity: 0; }
+    }
+
+    /* ── Right Side — Login Form ─────────────────────────── */
+    .right-side {
+      width: 440px;
+      min-width: 400px;
+      background: linear-gradient(175deg, var(--maroon) 0%, var(--maroon-dark) 60%, #1e0404 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 40px;
+      position: relative;
+      overflow: hidden;
+
+      /* yellow lining — left edge */
+      border-left: 3px solid var(--yellow);
+      box-shadow:
+        -4px 0 30px rgba(212,160,23,0.12),
+        inset 2px 0 40px rgba(212,160,23,0.05);
+    }
+
+    /* decorative corner accents */
+    .right-side::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--yellow), var(--yellow-light), var(--yellow));
+    }
+    .right-side::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--yellow), var(--yellow-light), var(--yellow));
+    }
+
+    /* subtle maroon texture overlay */
+    .form-texture {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(92,21,21,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(92,21,21,0.25) 0%, transparent 55%);
+      pointer-events: none;
+    }
+
+    .form-content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 340px;
+
+      /* entrance animation */
+      opacity: 0;
+      transform: translateX(30px);
+      transition: opacity 0.7s cubic-bezier(.22,1,.36,1) 0.3s,
+                  transform 0.7s cubic-bezier(.22,1,.36,1) 0.3s;
+    }
+    body.loaded .form-content {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* ── Logo ─────────────────────────────────────────────── */
+    .logo-area {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo-img {
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      margin: 0 auto 16px;
+      filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
+      animation: logo-breathe 4s ease-in-out infinite;
+    }
+    @keyframes logo-breathe {
+      0%, 100% { filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5)); transform: scale(1); }
+      50%      { filter: drop-shadow(0 6px 24px rgba(212,160,23,0.3)); transform: scale(1.03); }
+    }
+
+    .company-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--yellow-light);
+      letter-spacing: 0.04em;
+      line-height: 1.3;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    /* ── Yellow separator ─────────────────────────────────── */
+    .gold-divider {
+      width: 60px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+      margin: 20px auto 28px;
+      border-radius: 2px;
+    }
+
+    /* ── Form ─────────────────────────────────────────────── */
+    .form-group {
+      margin-bottom: 22px;
+      position: relative;
+    }
+
+    label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--yellow);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(212,160,23,0.4);
+      pointer-events: none;
+      transition: color 0.25s;
+      z-index: 3;
+    }
+    .input-icon svg { width: 17px; height: 17px; }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 14px 14px 14px 44px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+      position: relative;
+      z-index: 1;
+    }
+    input::placeholder { color: rgba(255,245,224,0.25); }
+    input:focus {
+      border-color: var(--yellow);
+      background: rgba(212,160,23,0.06);
+      box-shadow: 0 0 0 3px rgba(212,160,23,0.15), 0 0 20px rgba(212,160,23,0.08);
+    }
+    input:focus ~ .input-icon,
+    .input-wrap:focus-within .input-icon {
+      color: var(--yellow-light);
+    }
+
+    /* toggle password */
+    .toggle-pass {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: rgba(212,160,23,0.35);
+      padding: 4px;
+      z-index: 3;
+      transition: color 0.2s;
+    }
+    .toggle-pass:hover { color: var(--yellow-light); }
+    .toggle-pass svg { width: 18px; height: 18px; display: block; }
+
+    /* ── Login Button ─────────────────────────────────────── */
+    .btn-login {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--yellow) 0%, #b8860b 50%, var(--yellow-light) 100%);
+      background-size: 200% 200%;
+      animation: btn-shimmer 3s ease infinite;
+      border: none;
+      border-radius: 10px;
+      color: var(--maroon-dark);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.18s, box-shadow 0.25s, filter 0.25s;
+      box-shadow: 0 6px 24px rgba(212,160,23,0.3);
+      margin-top: 6px;
+    }
+    @keyframes btn-shimmer {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .btn-login::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.20) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 36px rgba(212,160,23,0.45);
+      filter: brightness(1.1);
+    }
+    .btn-login:hover::after { opacity: 1; }
+    .btn-login:active { transform: translateY(0); }
+
+    /* ripple */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.35);
+      transform: scale(0);
+      animation: ripple-anim 0.6s linear;
+      pointer-events: none;
+    }
+    @keyframes ripple-anim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* spinner */
+    .btn-login .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(58,10,10,0.3);
+      border-top-color: var(--maroon-dark);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    .btn-login.loading .btn-text { display: none; }
+    .btn-login.loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error Alert ──────────────────────────────────────── */
+    .alert {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(255,80,80,0.12);
+      border: 1px solid rgba(255,80,80,0.3);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      color: #ff9a9a;
+      font-size: 0.83rem;
+      animation: shake 0.4s ease;
+    }
+    .alert.show { display: flex; }
+    .alert svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%  { transform: translateX(-6px); }
+      40%  { transform: translateX(6px); }
+      60%  { transform: translateX(-4px); }
+      80%  { transform: translateX(4px); }
+    }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 0.72rem;
+      color: rgba(255,245,224,0.25);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 860px) {
+      .page-wrapper {
+        flex-direction: column;
+      }
+      .left-side {
+        min-height: 35vh;
+      }
+      .right-side {
+        width: 100%;
+        min-width: unset;
+        border-left: none;
+        border-top: 3px solid var(--yellow);
+        padding: 36px 28px;
+      }
+      .slide-dots {
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: auto;
+        top: calc(35vh - 50px);
+      }
+    }
+
+    @media (max-width: 500px) {
+      .right-side {
+        padding: 32px 22px;
+      }
+      .logo-img {
+        width: 80px;
+        height: 80px;
+      }
+      .company-name {
+        font-size: 0.95rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Background Slideshow ────────────────────────────── -->
+  <div class="bg-slideshow" aria-hidden="true">
+    <div class="bg-slide active"></div>
+    <div class="bg-slide"></div>
+    <div class="bg-slide"></div>
+  </div>
+  <div class="bg-overlay" aria-hidden="true"></div>
+
+  <!-- ── Page Layout ─────────────────────────────────────── -->
+  <div class="page-wrapper">
+
+    <!-- Left — Background visible -->
+    <div class="left-side"></div>
+
+    <!-- Right — Login Form -->
+    <div class="right-side">
+      <div class="form-texture" aria-hidden="true"></div>
+
+      <div class="form-content">
+
+        <!-- Logo & Company Name -->
+        <div class="logo-area">
+          <img
+            src="build/assets/images/login_logo.png"
+            alt="w68 Autoparts Logo"
+            class="logo-img"
+            id="logoImg"
+          />
+          <div class="company-name">w68 Autoparts &amp; Service Center</div>
+        </div>
+
+        <div class="gold-divider"></div>
+
+        <!-- Error Alert -->
+        <div class="alert" id="alertBox" role="alert" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="alertMsg">Please fill in all fields.</span>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm" novalidate>
+
+          <!-- User-ID -->
+          <div class="form-group">
+            <label for="userId">User-ID</label>
+            <div class="input-wrap">
+              <input
+                type="text"
+                id="userId"
+                name="email"
+                placeholder="Enter your User-ID"
+                autocomplete="username"
+                required
+              />
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+                required
+              />
+              <span class="input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </span>
+              <button type="button" class="toggle-pass" id="togglePass" aria-label="Toggle password visibility">
+                <svg id="eyeOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg id="eyeClosed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Login Button -->
+          <button type="submit" class="btn-login" id="submitBtn">
+            <span class="btn-text">Login</span>
+            <div class="spinner"></div>
+          </button>
+        </form>
+
+        <p class="footer-note">
+          &copy; 2025 w68 Autoparts &amp; Service Center
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Dot Indicators ──────────────────────────────────── -->
+  <div class="slide-dots" aria-label="Background slide indicators">
+    <span class="dot active" data-slide="0"></span>
+    <span class="dot" data-slide="1"></span>
+    <span class="dot" data-slide="2"></span>
+  </div>
+
+  <script>
+    /* ── Background Slideshow ────────────────────────────── */
+    (function () {
+      const slides = document.querySelectorAll('.bg-slide');
+      const dots   = document.querySelectorAll('.dot');
+      let current  = 0;
+      let interval;
+      const DURATION = 5000; // 5 seconds per slide
+
+      function goTo(index) {
+        slides[current].classList.remove('active');
+        dots[current].classList.remove('active');
+        current = index;
+        slides[current].classList.add('active');
+        dots[current].classList.add('active');
+      }
+
+      function next() {
+        goTo((current + 1) % slides.length);
+      }
+
+      function startAuto() {
+        clearInterval(interval);
+        interval = setInterval(next, DURATION);
+      }
+
+      // Dot click
+      dots.forEach(function (dot) {
+        dot.addEventListener('click', function () {
+          goTo(parseInt(this.dataset.slide, 10));
+          startAuto();
+        });
+      });
+
+      startAuto();
+    })();
+
+    /* ── Entrance animation ──────────────────────────────── */
+    window.addEventListener('load', function () {
+      document.body.classList.add('loaded');
+    });
+
+    /* ── Toggle password visibility ──────────────────────── */
+    (function () {
+      var btn    = document.getElementById('togglePass');
+      var input  = document.getElementById('password');
+      var open   = document.getElementById('eyeOpen');
+      var closed = document.getElementById('eyeClosed');
+      btn.addEventListener('click', function () {
+        var isPass = input.type === 'password';
+        input.type = isPass ? 'text' : 'password';
+        open.style.display   = isPass ? 'none'  : 'block';
+        closed.style.display = isPass ? 'block' : 'none';
+      });
+    })();
+
+    /* ── Ripple effect on button ─────────────────────────── */
+    document.getElementById('submitBtn').addEventListener('click', function (e) {
+      var btn  = this;
+      var rect = btn.getBoundingClientRect();
+      var rip  = document.createElement('span');
+      var size = Math.max(rect.width, rect.height);
+      rip.className = 'ripple';
+      rip.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + (e.clientX - rect.left - size/2) + 'px;top:' + (e.clientY - rect.top - size/2) + 'px';
+      btn.appendChild(rip);
+      setTimeout(function () { rip.remove(); }, 700);
+    });
+
+    /* ── Form submit & redirect ──────────────────────────── */
+    document.getElementById('loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var userId   = document.getElementById('userId').value.trim();
+      var password = document.getElementById('password').value;
+      var alertEl  = document.getElementById('alertBox');
+      var alertMsg = document.getElementById('alertMsg');
+      var btn      = document.getElementById('submitBtn');
+
+      // Validation
+      if (!userId || !password) {
+        alertMsg.textContent = 'Please fill in your User-ID and password.';
+        alertEl.classList.add('show');
+        return;
+      }
+
+      alertEl.classList.remove('show');
+
+      // Loading state
+      btn.classList.add('loading');
+      btn.disabled = true;
+
+      // Animate out then submit
+      setTimeout(function () {
+        var content = document.querySelector('.form-content');
+        content.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+        content.style.opacity    = '0';
+        content.style.transform  = 'translateX(30px)';
+
+        setTimeout(function () {
+          var target = 'http://localhost/System_Proposal/public/login';
+          var form = document.createElement('form');
+          form.method = 'POST';
+          form.action = target;
+
+          var fields = {
+            email:    userId,
+            password: password
+          };
+
+          Object.keys(fields).forEach(function (name) {
+            var input   = document.createElement('input');
+            input.type  = 'hidden';
+            input.name  = name;
+            input.value = fields[name];
+            form.appendChild(input);
+          });
+
+          document.body.appendChild(form);
+          form.submit();
+        }, 420);
+      }, 900);
+    });
+  </script>
+</body>
+</html>

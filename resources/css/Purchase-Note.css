@@ -1,0 +1,235 @@
+/* Purchase Note Custom Styles */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+#page-purchase-note-root {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Custom Maroon & Gold Accents */
+.bg-maroon {
+    background-color: #4A0A15;
+}
+
+.text-gold {
+    color: #FFC72C;
+}
+
+.bg-maroon-gradient {
+    background: linear-gradient(135deg, #4A0A15 0%, #30020a 100%);
+}
+
+/* Micro-animations */
+.hover-card-trigger {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-card-trigger:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(74, 10, 21, 0.15);
+}
+
+/* Table Row Hover */
+.table-row-animate:hover {
+    background-color: rgba(74, 10, 21, 0.05) !important;
+}
+
+/* Column Search Inputs Style */
+.column-search-input {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    border-width: 1px;
+    border-color: #e2e8f0;
+    width: 100%;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.column-search-input:focus {
+    outline: none;
+    border-color: #4A0A15;
+    box-shadow: 0 0 0 2px rgba(74, 10, 21, 0.1);
+}
+
+/* Modal Animations */
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-animate-in {
+    animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Sticky Header for Modal Tables */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW PURCHASE NOTE MODAL - MAROON & GOLD THEME
+   ═══════════════════════════════════════════════════════════ */
+
+#view-purchase-note-modal {
+    z-index: 300;
+}
+
+/* Modal Header Styling */
+#view-purchase-note-modal .bg-maroon {
+    background: linear-gradient(135deg, #3a0a0a 0%, #2a0606 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Glowing gold border effect */
+#view-purchase-note-modal .border-gold {
+    border-color: #d4a017;
+    box-shadow: 0 0 12px rgba(212, 160, 23, 0.2);
+}
+
+/* Supplier Info Card Styling */
+#view-purchase-note-modal .border-2.border-gold {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#view-purchase-note-modal .border-2.border-gold:hover {
+    box-shadow: 0 8px 24px rgba(212, 160, 23, 0.15);
+    border-color: #f0c040;
+}
+
+/* Maroon vertical line accent */
+#view-purchase-note-modal .w-1.h-6.bg-maroon {
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.3);
+}
+
+/* Items table header styling */
+#view-purchase-note-modal .sticky-header.bg-gradient-to-r {
+    background: linear-gradient(90deg, #3a0a0a 0%, #4a1515 50%, #3a0a0a 100%);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(212, 160, 23, 0.15);
+}
+
+/* Gold text in table headers */
+#view-purchase-note-modal .text-gold {
+    color: #f0c040;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Search input styling */
+#view-purchase-note-modal .column-search-input {
+    border-left-width: 2px;
+    border-left-color: #d4a017;
+    background: linear-gradient(to right, rgba(212, 160, 23, 0.02), transparent);
+    transition: all 0.2s;
+}
+
+#view-purchase-note-modal .column-search-input:focus {
+    border-left-color: #f0c040;
+    box-shadow: inset 0 0 0 2px rgba(212, 160, 23, 0.1);
+    background: linear-gradient(to right, rgba(212, 160, 23, 0.05), transparent);
+}
+
+/* Table rows with hover effect */
+#view-purchase-note-modal tbody tr {
+    transition: all 0.2s;
+    border-bottom-color: rgba(212, 160, 23, 0.1);
+}
+
+#view-purchase-note-modal tbody tr:hover {
+    background-color: rgba(212, 160, 23, 0.03);
+}
+
+/* Summary footer card */
+#view-purchase-note-modal .bg-gradient-to-r.from-maroon {
+    background: linear-gradient(90deg, #3a0a0a 0%, #4a1515 50%, #3a0a0a 100%);
+    box-shadow: 0 4px 20px rgba(212, 160, 23, 0.2);
+}
+
+/* Icon background in footer */
+#view-purchase-note-modal .bg-white\/15.rounded-xl {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(212, 160, 23, 0.2);
+}
+
+/* Grand total amount styling */
+#view-purchase-note-modal #view-items-grand-total {
+    color: #f0c040;
+    text-shadow: 0 2px 8px rgba(212, 160, 23, 0.2);
+    letter-spacing: 1px;
+}
+
+/* Smooth transitions for all elements */
+#view-purchase-note-modal * {
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+/* Animation for modal entrance */
+@keyframes viewModalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+#view-purchase-note-modal .modal-animate-in {
+    animation: viewModalSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Highlight row when navigating from duplicate-item warning */
+@keyframes pnRowBlinkRed {
+    0%, 100% { background-color: rgba(239, 68, 68, 0.15); }
+    50% { background-color: rgba(239, 68, 68, 0.45); }
+}
+
+#purchase-note-tbody tr.pn-row-highlight-blink {
+    animation: pnRowBlinkRed 0.75s ease-in-out 6;
+    outline: 2px solid #ef4444;
+    outline-offset: -2px;
+}
+
+/* Wizard step indicators (match Purchase Order Processing header) */
+#purchase-note-wizard-modal .step-indicator {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: all 0.3s;
+}
+
+#purchase-note-wizard-modal .step-indicator.active {
+    background-color: #FFC72C;
+    color: #4A0A15;
+    box-shadow: 0 0 0 4px rgba(255, 199, 44, 0.35);
+}
+
+#purchase-note-wizard-modal .step-indicator.completed {
+    background-color: #10b981;
+    color: white;
+}
+
+#purchase-note-wizard-modal .step-indicator.pending {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+@keyframes pnGoToNotePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 199, 44, 0.7); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 199, 44, 0); }
+}
+
+.pn-go-to-note-highlight {
+    animation: pnGoToNotePulse 1.5s ease-in-out infinite;
+}

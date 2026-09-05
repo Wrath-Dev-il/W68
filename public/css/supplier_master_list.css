@@ -1,0 +1,204 @@
+/* Supplier Master List Custom Styles */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+#page-supplier-master-root {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Custom Maroon & Gold Accents */
+.bg-maroon-gradient {
+    background: linear-gradient(135deg, #4A0A15 0%, #30020a 100%);
+}
+
+.text-maroon {
+    color: #4A0A15;
+}
+
+.bg-maroon {
+    background-color: #4A0A15;
+}
+
+.hover\:bg-maroon-hover:hover {
+    background-color: #5d0d1b;
+}
+
+.text-gold {
+    color: #FFC72C;
+}
+
+.border-gold-accent {
+    border-color: #FFC72C;
+}
+
+/* Glassmorphism overlays */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+}
+
+/* Modal Animations */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.modal-animate-in {
+    animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Tab Transitions */
+.supplier-tab-btn {
+    position: relative;
+}
+
+.supplier-tab-btn.tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #4A0A15;
+}
+
+.tab-active {
+    color: #4A0A15;
+    background-color: white;
+}
+
+.tab-inactive {
+    color: #94a3b8;
+}
+
+.tab-inactive:hover {
+    color: #4A0A15;
+    background-color: #f8fafc;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Cards View Styles */
+.supplier-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.supplier-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* Status Tags */
+.tag-newly {
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.tag-old {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.tag-active {
+    background-color: #ecfdf5;
+    color: #059669;
+}
+
+.tag-inactive {
+    background-color: #fff1f2;
+    color: #e11d48;
+}
+
+/* Column Search Inputs */
+.column-search-input {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 2px 8px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.column-search-input:focus {
+    border-color: #4A0A15;
+    box-shadow: 0 0 0 2px rgba(74, 10, 21, 0.1);
+}
+
+/* OSM Nominatim Search Suggestions */
+.search-suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #334155;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: background 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: #f8fafc;
+}
+
+.suggestion-item:last-child {
+    border-radius: 0 0 12px 12px;
+}
+
+.suggestion-item i {
+    margin-top: 2px;
+    color: #94a3b8;
+}
+
+.suggestion-item .suggestion-text {
+    flex: 1;
+}
+
+.suggestion-item .suggestion-main {
+    font-weight: 600;
+    display: block;
+}
+
+.suggestion-item .suggestion-sub {
+    font-size: 11px;
+    color: #64748b;
+    display: block;
+}

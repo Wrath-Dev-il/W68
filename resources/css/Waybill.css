@@ -1,0 +1,151 @@
+/* Waybill Custom Styles */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+#page-waybill-root {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.bg-maroon {
+    background-color: #4A0A15;
+}
+
+.text-gold {
+    color: #FFC72C;
+}
+
+.border-gold {
+    border-color: #FFC72C;
+}
+
+.bg-maroon-gradient {
+    background: linear-gradient(135deg, #4A0A15 0%, #30020a 100%);
+}
+
+.hover-card-trigger {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-card-trigger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(74, 10, 21, 0.08);
+}
+
+.column-search-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 10px;
+    outline: none;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+.column-search-input:focus {
+    border-color: #4A0A15;
+    box-shadow: 0 0 0 2px rgba(74, 10, 21, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.waybill-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+}
+
+.waybill-tab.active {
+    background: #4A0A15;
+    color: #ffffff;
+    border-color: #4A0A15;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.waybill-tab:not(.active):hover {
+    border-color: #4A0A15;
+    color: #4A0A15;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-animate-in {
+    animation: modalIn 0.25s ease-out;
+}
+
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.step-indicator {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    transition: all 0.3s;
+}
+
+.step-indicator.active {
+    background: #4A0A15;
+    color: #FFC72C;
+    border: 2px solid #FFC72C;
+    box-shadow: 0 0 0 4px rgba(255, 199, 44, 0.2);
+}
+
+.step-indicator.completed {
+    background: #059669;
+    color: #fff;
+    border: 2px solid #059669;
+}
+
+.step-indicator.pending {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border: 2px solid #e2e8f0;
+}
+
+.ci-step-content {
+    display: block;
+}
+
+.ci-step-content.hidden {
+    display: none;
+}

@@ -1,0 +1,301 @@
+- generic [ref=f59e1]:
+  - generic [ref=f59e2]:
+    - complementary [ref=f59e3]:
+      - button "Toggle Sidebar" [ref=f59e5] [cursor=pointer]:
+        - img [ref=f59e284]
+      - generic [ref=f59e8]:
+        - link "Dashboard" [ref=f59e10] [cursor=pointer]:
+          - /url: http://localhost/hatdog/public/regular/dashboard
+          - img [ref=f59e286]
+        - generic [ref=f59e16]:
+          - button "Master List" [ref=f59e17] [cursor=pointer]:
+            - img [ref=f59e291]
+          - generic:
+            - link "Product Master List" [ref=f59e23] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/master-list/product-master
+              - generic [ref=f59e28]: Product Master List
+            - link "Online Product Config" [ref=f59e29] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/master-list/online-product-config
+              - generic [ref=f59e35]: Online Product Config
+            - link "Supplier Master List" [ref=f59e36] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/master-list/supplier-master
+              - generic [ref=f59e42]: Supplier Master List
+            - link "Customer Master List" [ref=f59e43] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/master-list/customer-master
+              - generic [ref=f59e49]: Customer Master List
+            - link "Forwarder Master List" [ref=f59e50] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/master-list/forwarder-master
+              - generic [ref=f59e53]: Forwarder Master List
+        - generic [ref=f59e54]:
+          - button "Inventory Management" [ref=f59e55] [cursor=pointer]:
+            - img [ref=f59e311]
+          - generic:
+            - link "Inventory Adjustment" [ref=f59e67] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/inventory/inventory-adjustment
+              - generic [ref=f59e69]: Inventory Adjustment
+            - link "Junk Items" [ref=f59e70] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/inventory/sales-junk
+              - generic [ref=f59e74]: Junk Items
+        - generic [ref=f59e75]:
+          - button "Purchasing" [ref=f59e76] [cursor=pointer]:
+            - img [ref=f59e323]
+          - generic:
+            - link "Purchase Entry" [ref=f59e82] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/purchase/viber-list
+              - generic [ref=f59e85]: Purchase Entry
+            - link "Purchasing Note" [ref=f59e86] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/purchase/purchase-note
+              - generic [ref=f59e90]: Purchasing Note
+            - link "Purchase Order" [ref=f59e91] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/purchase/purchase-order
+              - generic [ref=f59e95]: Purchase Order
+            - link "Purchase Return" [ref=f59e96] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/purchase/purchase-return
+              - generic [ref=f59e100]: Purchase Return
+        - generic [ref=f59e101]:
+          - button "Sales" [ref=f59e102] [cursor=pointer]:
+            - img [ref=f59e334]
+          - generic:
+            - link "Sales Note" [ref=f59e107] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/sales/sales-note
+              - generic [ref=f59e111]: Sales Note
+            - link "Sales Order" [ref=f59e112] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/sales/sales-order
+              - generic [ref=f59e117]: Sales Order
+            - link "Consignment Invoice" [ref=f59e118] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/sales/consignment-invoice
+              - generic [ref=f59e124]: Consignment Invoice
+            - link "Sales Return" [ref=f59e125] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/sales/sales-return
+              - generic [ref=f59e129]: Sales Return
+            - link "Waybill" [ref=f59e130] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/sales/waybill
+              - generic [ref=f59e133]: Waybill
+        - generic [ref=f59e134]:
+          - button "Accounting" [ref=f59e135] [cursor=pointer]:
+            - img [ref=f59e349]
+          - generic:
+            - link "Payments" [ref=f59e140] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/accounting/payments
+              - generic [ref=f59e143]: Payments
+            - link "Payable Cheque Voucher" [ref=f59e144] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/accounting/payable-cheque-voucher
+              - generic [ref=f59e148]: Payable Cheque Voucher
+            - link "Expense Cheque Voucher" [ref=f59e149] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/accounting/expense-cheque-voucher
+              - generic [ref=f59e153]: Expense Cheque Voucher
+        - generic [ref=f59e154]:
+          - button "Reports" [ref=f59e155] [cursor=pointer]:
+            - img [ref=f59e356]
+          - generic:
+            - link "Sales Reports" [ref=f59e160] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/reports/sales-report
+              - generic [ref=f59e163]: Sales Reports
+            - link "Inventory Reports" [ref=f59e164] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/reports/inventory-reports
+              - generic [ref=f59e171]: Inventory Reports
+            - link "Accounts Receivable Reports" [ref=f59e172] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/reports/accounts-receivable
+              - generic [ref=f59e176]: Accounts Receivable Reports
+            - link "Cost Report" [ref=f59e177] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/regular/reports/cost-report
+              - generic [ref=f59e181]: Cost Report
+    - main [ref=f59e182]:
+      - generic [ref=f59e183]:
+        - generic [ref=f59e185]:
+          - generic:
+            - img
+          - img [ref=f59e369]
+          - generic [ref=f59e188]: Sat, Jul 4, 2026 | 02:45:53 PM
+        - generic [ref=f59e189]:
+          - button "1 Bibble notification" [ref=f59e371] [cursor=pointer]:
+            - generic [ref=f59e372]: "1"
+            - img "Bibble notification"
+          - button "Kid The Death Kid The Death Employee" [ref=f59e194] [cursor=pointer]:
+            - img "Kid The Death" [ref=f59e195]
+            - generic [ref=f59e196]:
+              - heading "Kid The Death" [level=5] [ref=f59e197]
+              - generic [ref=f59e198]: Employee
+      - generic [ref=f59e199]:
+        - generic [ref=f59e201]:
+          - navigation "Breadcrumb" [ref=f59e202]:
+            - generic [ref=f59e203]: Portal
+            - generic [ref=f59e204]: /
+            - generic [ref=f59e205]: Accounting / Payable Cheque Voucher
+          - heading "Payable Cheque Voucher" [level=1] [ref=f59e206]
+        - generic [ref=f59e208]:
+          - generic [ref=f59e209]:
+            - button "Pending Invoices 5 Suppliers" [ref=f59e373] [cursor=pointer]:
+              - generic [ref=f59e211]:
+                - generic [ref=f59e212]: Pending Invoices
+                - img [ref=f59e374]
+              - generic [ref=f59e217]:
+                - generic [ref=f59e218]: "5"
+                - generic [ref=f59e219]: Suppliers
+            - button "Old Invoices 0 Suppliers" [ref=f59e220] [cursor=pointer]:
+              - generic [ref=f59e221]:
+                - generic [ref=f59e222]: Old Invoices
+                - img [ref=f59e377]
+              - generic [ref=f59e227]:
+                - generic [ref=f59e228]: "0"
+                - generic [ref=f59e229]: Suppliers
+            - button "Suddenly Returns 1 Suppliers" [ref=f59e380] [cursor=pointer]:
+              - generic [ref=f59e231]:
+                - generic [ref=f59e232]: Suddenly Returns
+                - img [ref=f59e381]
+              - generic [ref=f59e237]:
+                - generic [ref=f59e238]: "1"
+                - generic [ref=f59e239]: Suppliers
+          - generic [ref=f59e240]:
+            - img [ref=f59e384]
+            - textbox "Search supplier, invoice, amount..." [ref=f59e244]
+          - generic [ref=f59e246]:
+            - button "Payables" [ref=f59e247] [cursor=pointer]:
+              - img [ref=f59e387]
+              - generic [ref=f59e251]: Payables
+            - button "History" [ref=f59e252] [cursor=pointer]:
+              - img [ref=f59e390]
+              - generic [ref=f59e256]: History
+          - generic [ref=f59e258]:
+            - table [ref=f59e260]:
+              - rowgroup [ref=f59e261]:
+                - row "Supplier Not Paid Invoice Partial Paid Total Amount Action" [ref=f59e262]:
+                  - columnheader "Supplier" [ref=f59e263]
+                  - columnheader "Not Paid Invoice" [ref=f59e264]
+                  - columnheader "Partial Paid" [ref=f59e265]
+                  - columnheader "Total Amount" [ref=f59e266]
+                  - columnheader "Action" [ref=f59e267]
+                - row [ref=f59e268]:
+                  - columnheader [ref=f59e269]:
+                    - textbox "Search Supplier..." [ref=f59e270]
+                  - columnheader [ref=f59e271]:
+                    - textbox "Search Not Paid..." [ref=f59e272]
+                  - columnheader [ref=f59e273]:
+                    - textbox "Search Partial..." [ref=f59e274]
+                  - columnheader [ref=f59e275]:
+                    - textbox "Search Amount..." [ref=f59e276]
+                  - columnheader [ref=f59e277]
+              - rowgroup [ref=f59e278]:
+                - row "1HYREAL AUTO PARTS CO., --- 1 0 ₱1,680.00 Proceed" [ref=f59e393]:
+                  - cell "1HYREAL AUTO PARTS CO., ---" [ref=f59e394]:
+                    - generic [ref=f59e395]: 1HYREAL AUTO PARTS CO.,
+                    - generic [ref=f59e396]: "---"
+                  - cell "1" [ref=f59e397]
+                  - cell "0" [ref=f59e398]
+                  - cell "₱1,680.00" [ref=f59e399]
+                  - cell "Proceed" [ref=f59e400]:
+                    - button "Proceed" [active] [ref=f59e401] [cursor=pointer]
+                - row "1SANHO INDUSTRY INC. CO. MR. SIMON 2 0 ₱74,840.00 Proceed" [ref=f59e402]:
+                  - cell "1SANHO INDUSTRY INC. CO. MR. SIMON" [ref=f59e403]:
+                    - generic [ref=f59e404]: 1SANHO INDUSTRY INC. CO.
+                    - generic [ref=f59e405]: MR. SIMON
+                  - cell "2" [ref=f59e406]
+                  - cell "0" [ref=f59e407]
+                  - cell "₱74,840.00" [ref=f59e408]
+                  - cell "Proceed" [ref=f59e409]:
+                    - button "Proceed" [ref=f59e410] [cursor=pointer]
+                - row "CELHERSON GUZMAN 2 0 ₱84,500.00 Proceed" [ref=f59e411]:
+                  - cell "CELHERSON GUZMAN" [ref=f59e412]:
+                    - generic [ref=f59e413]: CELHERSON
+                    - generic [ref=f59e414]: GUZMAN
+                  - cell "2" [ref=f59e415]
+                  - cell "0" [ref=f59e416]
+                  - cell "₱84,500.00" [ref=f59e417]
+                  - cell "Proceed" [ref=f59e418]:
+                    - button "Proceed" [ref=f59e419] [cursor=pointer]
+                - row "METRO CARDEX INC./BESTAT AUTOPHIL CORPORATION / YAMATA --- 5 0 ₱59,183.00 Proceed" [ref=f59e420]:
+                  - cell "METRO CARDEX INC./BESTAT AUTOPHIL CORPORATION / YAMATA ---" [ref=f59e421]:
+                    - generic [ref=f59e422]: METRO CARDEX INC./BESTAT AUTOPHIL CORPORATION / YAMATA
+                    - generic [ref=f59e423]: "---"
+                  - cell "5" [ref=f59e424]
+                  - cell "0" [ref=f59e425]
+                  - cell "₱59,183.00" [ref=f59e426]
+                  - cell "Proceed" [ref=f59e427]:
+                    - button "Proceed" [ref=f59e428] [cursor=pointer]
+                - row "VISCO MOTOR SUPPLY CO INC --- 9 0 ₱39,687.84 Proceed" [ref=f59e429]:
+                  - cell "VISCO MOTOR SUPPLY CO INC ---" [ref=f59e430]:
+                    - generic [ref=f59e431]: VISCO MOTOR SUPPLY CO INC
+                    - generic [ref=f59e432]: "---"
+                  - cell "9" [ref=f59e433]
+                  - cell "0" [ref=f59e434]
+                  - cell "₱39,687.84" [ref=f59e435]
+                  - cell "Proceed" [ref=f59e436]:
+                    - button "Proceed" [ref=f59e437] [cursor=pointer]
+            - generic [ref=f59e281]:
+              - paragraph [ref=f59e282]: Showing 1 to 5 of 5 suppliers
+              - generic [ref=f59e438]:
+                - button "Prev" [disabled] [ref=f59e439]
+                - button "1" [ref=f59e440] [cursor=pointer]
+                - button "Next" [disabled] [ref=f59e441]
+          - generic [ref=f59e444]:
+            - generic [ref=f59e445]:
+              - generic [ref=f59e446]:
+                - img [ref=f59e448]
+                - generic [ref=f59e452]:
+                  - heading "Proceed Voucher" [level=3] [ref=f59e453]
+                  - paragraph [ref=f59e454]: 1HYREAL AUTO PARTS CO.,
+              - button [ref=f59e455] [cursor=pointer]:
+                - img [ref=f59e456]
+            - generic [ref=f59e461]:
+              - generic [ref=f59e462]:
+                - generic [ref=f59e463]: "1"
+                - generic [ref=f59e464]: Supplier
+              - generic [ref=f59e465]:
+                - generic [ref=f59e466]: "3"
+                - generic [ref=f59e467]: Invoices
+              - generic [ref=f59e468]:
+                - generic [ref=f59e469]: "4"
+                - generic [ref=f59e470]: Payment
+              - generic [ref=f59e471]:
+                - generic [ref=f59e472]: "5"
+                - generic [ref=f59e473]: Review
+            - generic [ref=f59e476]:
+              - generic [ref=f59e477]:
+                - heading "Supplier Details" [level=4] [ref=f59e478]
+                - generic [ref=f59e479]:
+                  - generic [ref=f59e480]:
+                    - text: Voucher No.
+                    - generic [ref=f59e481]: PCV-0000004
+                  - generic [ref=f59e482]:
+                    - text: Date
+                    - generic [ref=f59e483]: 2026-07-04
+                - generic [ref=f59e484]:
+                  - generic [ref=f59e485]:
+                    - text: Supplier Name
+                    - paragraph [ref=f59e486]: 1HYREAL AUTO PARTS CO.,
+                  - generic [ref=f59e487]:
+                    - text: Contact
+                    - paragraph [ref=f59e488]: +88-2-29832371
+                  - generic [ref=f59e489]:
+                    - text: Contact Person
+                    - paragraph [ref=f59e490]: "---"
+                  - generic [ref=f59e491]:
+                    - text: Address
+                    - paragraph [ref=f59e492]: NO.28, LANE 60,CHUNGYANG RD., SEC.1 SANHUNG, TAIPIE, TAIWAN 241
+                - generic [ref=f59e493]:
+                  - button "Marker" [ref=f59e494] [cursor=pointer]
+                  - generic:
+                    - generic [ref=f59e495]:
+                      - button "Zoom in" [ref=f59e496] [cursor=pointer]: +
+                      - button "Zoom out" [ref=f59e497] [cursor=pointer]: −
+                    - generic [ref=f59e498]:
+                      - link "Leaflet" [ref=f59e499] [cursor=pointer]:
+                        - /url: https://leafletjs.com
+                        - img [ref=f59e500]
+                        - text: Leaflet
+                      - text: "| © OpenStreetMap contributors"
+              - generic [ref=f59e504]:
+                - heading "Voucher Reference" [level=4] [ref=f59e505]
+                - generic [ref=f59e506]:
+                  - generic [ref=f59e507]:
+                    - text: Ref No.
+                    - textbox "Enter reference number" [ref=f59e508]
+                  - generic [ref=f59e509]:
+                    - text: Particulars
+                    - textbox "Enter particulars" [ref=f59e510]
+            - button "Next" [ref=f59e513] [cursor=pointer]
+      - generic:
+        - img
+        - generic: Operation Successful
+  - generic [ref=f59e283]:
+    - img

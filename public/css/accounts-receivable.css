@@ -1,0 +1,216 @@
+ .ar-radio-row {
+     display: inline-flex;
+     align-items: center;
+     gap: 10px;
+     padding: 12px 14px;
+     border: 1px solid #e2e8f0;
+     border-radius: 14px;
+     background: #f8fafc;
+ }
+ 
+ .ar-radio-input {
+     position: absolute;
+     opacity: 0;
+     pointer-events: none;
+ }
+ 
+ .ar-radio-ui {
+     width: 18px;
+     height: 18px;
+     border-radius: 999px;
+     border: 2px solid rgba(74, 10, 21, 0.35);
+     background: #ffffff;
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     flex-shrink: 0;
+ }
+ 
+ .ar-radio-input:checked + .ar-radio-ui {
+     border-color: rgba(74, 10, 21, 0.95);
+ }
+ 
+ .ar-radio-input:checked + .ar-radio-ui::after {
+     content: "";
+     width: 9px;
+     height: 9px;
+     border-radius: 999px;
+     background: #4A0A15;
+     display: block;
+ }
+ 
+ .ar-dropdown-item {
+     padding: 10px 12px;
+     display: flex;
+     align-items: center;
+     justify-content: space-between;
+     gap: 10px;
+     cursor: pointer;
+ }
+ 
+ .ar-dropdown-item:hover {
+     background: #f8fafc;
+ }
+ 
+ .ar-dropdown-code {
+     font-size: 10px;
+     font-weight: 900;
+     text-transform: uppercase;
+     letter-spacing: 0.12em;
+     color: #64748b;
+ }
+
+.ar-print-layout {
+    display: none;
+}
+
+.ar-print-sheet {
+    color: #0f172a;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.ar-print-company {
+    font-size: 20px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+}
+
+.ar-print-title {
+    margin-top: 10px;
+    font-size: 16px;
+    font-weight: 800;
+    text-align: left;
+}
+
+.ar-print-meta {
+    margin-top: 6px;
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    justify-content: flex-start;
+}
+
+.ar-agent-section {
+    margin-top: 28px;
+}
+
+.ar-salesman-line {
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ar-salesman-line span {
+    font-weight: 700;
+}
+
+.ar-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    border: 1px solid #0f172a;
+}
+
+.ar-print-table th,
+.ar-print-table td {
+    border: 1px solid #0f172a;
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.ar-print-table th {
+    text-align: left;
+    font-weight: 800;
+}
+
+.ar-print-table th:last-child,
+.ar-print-table td:last-child {
+    text-align: right;
+}
+
+.ar-col-customer,
+.ar-print-table th:first-child {
+    width: 60%;
+}
+
+.ar-col-total,
+.ar-print-table th:last-child {
+    width: 40%;
+}
+
+.ar-agent-total {
+    margin-top: 14px;
+    border-top: 1px solid #0f172a;
+    padding-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 24px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.ar-agent-total-label {
+    min-width: 120px;
+    text-align: center;
+}
+
+.ar-print-empty {
+    margin-top: 24px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+@media print {
+    html,
+    body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    .no-print,
+    .no-print * {
+        display: none !important;
+    }
+
+    #ar-print-area,
+    #ar-print-area * {
+        visibility: visible !important;
+    }
+
+    #ar-print-area {
+        display: block !important;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        z-index: 9999;
+        background: #fff;
+        margin: 0;
+        padding: 0;
+    }
+
+    .ar-print-sheet {
+        display: block;
+        padding: 0;
+        max-width: 760px;
+        margin: 0 auto;
+    }
+
+    @page {
+        size: auto;
+        margin: 14mm;
+    }
+}

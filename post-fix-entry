@@ -1,0 +1,299 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - button "Toggle Sidebar" [ref=e5] [cursor=pointer]:
+        - img [ref=e307]
+      - generic [ref=e8]:
+        - link "Dashboard" [ref=e10] [cursor=pointer]:
+          - /url: http://localhost/hatdog/public/admin/dashboard
+          - img [ref=e309]
+        - generic [ref=e16]:
+          - button "System Security" [ref=e17] [cursor=pointer]:
+            - img [ref=e314]
+          - generic:
+            - link "USM (Admin Access Only)" [ref=e22] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/usm
+              - generic [ref=e26]: USM (Admin Access Only)
+            - link "Archived" [ref=e27] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/archived
+              - generic [ref=e31]: Archived
+            - link "Data Sync" [ref=e32] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/datasync
+              - generic [ref=e38]: Data Sync
+            - link "Audit Trail" [ref=e39] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/system-security/audit-trail
+              - generic [ref=e43]: Audit Trail
+        - generic [ref=e44]:
+          - button "Master List" [ref=e45] [cursor=pointer]:
+            - img [ref=e327]
+          - generic:
+            - link "Product Master List" [ref=e51] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/product
+              - generic [ref=e56]: Product Master List
+            - link "Online Product Config" [ref=e57] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/online-product-config
+              - generic [ref=e63]: Online Product Config
+            - link "Supplier Master List" [ref=e64] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/supplier
+              - generic [ref=e70]: Supplier Master List
+            - link "Customer Master List" [ref=e71] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/customer
+              - generic [ref=e77]: Customer Master List
+            - link "Forwarder Master List" [ref=e78] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/masterlist/forwarder
+              - generic [ref=e81]: Forwarder Master List
+        - generic [ref=e82]:
+          - button "Inventory Management" [ref=e83] [cursor=pointer]:
+            - img [ref=e347]
+          - generic:
+            - link "Inventory Adjustment" [ref=e95] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/adjustment
+              - generic [ref=e97]: Inventory Adjustment
+            - link "Junk Items" [ref=e98] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/sales-junk
+              - generic [ref=e102]: Junk Items
+            - link "Convert Items" [ref=e103] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/inventory/item-convert
+              - generic [ref=e110]: Convert Items
+        - generic [ref=e111]:
+          - button "Purchasing" [ref=e112] [cursor=pointer]:
+            - img [ref=e364]
+          - generic:
+            - link "Viber List" [ref=e119] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/viber-list
+              - generic [ref=e123]: Viber List
+            - link "Purchasing Note" [ref=e124] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-note
+              - generic [ref=e128]: Purchasing Note
+            - link "Purchase Order" [ref=e129] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-order
+              - generic [ref=e133]: Purchase Order
+            - link "Purchase Return" [ref=e134] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/purchase/purchase-return
+              - generic [ref=e138]: Purchase Return
+        - generic [ref=e139]:
+          - button "Sales" [ref=e140] [cursor=pointer]:
+            - img [ref=e376]
+          - generic:
+            - link "Sales Note" [ref=e145] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-note
+              - generic [ref=e149]: Sales Note
+            - link "Sales Order" [ref=e150] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-order
+              - generic [ref=e155]: Sales Order
+            - link "Consignment Invoice" [ref=e156] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/consignment-invoice
+              - generic [ref=e162]: Consignment Invoice
+            - link "Sales Return" [ref=e163] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/sales-return
+              - generic [ref=e167]: Sales Return
+            - link "Waybill" [ref=e168] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/sales/waybill
+              - generic [ref=e171]: Waybill
+        - generic [ref=e172]:
+          - button "Accounting" [ref=e173] [cursor=pointer]:
+            - img [ref=e391]
+          - generic:
+            - link "Payments" [ref=e177] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/payments
+              - generic [ref=e180]: Payments
+            - link "Payable Cheque Voucher" [ref=e181] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/accounting/payable-cheque-voucher
+              - generic [ref=e185]: Payable Cheque Voucher
+            - link "Expense Cheque Voucher" [ref=e186] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/accounting/expense-cheque-voucher
+              - generic [ref=e190]: Expense Cheque Voucher
+        - generic [ref=e191]:
+          - button "Reports" [ref=e192] [cursor=pointer]:
+            - img [ref=e398]
+          - generic:
+            - link "Sales Reports" [ref=e197] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/sales-report
+              - generic [ref=e200]: Sales Reports
+            - link "Inventory Reports" [ref=e201] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/inventory-reports
+              - generic [ref=e208]: Inventory Reports
+            - link "Accounts Receivable Reports" [ref=e209] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/accounts-receivable
+              - generic [ref=e213]: Accounts Receivable Reports
+            - link "Cost Report" [ref=e214] [cursor=pointer]:
+              - /url: http://localhost/hatdog/public/admin/reports/cost-report
+              - generic [ref=e218]: Cost Report
+    - main [ref=e219]:
+      - generic [ref=e220]:
+        - generic [ref=e222]:
+          - img [ref=e411]
+          - generic [ref=e225]: Sat, Jun 27, 2026 | 03:44:40 PM
+        - generic [ref=e226]:
+          - button "View Notifications" [ref=e228] [cursor=pointer]:
+            - img [ref=e413]
+          - button "admin user 10 admin user 10 Admin" [ref=e234] [cursor=pointer]:
+            - img "admin user 10" [ref=e235]
+            - generic [ref=e236]:
+              - heading "admin user 10" [level=5] [ref=e237]
+              - generic [ref=e238]: Admin
+      - generic [ref=e239]:
+        - generic [ref=e241]:
+          - navigation "Breadcrumb" [ref=e242]:
+            - generic [ref=e243]: Portal
+            - generic [ref=e244]: /
+            - generic [ref=e245]: Purchasing / Viber List
+          - heading "Viber List" [level=1] [ref=e246]
+        - generic [ref=e247]:
+          - generic [ref=e248]:
+            - generic [ref=e249]:
+              - generic [ref=e250] [cursor=pointer]:
+                - img [ref=e416]
+                - generic [ref=e254]: "3"
+                - generic [ref=e255]: Entry
+              - generic [ref=e256] [cursor=pointer]:
+                - img [ref=e419]
+                - generic [ref=e262]: "0"
+                - generic [ref=e263]: To Shipped
+              - generic [ref=e264] [cursor=pointer]:
+                - img [ref=e424]
+                - generic [ref=e270]: "0"
+                - generic [ref=e271]: Arrived
+              - generic [ref=e272] [cursor=pointer]:
+                - img [ref=e429]
+                - generic [ref=e279]: "0"
+                - generic [ref=e280]: Not Arrived
+              - generic [ref=e281] [cursor=pointer]:
+                - img [ref=e435]
+                - generic [ref=e286]: "0"
+                - generic [ref=e287]: Partial
+            - generic [ref=e439]:
+              - generic [ref=e441]:
+                - button "00000002 — CELICA MOTOR SALES CORPORATION 3" [ref=e442] [cursor=pointer]:
+                  - img [ref=e444]
+                  - generic [ref=e448]: "00000002"
+                  - generic [ref=e449]: —
+                  - generic [ref=e450]: CELICA MOTOR SALES CORPORATION
+                  - generic [ref=e451]: "3"
+                - button [ref=e452] [cursor=pointer]:
+                  - img [ref=e453]
+              - button "Add Supplier" [ref=e456] [cursor=pointer]:
+                - img [ref=e457]
+                - generic [ref=e458]: Add Supplier
+            - generic [ref=e288]:
+              - button "Add Items" [ref=e459] [cursor=pointer]:
+                - img [ref=e460]
+                - generic [ref=e464]: Add Items
+              - generic [ref=e293]:
+                - generic:
+                  - img
+                - textbox "Search item code, part no, description..." [ref=e294]
+            - generic [ref=e465]:
+              - table [ref=e467]:
+                - rowgroup [ref=e468]:
+                  - row "Item Code Part No# Description Application Last Cost New Cost Order Qty Ordered Date Remarks Actions" [ref=e469]:
+                    - columnheader "Item Code" [ref=e470]
+                    - columnheader "Part No#" [ref=e471]
+                    - columnheader "Description" [ref=e472]
+                    - columnheader "Application" [ref=e473]
+                    - columnheader "Last Cost" [ref=e474]
+                    - columnheader "New Cost" [ref=e475]
+                    - columnheader "Order Qty" [ref=e476]
+                    - columnheader "Ordered Date" [ref=e477]
+                    - columnheader "Remarks" [ref=e478]
+                    - columnheader "Actions" [ref=e479]
+                  - row [ref=e480]:
+                    - columnheader [ref=e481]:
+                      - textbox "Filter..." [ref=e482]
+                    - columnheader [ref=e483]:
+                      - textbox "Filter..." [ref=e484]
+                    - columnheader [ref=e485]:
+                      - textbox "Filter..." [ref=e486]
+                    - columnheader [ref=e487]:
+                      - textbox "Filter..." [ref=e488]
+                    - columnheader [ref=e489]:
+                      - textbox "Filter..." [ref=e490]
+                    - columnheader [ref=e491]:
+                      - textbox "Filter..." [ref=e492]
+                    - columnheader [ref=e493]:
+                      - textbox "Filter..." [ref=e494]
+                    - columnheader [ref=e495]:
+                      - textbox "Filter..." [ref=e496]
+                    - columnheader [ref=e497]:
+                      - textbox "Filter..." [ref=e498]
+                    - columnheader [ref=e499]
+                - rowgroup [ref=e500]:
+                  - row "5\" X 300mm EXHAUST PIPE ₱0.00 500.00 100 2026-06-27 hfjh" [ref=e501]:
+                    - cell "5\" X 300mm" [ref=e502]
+                    - cell [ref=e503]
+                    - cell "EXHAUST PIPE" [ref=e504]: EXHAUST PIPE
+                    - cell [ref=e505]
+                    - cell "₱0.00" [ref=e506]
+                    - cell "500.00" [ref=e507]:
+                      - spinbutton [ref=e508]: "500.00"
+                    - cell "100" [ref=e509]:
+                      - spinbutton [ref=e510]: "100"
+                    - cell "2026-06-27" [ref=e511]
+                    - cell "hfjh" [ref=e512]:
+                      - textbox "—" [ref=e513]: hfjh
+                    - cell [ref=e514]:
+                      - button "Delete item" [ref=e515] [cursor=pointer]:
+                        - img [ref=e516]
+                  - row "04111-23040 04111-23040 FULL SET GASKET ₱0.00 0.00 1 2026-06-27 jkb" [ref=e519]:
+                    - cell "04111-23040" [ref=e520]
+                    - cell "04111-23040" [ref=e521]
+                    - cell "FULL SET GASKET" [ref=e522]
+                    - cell [ref=e523]
+                    - cell "₱0.00" [ref=e524]
+                    - cell "0.00" [ref=e525]:
+                      - spinbutton [ref=e526]: "0.00"
+                    - cell "1" [ref=e527]:
+                      - spinbutton [ref=e528]: "1"
+                    - cell "2026-06-27" [ref=e529]
+                    - cell "jkb" [ref=e530]:
+                      - textbox "—" [ref=e531]: jkb
+                    - cell [ref=e532]:
+                      - button "Delete item" [ref=e533] [cursor=pointer]:
+                        - img [ref=e534]
+                  - row "5\" X 300mm EXHAUST PIPE ₱0.00 100.00 1 2026-06-27" [ref=e537]:
+                    - cell "5\" X 300mm" [ref=e538]
+                    - cell [ref=e539]
+                    - cell "EXHAUST PIPE" [ref=e540]: EXHAUST PIPE
+                    - cell [ref=e541]
+                    - cell "₱0.00" [ref=e542]
+                    - cell "100.00" [ref=e543]:
+                      - spinbutton [ref=e544]: "100.00"
+                    - cell "1" [ref=e545]:
+                      - spinbutton [ref=e546]: "1"
+                    - cell "2026-06-27" [ref=e547]
+                    - cell [ref=e548]:
+                      - textbox "—" [ref=e549]
+                    - cell [ref=e550]:
+                      - button "Delete item" [ref=e551] [cursor=pointer]:
+                        - img [ref=e552]
+              - generic [ref=e555]:
+                - generic [ref=e556]: Showing 1-3 of 3
+                - generic [ref=e557]:
+                  - button "Prev" [disabled] [ref=e558]
+                  - generic [ref=e559]: Page 1 of 1
+                  - button "Next" [disabled] [ref=e560]
+          - generic [ref=e562]:
+            - heading "Suppliers" [level=3] [ref=e564]
+            - table [ref=e566]:
+              - rowgroup [ref=e567]:
+                - row "Supplier Code Supplier Name Ordered Items Arrived Partial Action" [ref=e568]:
+                  - columnheader "Supplier Code" [ref=e569]
+                  - columnheader "Supplier Name" [ref=e570]
+                  - columnheader "Ordered Items" [ref=e571]
+                  - columnheader "Arrived" [ref=e572]
+                  - columnheader "Partial" [ref=e573]
+                  - columnheader "Action" [ref=e574]
+              - rowgroup [ref=e575]:
+                - row "00000002 CELICA MOTOR SALES CORPORATION 3 0 0 Select" [ref=e576]:
+                  - cell "00000002" [ref=e577]
+                  - cell "CELICA MOTOR SALES CORPORATION" [ref=e578]
+                  - cell "3" [ref=e579]
+                  - cell "0" [ref=e580]
+                  - cell "0" [ref=e581]
+                  - cell "Select" [ref=e582]:
+                    - button "Select" [ref=e583] [cursor=pointer]
+      - generic:
+        - img
+        - generic: Operation Successful
+  - generic [ref=e306]:
+    - img

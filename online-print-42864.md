@@ -1,0 +1,21 @@
+- generic [active] [ref=f7e1]:
+  - generic [ref=f7e3]:
+    - generic [ref=f7e4]: W68 AUTOPARTS & SERVICE CENTER
+    - generic [ref=f7e5]: ONLINE REPORT
+    - table [ref=f7e6]:
+      - rowgroup [ref=f7e7]
+    - table [ref=f7e17]:
+      - rowgroup [ref=f7e18]
+      - rowgroup [ref=f7e26]
+    - generic [ref=f7e34]:
+      - generic [ref=f7e36]: "INVOICE AMOUNT: 4,480.00"
+      - generic [ref=f7e37]: "NET TOTAL: 4,480.00"
+    - generic [ref=f7e39]:
+      - generic [ref=f7e40]
+      - generic [ref=f7e67]
+  - generic [ref=f7e94]:
+    - button "← Go Back" [ref=f7e95] [cursor=pointer]:
+      - generic [ref=f7e96]: ←
+      - text: Go Back
+    - button "Print Report" [ref=f7e97] [cursor=pointer]
+    - button "Save as PDF" [ref=f7e98] [cursor=pointer]

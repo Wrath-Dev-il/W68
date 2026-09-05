@@ -1,0 +1,97 @@
+.text-maroon { color: #800000; }
+.bg-maroon { background-color: #800000; }
+.border-maroon { border-color: #800000; }
+.text-gold { color: #FFD700; }
+.bg-gold { background-color: #FFD700; }
+
+.animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-animate-in {
+    animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes modalScaleUp {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.col-search-input {
+    padding: 0.375rem 0.75rem;
+    background-color: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 0.5rem;
+    outline: none;
+    transition: all 0.2s;
+    font-size: 10px;
+    width: 100%;
+}
+
+.col-search-input:focus {
+    box-shadow: 0 0 0 2px rgba(128, 0, 0, 0.1);
+    border-color: rgba(128, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+}
+
+/* Tag Styles */
+.tag-new {
+    padding: 0.125rem 0.5rem;
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    border-radius: 0.375rem;
+    border: 1px solid #dbeafe;
+    margin-left: 0.25rem;
+    display: inline-block;
+}
+
+.tag-partial {
+    padding: 0.125rem 0.5rem;
+    background-color: #fffbeb;
+    color: #d97706;
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    border-radius: 0.375rem;
+    border: 1px solid #fef3c7;
+    margin-left: 0.25rem;
+    display: inline-block;
+}
+
+.tag-paid {
+    padding: 0.125rem 0.5rem;
+    background-color: #ecfdf5;
+    color: #059669;
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    border-radius: 0.375rem;
+    border: 1px solid #d1fae5;
+    margin-left: 0.25rem;
+    display: inline-block;
+}

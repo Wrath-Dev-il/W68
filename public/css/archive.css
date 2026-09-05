@@ -1,0 +1,68 @@
+ .archive-col-search-input {
+     padding: 0.375rem 0.75rem;
+     background-color: #f8fafc;
+     border: 1px solid #f1f5f9;
+     border-radius: 0.75rem;
+     outline: none;
+     transition: all 0.2s;
+     font-size: 10px;
+     width: 100%;
+ }
+ 
+ .archive-col-search-input:focus {
+     box-shadow: 0 0 0 2px rgba(74, 10, 21, 0.14);
+     border-color: rgba(74, 10, 21, 0.25);
+     background-color: #ffffff;
+ }
+ 
+ .archive-card.is-active {
+     border-color: rgba(234, 179, 8, 0.55);
+     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.07);
+ }
+ 
+ .archive-id-info-btn {
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     width: 30px;
+     height: 30px;
+     border-radius: 0.75rem;
+     border: 1px solid #e2e8f0;
+     background: #ffffff;
+     color: #334155;
+     transition: all 0.15s ease;
+ }
+ 
+ .archive-id-info-btn:hover {
+     border-color: #cbd5e1;
+     background: #f8fafc;
+ }
+ 
+ .archive-table-scroll::-webkit-scrollbar {
+     height: 8px;
+     width: 8px;
+ }
+ 
+ .archive-table-scroll::-webkit-scrollbar-track {
+     background: transparent;
+ }
+ 
+ .archive-table-scroll::-webkit-scrollbar-thumb {
+     background: #e2e8f0;
+     border-radius: 999px;
+ }
+ 
+ .archive-table-scroll::-webkit-scrollbar-thumb:hover {
+     background: #cbd5e1;
+ }
+ 
+ .archive-guide-row {
+     display: flex;
+     align-items: flex-start;
+     justify-content: space-between;
+     gap: 12px;
+     padding: 12px 14px;
+     border: 1px solid #f1f5f9;
+     border-radius: 14px;
+     background: #ffffff;
+ }

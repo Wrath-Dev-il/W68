@@ -1,0 +1,25 @@
+/* Custom scrollbars matching the theme */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #4a0612;
+}
+::-webkit-scrollbar-thumb {
+    background: #ca8a04;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #facc15;
+}
+/* Custom smooth transition classes */
+.sidebar-transition {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.rotate-transition {
+    transition: transform 0.2s ease-in-out;
+}
+.submenu-transition {
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-in-out;
+}
