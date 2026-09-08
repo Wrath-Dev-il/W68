@@ -7,7 +7,7 @@
 @section('prod_master_content')
 <script>
     window.prodRoutes = {
-        fetch: '{{ route("regular.prod-master.data") }}',
+        fetch: '{{ url("/api/regular-product-master/data") }}',
         create: '{{ route("regular.prod-master.create") }}',
         update: '{{ route("regular.prod-master.update", ["id" => ":id"]) }}',
         delete: '{{ route("regular.prod-master.delete", ["id" => ":id"]) }}',
