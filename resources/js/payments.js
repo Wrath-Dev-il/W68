@@ -470,6 +470,66 @@ function setText(id, value) {
     if (el) el.textContent = value || '---';
 }
 
+async function fetchPaymentsJson(url, fallbackMessage = 'Unable to load payments.') {
+    const request = async () => {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+
+        const text = await response.text();
+
+        if (!text || !text.trim()) {
+            const error = new Error(
+                `${fallbackMessage} Server returned an empty response${response.status ? ` (HTTP ${response.status})` : ''}.`
+            );
+            error.emptyResponse = true;
+            error.status = response.status;
+            throw error;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (_) {
+            const error = new Error(
+                `${fallbackMessage} Server returned an invalid response${response.status ? ` (HTTP ${response.status})` : ''}.`
+            );
+            error.invalidJson = true;
+            error.status = response.status;
+            throw error;
+        }
+
+        if (!response.ok || data.success === false) {
+            throw new Error(
+                data.message ||
+                `${fallbackMessage}${response.status ? ` (HTTP ${response.status})` : ''}`
+            );
+        }
+
+        return data;
+    };
+
+    try {
+        return await request();
+    } catch (error) {
+        // HostForge may occasionally terminate an application response before
+        // Laravel can write its JSON body. Retry that empty/invalid response once
+        // instead of immediately crashing on Response.json().
+        if (!error?.emptyResponse && !error?.invalidJson) {
+            throw error;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return await request();
+    }
+}
+
 window.loadPaymentsTable = async function() {
     const tbody = document.getElementById('payments-tbody');
     if (!tbody) return;
@@ -479,9 +539,11 @@ window.loadPaymentsTable = async function() {
     try {
         const url = new URL(routes().data, window.location.origin);
         url.searchParams.set('page', paymentsPage);
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!data.success) throw new Error(data.message || 'Unable to load payments.');
+
+        const data = await fetchPaymentsJson(
+            url.toString(),
+            'Unable to load payments.'
+        );
 
         if (!data.payors.length) {
             tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No closed P.O records with unpaid balances.</td></tr>`;
