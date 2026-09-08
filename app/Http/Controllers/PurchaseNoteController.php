@@ -150,6 +150,7 @@ class PurchaseNoteController extends Controller
         }
     }
 
+
     private function resolveAuditActor(): array
     {
         $user = session('user');
@@ -578,7 +579,6 @@ class PurchaseNoteController extends Controller
                     // Purchase Note item arrangement is the original insert order.
                     // Always keep it stable whenever the note is opened again for Edit.
                     ->orderBy('id', 'asc');
-
                 if (!empty($transferredOutItemIds)) {
                     $query->whereNotIn('id', $transferredOutItemIds);
                 }
@@ -1126,6 +1126,7 @@ class PurchaseNoteController extends Controller
                     }
                 }
 
+
                 $this->writePurchaseNoteAudit('Created', $purchaseNote, [
                     'after' => $this->buildPurchaseNoteAuditSnapshot($purchaseNote),
                 ]);
@@ -1359,6 +1360,7 @@ class PurchaseNoteController extends Controller
                         ]);
                     }
                 }
+
 
                 // Recalculate the Purchase Note header from ALL surviving PN rows,
                 // not only the currently selected invoice.

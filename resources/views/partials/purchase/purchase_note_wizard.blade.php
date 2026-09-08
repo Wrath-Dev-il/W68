@@ -190,9 +190,10 @@
                     </div>
                     <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                         <div class="overflow-x-auto custom-scrollbar max-h-[min(340px,40vh)]">
-                            <table class="w-full text-left border-collapse min-w-[800px]">
+                            <table class="w-full text-left border-collapse min-w-[920px]">
                                 <thead class="sticky top-0 bg-slate-50 border-b border-slate-100 z-10" id="po-items-thead">
                                     <tr>
+                                        <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-24">Arrangement</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Item Code</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Part No.</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Description</th>
@@ -204,6 +205,7 @@
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-center w-20">Action</th>
                                     </tr>
                                     <tr id="pn-item-column-search-row" class="bg-slate-50/80 border-t border-slate-100">
+                                        <th class="p-2 px-3"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="itemCode" oninput="filterPurchaseNoteItems('itemCode', this.value)" placeholder="Search Code..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="partNo" oninput="filterPurchaseNoteItems('partNo', this.value)" placeholder="Search Part No..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="description" oninput="filterPurchaseNoteItems('description', this.value)" placeholder="Search Description..." class="column-search-input text-[9px]"></th>
@@ -317,3 +319,76 @@
             </div>
         </div>
     </div>
+
+{{-- W68 Purchase Note Arrangement modal: UI only; NO database field --}}
+<div id="pn-arrangement-modal" class="fixed inset-0 z-[1300] hidden flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div onclick="closePurchaseNoteArrangementModal()" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div class="bg-maroon px-6 py-5 text-white border-b-4 border-gold flex items-center justify-between gap-4">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gold">Item Arrangement</p>
+                <h3 class="mt-1 text-lg font-bold">Move Purchase Note Item</h3>
+            </div>
+            <button type="button" onclick="closePurchaseNoteArrangementModal()" class="rounded-xl bg-white/10 p-2 text-white/70 hover:text-white">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+        </div>
+
+        <div class="p-6 space-y-5">
+            <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Current No.</p>
+                    <p id="pn-arrangement-current" class="mt-1 text-xl font-black text-maroon">#1</p>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Product Code</p>
+                    <p id="pn-arrangement-product-code" class="mt-1 break-all text-sm font-black text-slate-700">N/A</p>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+                Fill only one field. Example: item <strong>#20</strong> + <strong>Add Before #5</strong> moves it to <strong>#4</strong>. Leave Add After blank. Add After #5 moves it to #6.
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="pn-arrangement-before" class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-500">Add Before No.</label>
+                    <input id="pn-arrangement-before" type="number" min="1" step="1" inputmode="numeric" placeholder="Example: 5"
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-maroon focus:ring-2 focus:ring-maroon/10">
+                </div>
+                <div>
+                    <label for="pn-arrangement-after" class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-500">Add After No.</label>
+                    <input id="pn-arrangement-after" type="number" min="1" step="1" inputmode="numeric" placeholder="Leave blank if using Before"
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-maroon focus:ring-2 focus:ring-maroon/10">
+                </div>
+            </div>
+
+            <p id="pn-arrangement-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600"></p>
+
+            <div class="flex justify-end gap-3 border-t border-slate-100 pt-4">
+                <button type="button" onclick="closePurchaseNoteArrangementModal()" class="rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">Cancel</button>
+                <button type="button" onclick="applyPurchaseNoteArrangement()" class="rounded-xl bg-maroon px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-maroon-800">
+                    Apply Arrangement
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #po-items-tbody .pn-arrangement-drop-before > td {
+        border-top: 3px solid #800000 !important;
+    }
+    #po-items-tbody .pn-arrangement-drop-after > td {
+        border-bottom: 3px solid #800000 !important;
+    }
+    #po-items-tbody [data-pn-arrangement-cell] {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+    }
+</style>
+
+@push('scripts')
+    <script src="{{ asset('js/Purchase-Note-Arrangement.js') }}?v={{ time() }}"></script>
+@endpush
