@@ -883,6 +883,30 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
             abort(403);
         }
 
+        // W68_PAYMENTS_DIRECT_PROXY_FIX
+        // Payments data is a large read-only aggregation. For Regular/Special,
+        // call the already-registered Admin route Closure directly instead of
+        // booting a nested Laravel HTTP request via app()->handle().
+        if ($adminRouteName === 'admin.payments.data') {
+            @ini_set('memory_limit', '1024M');
+            @set_time_limit(120);
+
+            foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+                try {
+                    DB::connection($connectionName)->disableQueryLog();
+                } catch (\Throwable $ignored) {
+                    // Keep Payments readable even if one optional connection
+                    // is unavailable before the actual route handles it.
+                }
+            }
+
+            $targetRoute = app('router')->getRoutes()->getByName('admin.payments.data');
+            $targetAction = $targetRoute ? $targetRoute->getAction('uses') : null;
+
+            if ($targetAction instanceof \Closure) {
+                return $targetAction();
+            }
+        }
         $currentRequest = request();
         $targetUri = route($adminRouteName, $routeParameters, false);
         $subRequest = \Illuminate\Http\Request::create(
@@ -22955,6 +22979,21 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
 }
 
 Route::get('/admin/payments/data', function () {
+    // W68_PAYMENTS_RUNTIME_GUARD
+    // This endpoint aggregates large historical datasets before pagination.
+    // HostForge was terminating the worker before Laravel could return JSON.
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(120);
+    gc_enable();
+
+    foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+        try {
+            DB::connection($connectionName)->disableQueryLog();
+        } catch (\Throwable $ignored) {
+            // The route's normal try/catch remains authoritative for failures.
+        }
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
