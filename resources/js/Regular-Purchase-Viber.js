@@ -1751,6 +1751,11 @@ window.saveModalItems = async function() {
         _pendingDuplicateKeys = new Set(
             duplicates.map(d => d.product_id || d.item_code).filter(Boolean).map(String)
         );
+        // Regular Viber: Duplicate Warning REPLACES Add Items.
+        // Keep selected rows in memory; Cancel returns to Add Items and
+        // Continue proceeds with the same selection.
+        const addItemsModal = document.getElementById('add-items-modal');
+        if (addItemsModal) addItemsModal.classList.add('hidden');
         document.getElementById('duplicate-warning-modal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         return;
@@ -1767,7 +1772,10 @@ window.confirmDuplicateContinue = async function() {
 
 window.cancelDuplicateContinue = function() {
     document.getElementById('duplicate-warning-modal').classList.add('hidden');
-    document.body.style.overflow = '';
+    const addItemsModal = document.getElementById('add-items-modal');
+    if (addItemsModal) addItemsModal.classList.remove('hidden');
+    // Add Items is visible again, so keep background scrolling locked.
+    document.body.style.overflow = 'hidden';
     _pendingDuplicateKeys = new Set();
 };
 

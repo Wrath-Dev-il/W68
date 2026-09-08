@@ -1679,6 +1679,17 @@ class PurchaseNoteController extends Controller
                 'before' => $auditSnapshot,
             ]);
 
+            // ALL USERS: Admin, Regular and Special Purchase Note delete routes
+            // reach this shared controller. If the note came from Viber/Purchase
+            // Entry, release its source rows before the note is deleted so the
+            // items become available again instead of keeping a dead note ID.
+            $releasedViberItems = ViberListItem::where('purchase_note_id', $purchaseNote->id)
+                ->update([
+                    'purchase_note_id' => null,
+                    'shipped_at' => null,
+                    'updated_at' => now(),
+                ]);
+
             $deletedCounts = [
                 'purchase_notes' => 1,
                 'purchase_note_items' => count($items),
@@ -1686,6 +1697,7 @@ class PurchaseNoteController extends Controller
                 'purchase_order_items' => $relatedPOItems->count(),
                 'purchase_returns' => $relatedReturns->count(),
                 'purchase_return_items' => $relatedReturnItems->count(),
+                'viber_list_items_released' => $releasedViberItems,
             ];
 
             // FK-safe order: return items → returns → PO items → POs → note items → note
@@ -1710,7 +1722,7 @@ class PurchaseNoteController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Purchase Note and all related Purchase Orders, Order Items, Purchase Returns, and Return Items archived and deleted successfully.',
+                'message' => 'Purchase Note and all related records archived and deleted successfully. Linked Viber items were released and their note ID was returned to NULL.',
                 'deleted' => $deletedCounts,
             ]);
         } catch (\Exception $e) {

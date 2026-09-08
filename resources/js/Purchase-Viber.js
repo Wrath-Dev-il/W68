@@ -1679,6 +1679,13 @@ window.saveModalItems = async function() {
     });
 
     if (duplicates.length > 0) {
+        // Admin Viber: Duplicate Warning REPLACES Add Items.
+        // Special User intentionally stays read-only and is not part of this
+        // Add Items behavior even though it loads this shared JS file.
+        if (!VIBER_READ_ONLY) {
+            const addItemsModal = document.getElementById('add-items-modal');
+            if (addItemsModal) addItemsModal.classList.add('hidden');
+        }
         document.getElementById('duplicate-warning-modal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         return;
@@ -1695,6 +1702,16 @@ window.confirmDuplicateContinue = async function() {
 
 window.cancelDuplicateContinue = function() {
     document.getElementById('duplicate-warning-modal').classList.add('hidden');
+
+    if (!VIBER_READ_ONLY) {
+        const addItemsModal = document.getElementById('add-items-modal');
+        if (addItemsModal) addItemsModal.classList.remove('hidden');
+        // Admin Add Items is visible again after Cancel.
+        document.body.style.overflow = 'hidden';
+        return;
+    }
+
+    // Special User is read-only: retain the old close-only behavior.
     document.body.style.overflow = '';
 };
 

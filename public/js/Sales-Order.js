@@ -3968,7 +3968,10 @@ function wait(ms) {
  */
 async function navigateToOnlinePrintWithW68(printUrl) {
     if (window.W68Loader && typeof window.W68Loader.show === 'function') {
-        window.W68Loader.show();
+        // Mark this as a navigation loader, not a permanent/manual loader.
+        // The global loader automatically clears the 'navigation' reason when
+        // Chrome restores Sales Order from the back/forward cache.
+        window.W68Loader.show('navigation');
         // Give Chrome one real rendering opportunity before navigation starts.
         await wait(50);
     }
@@ -4078,7 +4081,18 @@ function resetProductLedgerCheckingOverlay() {
 }
 
 document.addEventListener('DOMContentLoaded', resetProductLedgerCheckingOverlay);
-window.addEventListener('pageshow', resetProductLedgerCheckingOverlay);
+window.addEventListener('pageshow', function() {
+    resetProductLedgerCheckingOverlay();
+
+    // Older cached Sales Order pages may still contain the previous 'manual'
+    // W68 loader reason from Online Print navigation. Clear only that stale
+    // reason when the page becomes visible again so Go Back cannot leave the
+    // application covered by an endless loader.
+    if (window.W68Loader && typeof window.W68Loader.hide === 'function') {
+        window.W68Loader.hide('manual');
+        window.W68Loader.hide('navigation');
+    }
+});
 
 /* ADDITIVE FEATURE: Force close Partial Sales Notes from Sales Order Processing Step 1. */
 (function () {
