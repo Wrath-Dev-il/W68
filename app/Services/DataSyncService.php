@@ -64,8 +64,12 @@ class DataSyncService
     }
 
     /**
-     * Read and send ONE chunk. The browser repeatedly calls this method until
-     * done=true, keeping large Ledger/Sales tables away from one huge request.
+     * Sends one source chunk. The browser repeats this until done=true.
+     *
+     * V4 fixes:
+     * - caps normal payloads below the HostForge/nginx request limit;
+     * - automatically halves a chunk and retries when nginx returns HTTP 413;
+     * - never marks a partially-sent final chunk as complete.
      */
     public function pushChunk(
         string $connection,
@@ -105,11 +109,13 @@ class DataSyncService
         $offset = max(0, $offset);
 
         $total = $knownTotal;
+
         if ($total === null) {
             $total = (int) DB::connection($connection)->table($table)->count();
         }
 
         $query = DB::connection($connection)->table($table);
+
         foreach ($key as $column) {
             $query->orderBy($column);
         }
@@ -142,20 +148,22 @@ class DataSyncService
 
         foreach ($rawRows as $rawRow) {
             $row = $this->encodeRow($rawRow, $binaryColumns);
+
             $rowJson = json_encode(
                 $row,
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+                JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_INVALID_UTF8_SUBSTITUTE
             );
 
             if ($rowJson === false) {
-                throw new RuntimeException("Unable to encode {$connection}.{$table} for transfer.");
+                throw new RuntimeException(
+                    "Unable to encode {$connection}.{$table} for transfer."
+                );
             }
 
             $rowBytes = strlen($rowJson) + 1;
 
-            // Keep normal requests small enough for a hosted PHP reverse proxy.
-            // Always allow at least one row so a large image/blob can still be
-            // transferred instead of creating an infinite retry loop.
             if (!empty($transportRows) && ($payloadBytes + $rowBytes) > $payloadLimit) {
                 break;
             }
@@ -165,47 +173,78 @@ class DataSyncService
         }
 
         if (empty($transportRows)) {
-            throw new RuntimeException("No rows could be prepared for {$connection}.{$table}.");
+            throw new RuntimeException(
+                "No rows could be prepared for {$connection}.{$table}."
+            );
         }
 
         $receiver = $targetUrl . '/api/datasync/receive';
+        $originalPreparedCount = count($transportRows);
+        $reducedForProxy = false;
 
-        $response = Http::asJson()
-            ->acceptJson()
-            ->withHeaders([
-                'X-Datasync-Token' => $token,
-                'X-Datasync-Source' => (string) config('app.url'),
-            ])
-            ->withOptions([
-                'verify' => (bool) config('datasync.verify_ssl', true),
-            ])
-            ->connectTimeout((int) config('datasync.connect_timeout', 15))
-            ->timeout((int) config('datasync.request_timeout', 180))
-            ->retry(2, 1000, throw: false)
-            ->post($receiver, [
-                'connection' => $connection,
-                'table' => $table,
-                'rows' => $transportRows,
-            ]);
+        while (true) {
+            $response = $this->postReceiver(
+                $receiver,
+                $token,
+                $connection,
+                $table,
+                $transportRows
+            );
+
+            if ($response->status() !== 413) {
+                break;
+            }
+
+            if (count($transportRows) <= 1) {
+                throw new RuntimeException(
+                    "HostForge rejected a single {$connection}.{$table} row with HTTP 413. "
+                    . 'That individual row is larger than the reverse-proxy request limit.'
+                );
+            }
+
+            $transportRows = array_slice(
+                $transportRows,
+                0,
+                max(1, intdiv(count($transportRows), 2))
+            );
+
+            $payloadBytes = $this->payloadBytes(
+                $connection,
+                $table,
+                $transportRows
+            );
+
+            $reducedForProxy = true;
+        }
 
         if (!$response->successful()) {
-            $message = trim((string) ($response->json('message') ?: $response->body()));
+            $message = trim(
+                (string) ($response->json('message') ?: $response->body())
+            );
 
             throw new RuntimeException(
-                'HostForge rejected the sync chunk (HTTP ' . $response->status() . ')' .
-                ($message !== '' ? ': ' . $message : '.')
+                'HostForge rejected the sync chunk (HTTP '
+                . $response->status()
+                . ')'
+                . ($message !== '' ? ': ' . $message : '.')
             );
         }
 
         if ($response->json('success') !== true) {
             throw new RuntimeException(
-                (string) ($response->json('message') ?: 'HostForge returned an unsuccessful sync response.')
+                (string) (
+                    $response->json('message')
+                    ?: 'HostForge returned an unsuccessful sync response.'
+                )
             );
         }
 
         $processed = count($transportRows);
         $nextOffset = $offset + $processed;
-        $done = $nextOffset >= $total || count($rawRows) < $limit;
+
+        // IMPORTANT: use total only. A byte-limit or HTTP-413 retry may send
+        // fewer rows than were originally fetched, including on the final page.
+        $done = $nextOffset >= $total;
 
         return [
             'connection' => $connection,
@@ -216,6 +255,9 @@ class DataSyncService
             'total' => $total,
             'done' => $done,
             'payload_bytes' => $payloadBytes,
+            'proxy_reduced' => $reducedForProxy,
+            'prepared_rows' => $originalPreparedCount,
+            'sent_rows' => $processed,
             'message' => $done
                 ? "Finished syncing {$table}."
                 : "Synced {$nextOffset} of {$total} rows.",
@@ -223,8 +265,12 @@ class DataSyncService
     }
 
     /**
-     * HostForge receiver. Applies a chunk to the matching one of the six
-     * production database connections using PRIMARY/UNIQUE-key upsert.
+     * HostForge receiver.
+     *
+     * Legacy XAMPP data contains zero DATE/DATETIME values. HostForge's
+     * MariaDB uses a stricter SQL mode, so this receiver temporarily removes
+     * only the strict/zero-date modes for this connection while the upsert is
+     * performed, then restores the original session SQL mode immediately.
      */
     public function receiveChunk(
         string $providedToken,
@@ -233,16 +279,23 @@ class DataSyncService
         array $rows
     ): array {
         if (!(bool) config('datasync.target_enabled', false)) {
-            throw new RuntimeException('DataSync receiver is disabled on this environment.');
+            throw new RuntimeException(
+                'DataSync receiver is disabled on this environment.'
+            );
         }
 
         $expectedToken = trim((string) config('datasync.token', ''));
 
         if ($expectedToken === '') {
-            throw new RuntimeException('DATASYNC_TOKEN is not configured on the receiver.');
+            throw new RuntimeException(
+                'DATASYNC_TOKEN is not configured on the receiver.'
+            );
         }
 
-        if ($providedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+        if (
+            $providedToken === ''
+            || !hash_equals($expectedToken, $providedToken)
+        ) {
             throw new RuntimeException('Invalid DataSync token.');
         }
 
@@ -250,7 +303,9 @@ class DataSyncService
         $this->assertTableAllowed($connection, $table);
 
         if (count($rows) > 1000) {
-            throw new RuntimeException('DataSync chunk is too large. Maximum is 1000 rows.');
+            throw new RuntimeException(
+                'DataSync chunk is too large. Maximum is 1000 rows.'
+            );
         }
 
         if (empty($rows)) {
@@ -294,12 +349,19 @@ class DataSyncService
         }
 
         if (empty($cleanRows)) {
-            throw new RuntimeException('No writable columns were received for this table.');
+            throw new RuntimeException(
+                'No writable columns were received for this table.'
+            );
         }
 
         $presentColumns = array_keys($cleanRows[0]);
         $updateColumns = array_values(array_diff($presentColumns, $key));
         $db = DB::connection($connection);
+
+        $originalSqlMode = $this->sessionSqlMode($db);
+        $legacySqlMode = $this->legacyCompatibleSqlMode($originalSqlMode);
+
+        $this->setSessionSqlMode($db, $legacySqlMode);
 
         $db->beginTransaction();
 
@@ -309,7 +371,11 @@ class DataSyncService
             if (empty($updateColumns)) {
                 $db->table($table)->insertOrIgnore($cleanRows);
             } else {
-                $db->table($table)->upsert($cleanRows, $key, $updateColumns);
+                $db->table($table)->upsert(
+                    $cleanRows,
+                    $key,
+                    $updateColumns
+                );
             }
 
             $db->commit();
@@ -323,7 +389,13 @@ class DataSyncService
             try {
                 $db->statement('SET FOREIGN_KEY_CHECKS=1');
             } catch (Throwable $ignored) {
-                // Connection may already be gone; next request gets a new PDO.
+                // A new request will receive a fresh connection if this one died.
+            }
+
+            try {
+                $this->setSessionSqlMode($db, $originalSqlMode);
+            } catch (Throwable $ignored) {
+                // Same as above: do not hide the original import result.
             }
         }
 
@@ -335,38 +407,154 @@ class DataSyncService
         ];
     }
 
+    private function postReceiver(
+        string $receiver,
+        string $token,
+        string $connection,
+        string $table,
+        array $rows
+    ) {
+        return Http::asJson()
+            ->acceptJson()
+            ->withHeaders([
+                'X-Datasync-Token' => $token,
+                'X-Datasync-Source' => (string) config('app.url'),
+            ])
+            ->withOptions([
+                'verify' => (bool) config('datasync.verify_ssl', true),
+            ])
+            ->connectTimeout(
+                (int) config('datasync.connect_timeout', 15)
+            )
+            ->timeout(
+                (int) config('datasync.request_timeout', 180)
+            )
+            ->post($receiver, [
+                'connection' => $connection,
+                'table' => $table,
+                'rows' => $rows,
+            ]);
+    }
+
+    private function payloadBytes(
+        string $connection,
+        string $table,
+        array $rows
+    ): int {
+        $json = json_encode(
+            [
+                'connection' => $connection,
+                'table' => $table,
+                'rows' => $rows,
+            ],
+            JSON_UNESCAPED_UNICODE
+            | JSON_UNESCAPED_SLASHES
+            | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+
+        return $json === false ? 0 : strlen($json);
+    }
+
+    private function sessionSqlMode($db): string
+    {
+        $row = $db->selectOne(
+            'SELECT @@SESSION.sql_mode AS sql_mode'
+        );
+
+        return (string) ($row->sql_mode ?? '');
+    }
+
+    private function legacyCompatibleSqlMode(string $sqlMode): string
+    {
+        $remove = [
+            'STRICT_TRANS_TABLES' => true,
+            'STRICT_ALL_TABLES' => true,
+            'NO_ZERO_DATE' => true,
+            'NO_ZERO_IN_DATE' => true,
+        ];
+
+        $modes = [];
+
+        foreach (explode(',', $sqlMode) as $mode) {
+            $mode = trim($mode);
+
+            if ($mode === '') {
+                continue;
+            }
+
+            if (isset($remove[strtoupper($mode)])) {
+                continue;
+            }
+
+            $modes[] = $mode;
+        }
+
+        return implode(',', $modes);
+    }
+
+    private function setSessionSqlMode($db, string $sqlMode): void
+    {
+        $quoted = $db->getPdo()->quote($sqlMode);
+        $db->unprepared("SET SESSION sql_mode = {$quoted}");
+    }
+
     private function chunkSize(): int
     {
-        return max(10, min(1000, (int) config('datasync.chunk_size', 250)));
+        return max(
+            10,
+            min(1000, (int) config('datasync.chunk_size', 250))
+        );
     }
 
     private function maxPayloadBytes(): int
     {
         return max(
-            262144,
-            min(8388608, (int) config('datasync.max_payload_bytes', 3145728))
+            131072,
+            min(
+                8388608,
+                (int) config(
+                    'datasync.max_payload_bytes',
+                    524288
+                )
+            )
         );
     }
 
     private function assertConnectionAllowed(string $connection): void
     {
-        if (!array_key_exists($connection, (array) config('datasync.connections', []))) {
-            throw new RuntimeException("DataSync connection '{$connection}' is not allowed.");
+        if (
+            !array_key_exists(
+                $connection,
+                (array) config('datasync.connections', [])
+            )
+        ) {
+            throw new RuntimeException(
+                "DataSync connection '{$connection}' is not allowed."
+            );
         }
     }
 
-    private function assertTableAllowed(string $connection, string $table): void
-    {
-        if ($table === '' || !preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+    private function assertTableAllowed(
+        string $connection,
+        string $table
+    ): void {
+        if (
+            $table === ''
+            || !preg_match('/^[A-Za-z0-9_]+$/', $table)
+        ) {
             throw new RuntimeException('Invalid table name.');
         }
 
         if ($this->isExcludedTable($table)) {
-            throw new RuntimeException("Table {$table} is excluded from DataSync.");
+            throw new RuntimeException(
+                "Table {$table} is excluded from DataSync."
+            );
         }
 
         if (!Schema::connection($connection)->hasTable($table)) {
-            throw new RuntimeException("Table {$table} does not exist on connection {$connection}.");
+            throw new RuntimeException(
+                "Table {$table} does not exist on connection {$connection}."
+            );
         }
     }
 
@@ -374,15 +562,25 @@ class DataSyncService
     {
         $table = strtolower($table);
 
-        foreach ((array) config('datasync.excluded_tables', []) as $excluded) {
+        foreach (
+            (array) config('datasync.excluded_tables', [])
+            as $excluded
+        ) {
             if ($table === strtolower((string) $excluded)) {
                 return true;
             }
         }
 
-        foreach ((array) config('datasync.excluded_prefixes', []) as $prefix) {
+        foreach (
+            (array) config('datasync.excluded_prefixes', [])
+            as $prefix
+        ) {
             $prefix = strtolower((string) $prefix);
-            if ($prefix !== '' && str_starts_with($table, $prefix)) {
+
+            if (
+                $prefix !== ''
+                && str_starts_with($table, $prefix)
+            ) {
                 return true;
             }
         }
@@ -404,15 +602,25 @@ class DataSyncService
             [$database, 'BASE TABLE']
         );
 
-        return array_values(array_filter(array_map(
-            fn ($row) => (string) ($row->TABLE_NAME ?? ''),
-            $rows
-        )));
+        return array_values(
+            array_filter(
+                array_map(
+                    fn ($row) => (string) (
+                        $row->TABLE_NAME ?? ''
+                    ),
+                    $rows
+                )
+            )
+        );
     }
 
-    /** Prefer PRIMARY KEY, otherwise use the first UNIQUE index. */
-    private function syncKey(string $connection, string $table): array
-    {
+    /**
+     * Prefer PRIMARY KEY, otherwise use the first UNIQUE index.
+     */
+    private function syncKey(
+        string $connection,
+        string $table
+    ): array {
         $database = DB::connection($connection)->getDatabaseName();
 
         $rows = DB::connection($connection)->select(
@@ -444,11 +652,16 @@ class DataSyncService
         }
 
         $first = reset($indexes);
-        return is_array($first) ? array_values($first) : [];
+
+        return is_array($first)
+            ? array_values($first)
+            : [];
     }
 
-    private function writableColumns(string $connection, string $table): array
-    {
+    private function writableColumns(
+        string $connection,
+        string $table
+    ): array {
         $database = DB::connection($connection)->getDatabaseName();
 
         $rows = DB::connection($connection)->select(
@@ -466,7 +679,10 @@ class DataSyncService
             $column = (string) ($row->COLUMN_NAME ?? '');
             $extra = strtoupper((string) ($row->EXTRA ?? ''));
 
-            if ($column === '' || str_contains($extra, 'GENERATED')) {
+            if (
+                $column === ''
+                || str_contains($extra, 'GENERATED')
+            ) {
                 continue;
             }
 
@@ -476,8 +692,10 @@ class DataSyncService
         return $columns;
     }
 
-    private function binaryColumns(string $connection, string $table): array
-    {
+    private function binaryColumns(
+        string $connection,
+        string $table
+    ): array {
         $database = DB::connection($connection)->getDatabaseName();
 
         $rows = DB::connection($connection)->select(
@@ -489,9 +707,20 @@ class DataSyncService
         );
 
         $binaryTypes = [
-            'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob',
-            'geometry', 'point', 'linestring', 'polygon', 'multipoint',
-            'multilinestring', 'multipolygon', 'geometrycollection',
+            'binary',
+            'varbinary',
+            'tinyblob',
+            'blob',
+            'mediumblob',
+            'longblob',
+            'geometry',
+            'point',
+            'linestring',
+            'polygon',
+            'multipoint',
+            'multilinestring',
+            'multipolygon',
+            'geometrycollection',
         ];
 
         $binary = [];
@@ -501,7 +730,16 @@ class DataSyncService
             $type = strtolower((string) ($row->DATA_TYPE ?? ''));
             $charset = $row->CHARACTER_SET_NAME ?? null;
 
-            if ($column !== '' && (in_array($type, $binaryTypes, true) || $charset === null && str_contains($type, 'blob'))) {
+            if (
+                $column !== ''
+                && (
+                    in_array($type, $binaryTypes, true)
+                    || (
+                        $charset === null
+                        && str_contains($type, 'blob')
+                    )
+                )
+            ) {
                 $binary[$column] = true;
             }
         }
@@ -509,8 +747,10 @@ class DataSyncService
         return $binary;
     }
 
-    private function encodeRow(array $row, array $binaryColumns): array
-    {
+    private function encodeRow(
+        array $row,
+        array $binaryColumns
+    ): array {
         foreach ($row as $column => $value) {
             if (!is_string($value)) {
                 continue;
@@ -518,8 +758,14 @@ class DataSyncService
 
             $mustEncode = isset($binaryColumns[$column]);
 
-            if (!$mustEncode && function_exists('mb_check_encoding')) {
-                $mustEncode = !mb_check_encoding($value, 'UTF-8');
+            if (
+                !$mustEncode
+                && function_exists('mb_check_encoding')
+            ) {
+                $mustEncode = !mb_check_encoding(
+                    $value,
+                    'UTF-8'
+                );
             }
 
             if ($mustEncode) {
@@ -537,12 +783,20 @@ class DataSyncService
         if (
             is_array($value)
             && count($value) === 1
-            && array_key_exists(self::BINARY_MARKER, $value)
+            && array_key_exists(
+                self::BINARY_MARKER,
+                $value
+            )
         ) {
-            $decoded = base64_decode((string) $value[self::BINARY_MARKER], true);
+            $decoded = base64_decode(
+                (string) $value[self::BINARY_MARKER],
+                true
+            );
 
             if ($decoded === false) {
-                throw new RuntimeException('Invalid binary value received by DataSync.');
+                throw new RuntimeException(
+                    'Invalid binary value received by DataSync.'
+                );
             }
 
             return $decoded;
