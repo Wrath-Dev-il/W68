@@ -18576,6 +18576,12 @@ $_resolvedPrice = (float) ($_resolvedPrice ?? 0);
             }
 
             foreach ($correctedYears as $correctedYear => $correctedValues) {
+                // Historical manual corrections are only for 2023-2025.
+                // 2026 and later must always use the live Product Ledger so
+                // sales created today immediately appear in Online Print.
+                if ((int) $correctedYear >= 2026) {
+                    continue;
+                }
                 $salesByProduct[$correctedProductId . '-' . $correctedYear . '-local'] = $correctedValues['local'];
                 $salesByProduct[$correctedProductId . '-' . $correctedYear . '-online'] = $correctedValues['online'];
             }
