@@ -1,6 +1,46 @@
 @extends('partials.user_account.user_sidebar_navbar')
 
 @push('styles')
+    <style>
+        /* W68_PO_WIDE_MODALS_ALL_USERS */
+
+        /* Purchase Order Processing */
+        #proceed-modal > div.relative,
+
+        /* Edit Active Purchase Order */
+        #edit-modal > div.relative,
+
+        /* Edit Purchase Order from History */
+        #edit-history-modal > div.relative {
+            width: 98vw !important;
+            max-width: 98vw !important;
+            margin-left: 1vw !important;
+            margin-right: 1vw !important;
+            max-height: 94vh !important;
+        }
+
+        /* Keep every column accessible */
+        #proceed-modal .overflow-x-auto,
+        #edit-modal .overflow-x-auto,
+        #edit-history-modal .overflow-x-auto {
+            overflow-x: auto !important;
+            width: 100% !important;
+        }
+
+        /* Give the item tables enough room for all columns */
+        #proceed-modal table,
+        #edit-modal table,
+        #edit-history-modal table {
+            min-width: 1500px;
+        }
+
+        /* Use more vertical space too */
+        #proceed-modal > div.relative,
+        #edit-modal > div.relative,
+        #edit-history-modal > div.relative {
+            max-height: 96vh !important;
+        }
+    </style>
     <link rel="stylesheet" href="{{ asset('css/Purchase-Order.css') }}?v={{ time() }}">
 @endpush
 
