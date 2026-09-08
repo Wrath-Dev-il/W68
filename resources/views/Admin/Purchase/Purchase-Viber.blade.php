@@ -660,6 +660,11 @@
     <script src="{{ asset('js/Purchase-Viber.js') }}?v={{ time() }}"></script>
 @endpush
 
+
+@push('scripts')
+    {{-- Admin + Regular Viber: add selected Ready-to-Shipped items to an existing Viber Purchase Note --}}
+    <script src="{{ asset('js/Viber-Existing-Note.js') }}?v={{ time() }}"></script>
+@endpush
 @endsection
 
 @include('partials.admin.admin_sidebar_navbar')

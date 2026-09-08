@@ -27,6 +27,14 @@ use App\Http\Controllers\ShopeeWebhookController;
 use App\Http\Controllers\DeveloperInventoryControlController;
 
 // CRITICAL: This route must be defined early to avoid conflicts
+/* W68_VIBER_EXISTING_NOTE_ROUTES_START
+ | Admin + Regular only. Controller performs the account-type check too.
+ */
+Route::get('/admin/purchase/viber-list/available-existing-notes', [\App\Http\Controllers\PurchaseViberController::class, 'availableExistingNotes']);
+Route::post('/admin/purchase/viber-list/add-to-existing-note', [\App\Http\Controllers\PurchaseViberController::class, 'addToExistingNote']);
+Route::get('/regular/purchase/viber-list/available-existing-notes', [\App\Http\Controllers\PurchaseViberController::class, 'availableExistingNotes']);
+Route::post('/regular/purchase/viber-list/add-to-existing-note', [\App\Http\Controllers\PurchaseViberController::class, 'addToExistingNote']);
+/* W68_VIBER_EXISTING_NOTE_ROUTES_END */
 Route::match(['GET', 'POST'], '/admin/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('admin.purchase.note.verify-password');
 Route::match(['GET', 'POST'], '/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('purchase.note.verify-password');
 Route::match(['GET', 'POST'], '/regular/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('regular.purchase.note.verify-password');
