@@ -154,7 +154,7 @@
             <!-- Sidebar Header & Fold Toggle -->
             <div class="p-4 border-b border-maroon-800 flex items-center justify-between min-h-[70px]">
                 <div class="flex items-center space-x-3 overflow-hidden" id="sidebar-logo-block">
-                    <img src="{{ asset('build/assets/images/sidebar_logo.png') }}" alt="Logo" class="w-10 h-10 object-contain rounded-lg flex-shrink-0">
+                    <img src="{{ asset('images/layout/sidebar_logo.png') }}" alt="Logo" class="w-10 h-10 object-contain rounded-lg flex-shrink-0">
                     <span class="font-extrabold text-lg tracking-wide whitespace-nowrap text-goldlining-400 uppercase">w68</span>
                 </div>
                 <!-- Mini collapse button inside sidebar for large screens -->
