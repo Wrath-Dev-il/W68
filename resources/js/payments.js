@@ -227,6 +227,10 @@ function selectedInvoiceRowsInClickOrder() {
         });
 }
 let paymentsPage = 1;
+// W68_PAYMENTS_ACTIVE_PAYOR_GLOBAL_SEARCH_20260909
+let paymentsActivePayorSearch = '';
+let paymentsActivePayorSearchTimer = null;
+let paymentsActiveRequestSeq = 0;
 let paymentsLastPage = 1;
 let paymentsHistoryPage = 1;
 let paymentsHistoryLastPage = 1;
@@ -546,14 +550,17 @@ window.loadPaymentsTable = async function() {
     tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading closed P.O records...</td></tr>`;
 
     try {
+        const requestSeq = ++paymentsActiveRequestSeq;
         const url = new URL(routes().data, window.location.origin);
         url.searchParams.set('page', paymentsPage);
         url.searchParams.set('per_page', '15'); // W68_PAYMENTS_PAGE_FIRST_15_20260909
+        if (paymentsActivePayorSearch) url.searchParams.set('search', paymentsActivePayorSearch);
 
         const data = await fetchPaymentsJson(
             url.toString(),
             'Unable to load payments.'
         );
+        if (requestSeq !== paymentsActiveRequestSeq) return;
 
         if (!data.payors.length) {
             tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No closed P.O records with unpaid balances.</td></tr>`;
@@ -1978,9 +1985,21 @@ window.filterTableByColumns = function(tbodyId, filterRowId) {
 };
 
 window.filterPaymentsTable = function() {
-    window.filterTableByColumns('payments-tbody', 'payments-active-filter-row');
-};
+    const payorInput = document.querySelector('#payments-active-filter-row input[data-col="0"]');
+    const nextPayorSearch = String(payorInput?.value || '').trim();
 
+    // Keep instant filtering for the currently visible rows while the global
+    // server search is debounced.
+    window.filterTableByColumns('payments-tbody', 'payments-active-filter-row');
+
+    if (nextPayorSearch === paymentsActivePayorSearch) return;
+    clearTimeout(paymentsActivePayorSearchTimer);
+    paymentsActivePayorSearchTimer = setTimeout(() => {
+        paymentsActivePayorSearch = nextPayorSearch;
+        paymentsPage = 1;
+        loadPaymentsTable();
+    }, 250);
+};
 window.filterPaymentsHistoryTable = function() {
     const input = document.getElementById('payments-history-payor-search');
     paymentsHistorySearch = input ? input.value.trim() : '';

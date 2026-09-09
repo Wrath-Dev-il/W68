@@ -23110,6 +23110,10 @@ Route::get('/admin/payments/data', function () {
         // from decoding every Online Report and every historical invoice first.
         $page = max((int) request()->query('page', 1), 1);
         $perPage = 15;
+        // W68_PAYMENTS_ACTIVE_PAYOR_GLOBAL_SEARCH_20260909
+        // Search Payor against the complete active-payor candidate collection
+        // BEFORE page slicing, so a customer on page 2+ can be found from page 1.
+        $payorSearch = trim((string) request()->query('search', ''));
         $today = now()->startOfDay();
         $shopeePaymentCustomerIds = [1029, 1433];
         $normalizePaymentCustomerId = static fn ($id) => in_array((int) $id, $shopeePaymentCustomerIds, true)
@@ -23391,6 +23395,19 @@ Route::get('/admin/payments/data', function () {
             ->sortBy(fn ($row) => mb_strtolower((string) ($row['name'] ?? '')))
             ->values();
 
+        // Keep the aging cards based on all active payors. Only the table/pagination
+        // is narrowed by the Payor search.
+        $agingCandidatePayors = $activeCandidatePayors;
+        if ($payorSearch !== '') {
+            $needle = mb_strtolower($payorSearch);
+            $activeCandidatePayors = $activeCandidatePayors
+                ->filter(fn ($row) => str_contains(
+                    mb_strtolower((string) ($row['name'] ?? '')),
+                    $needle
+                ))
+                ->values();
+        }
+
         $total = $activeCandidatePayors->count();
         $lastPage = max((int) ceil($total / $perPage), 1);
         $page = min($page, $lastPage);
@@ -23409,7 +23426,7 @@ Route::get('/admin/payments/data', function () {
         $sourceCustomerIds = array_values(array_unique($sourceCustomerIds));
 
         $agingStats = ['30' => 0, '60' => 0, '90' => 0, '120' => 0, '150' => 0];
-        foreach ($activeCandidatePayors as $candidate) {
+        foreach ($agingCandidatePayors as $candidate) {
             $oldest = $candidate['oldest_date'] ?? null;
             $ageDays = $oldest ? $oldest->copy()->startOfDay()->diffInDays($today) : 0;
             $bucket = match (true) {
