@@ -363,10 +363,20 @@ class DataSyncService
 
         $this->setSessionSqlMode($db, $legacySqlMode);
 
+        $removedUniqueConflicts = 0;
+
         $db->beginTransaction();
 
         try {
             $db->statement('SET FOREIGN_KEY_CHECKS=0');
+
+            $removedUniqueConflicts = $this->removeSecondaryUniqueConflicts(
+                $db,
+                $connection,
+                $table,
+                $cleanRows,
+                $key
+            );
 
             if (empty($updateColumns)) {
                 $db->table($table)->insertOrIgnore($cleanRows);
@@ -404,6 +414,7 @@ class DataSyncService
             'table' => $table,
             'received' => count($cleanRows),
             'sync_key' => $key,
+            'removed_unique_conflicts' => $removedUniqueConflicts,
         ];
     }
 
@@ -658,6 +669,184 @@ class DataSyncService
             : [];
     }
 
+    /**
+     * W68_DATASYNC_SECONDARY_UNIQUE_CONFLICT_FIX_20260909
+     *
+     * The source and HostForge target can temporarily disagree on a row's
+     * PRIMARY KEY while still sharing another UNIQUE value (for example
+     * masterlist.products.product_code). A normal multi-row upsert can then
+     * fail with SQLSTATE 1062 when it updates/inserts the source primary key
+     * into a UNIQUE value already owned by a stale target row.
+     *
+     * Source is authoritative. Before upsert, remove only target rows that:
+     * - collide with an incoming row on a SECONDARY UNIQUE index; and
+     * - do NOT have the same DataSync key as that incoming source row.
+     *
+     * This lets the following upsert recreate the exact source identity.
+     */
+    private function removeSecondaryUniqueConflicts(
+        $db,
+        string $connection,
+        string $table,
+        array $rows,
+        array $syncKey
+    ): int {
+        $indexes = $this->uniqueIndexes($connection, $table);
+
+        if (count($indexes) <= 1) {
+            return 0;
+        }
+
+        $removed = 0;
+
+        foreach ($indexes as $indexName => $columns) {
+            $columns = array_values($columns);
+
+            // Never remove a row merely because it matches the authoritative
+            // PRIMARY/selected DataSync key itself.
+            if ($columns === array_values($syncKey)) {
+                continue;
+            }
+
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                // MySQL UNIQUE indexes permit multiple NULL values. A row with
+                // a missing/NULL indexed value cannot create this collision.
+                $completeUniqueValue = true;
+                foreach ($columns as $column) {
+                    if (
+                        !array_key_exists($column, $row)
+                        || $row[$column] === null
+                    ) {
+                        $completeUniqueValue = false;
+                        break;
+                    }
+                }
+
+                if (!$completeUniqueValue) {
+                    continue;
+                }
+
+                // We also need every sync-key value so we can distinguish the
+                // correct target row from a stale row that owns the same
+                // secondary UNIQUE value.
+                $completeSyncKey = true;
+                foreach ($syncKey as $keyColumn) {
+                    if (
+                        !array_key_exists($keyColumn, $row)
+                        || $row[$keyColumn] === null
+                    ) {
+                        $completeSyncKey = false;
+                        break;
+                    }
+                }
+
+                if (!$completeSyncKey) {
+                    continue;
+                }
+
+                $selectColumns = array_values(
+                    array_unique(array_merge($syncKey, $columns))
+                );
+
+                $conflictQuery = $db->table($table);
+
+                foreach ($columns as $column) {
+                    $conflictQuery->where($column, '=', $row[$column]);
+                }
+
+                $conflicts = $conflictQuery
+                    ->lockForUpdate()
+                    ->get($selectColumns);
+
+                foreach ($conflicts as $existing) {
+                    $sameSyncKey = true;
+
+                    foreach ($syncKey as $keyColumn) {
+                        $incomingValue = $row[$keyColumn] ?? null;
+                        $existingValue = $existing->{$keyColumn} ?? null;
+
+                        if ((string) $incomingValue !== (string) $existingValue) {
+                            $sameSyncKey = false;
+                            break;
+                        }
+                    }
+
+                    if ($sameSyncKey) {
+                        continue;
+                    }
+
+                    $deleteQuery = $db->table($table);
+
+                    foreach ($syncKey as $keyColumn) {
+                        $existingValue = $existing->{$keyColumn} ?? null;
+
+                        if ($existingValue === null) {
+                            $deleteQuery->whereNull($keyColumn);
+                        } else {
+                            $deleteQuery->where($keyColumn, '=', $existingValue);
+                        }
+                    }
+
+                    $removed += (int) $deleteQuery->delete();
+                }
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Return every non-prefix UNIQUE index in declared column order.
+     *
+     * Prefix UNIQUE indexes are intentionally skipped because equality on the
+     * full column value is not equivalent to equality on an indexed prefix.
+     */
+    private function uniqueIndexes(
+        string $connection,
+        string $table
+    ): array {
+        $database = DB::connection($connection)->getDatabaseName();
+
+        $rows = DB::connection($connection)->select(
+            'SELECT INDEX_NAME, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART
+             FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = ?
+               AND NON_UNIQUE = 0
+             ORDER BY INDEX_NAME, SEQ_IN_INDEX',
+            [$database, $table]
+        );
+
+        $indexes = [];
+        $skip = [];
+
+        foreach ($rows as $row) {
+            $index = (string) ($row->INDEX_NAME ?? '');
+            $column = (string) ($row->COLUMN_NAME ?? '');
+            $subPart = $row->SUB_PART ?? null;
+
+            if ($index === '' || $column === '') {
+                continue;
+            }
+
+            if ($subPart !== null) {
+                $skip[$index] = true;
+                continue;
+            }
+
+            $indexes[$index][] = $column;
+        }
+
+        foreach (array_keys($skip) as $index) {
+            unset($indexes[$index]);
+        }
+
+        return $indexes;
+    }
     private function writableColumns(
         string $connection,
         string $table
