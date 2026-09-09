@@ -27,6 +27,20 @@ class PurchaseNoteController extends Controller
      * script open that sends product_code but omits product_id. This method does
      * not generate a new ID; it retrieves the existing master-list primary key.
      */
+    /**
+     * Repair Purchase Note item product IDs before Laravel validation.
+     *
+     * W68_PN_AUTHORITATIVE_PRODUCT_ID_REPAIR_20260909
+     *
+     * A positive browser/Viber product_id is not automatically trusted:
+     * - if the ID exists and matches the submitted product_code, keep it;
+     * - if the ID is stale, invalid, or belongs to another product_code,
+     *   resolve the real core4_masterlist.products.id from product_code;
+     * - never generate a replacement ID.
+     *
+     * This prevents "The selected items.N.product_id is invalid." while also
+     * preventing a stale positive ID from silently saving the wrong product.
+     */
     private function hydrateMissingItemProductIds(Request $request): void
     {
         $items = $request->input('items');
@@ -36,6 +50,8 @@ class PurchaseNoteController extends Controller
         }
 
         $changed = false;
+        $productById = [];
+        $productMatchesByCode = [];
 
         foreach ($items as $index => &$item) {
             if (!is_array($item)) {
@@ -43,45 +59,112 @@ class PurchaseNoteController extends Controller
             }
 
             $candidateId = $item['product_id'] ?? $item['productId'] ?? null;
-            if (is_numeric($candidateId) && (int) $candidateId > 0) {
-                $item['product_id'] = (int) $candidateId;
-                continue;
-            }
-
+            $candidateId = is_numeric($candidateId) ? (int) $candidateId : 0;
             $productCode = trim((string) ($item['product_code'] ?? $item['code'] ?? ''));
+
+            $candidateProduct = null;
+
+            if ($candidateId > 0) {
+                if (!array_key_exists($candidateId, $productById)) {
+                    $productById[$candidateId] = Product::on('masterlist')
+                        ->select(['id', 'product_code'])
+                        ->find($candidateId);
+                }
+
+                $candidateProduct = $productById[$candidateId];
+
+                if ($candidateProduct) {
+                    $masterCode = trim((string) ($candidateProduct->product_code ?? ''));
+
+                    // When code is present, both ID and code must describe the same
+                    // Product Master row. This catches stale/wrong positive IDs.
+                    if ($productCode === '' || strcasecmp($masterCode, $productCode) === 0) {
+                        $item['product_id'] = (int) $candidateProduct->id;
+                        continue;
+                    }
+
+                    Log::warning('Purchase Note request contained a product_id/product_code mismatch; repairing from Product Master.', [
+                        'item_index' => $index,
+                        'submitted_product_id' => $candidateId,
+                        'submitted_product_code' => $productCode,
+                        'id_product_code' => $masterCode,
+                        'request_path' => $request->path(),
+                    ]);
+                } else {
+                    Log::warning('Purchase Note request contained a stale/invalid positive product_id; repairing from Product Master.', [
+                        'item_index' => $index,
+                        'submitted_product_id' => $candidateId,
+                        'submitted_product_code' => $productCode,
+                        'request_path' => $request->path(),
+                    ]);
+                }
+            }
+
             if ($productCode === '') {
+                // Leave validation to report the genuinely unresolved row.
                 continue;
             }
 
-            $matches = Product::on('masterlist')
-                ->whereRaw('TRIM(product_code) = ?', [$productCode])
-                ->limit(2)
-                ->get(['id', 'product_code']);
+            $codeKey = strtoupper($productCode);
+
+            if (!array_key_exists($codeKey, $productMatchesByCode)) {
+                $productMatchesByCode[$codeKey] = Product::on('masterlist')
+                    ->whereRaw('TRIM(product_code) = ?', [$productCode])
+                    ->limit(2)
+                    ->get(['id', 'product_code']);
+            }
+
+            $matches = $productMatchesByCode[$codeKey];
 
             if ($matches->count() === 1) {
-                $item['product_id'] = (int) $matches->first()->id;
-                $changed = true;
+                $resolvedProduct = $matches->first();
+                $resolvedId = (int) $resolvedProduct->id;
 
-                Log::warning('Purchase Note request arrived without product_id; existing master-list ID restored.', [
+                if ($candidateId !== $resolvedId) {
+                    $changed = true;
+                }
+
+                $item['product_id'] = $resolvedId;
+                $item['productId'] = $resolvedId;
+
+                // Cache the authoritative row so another item using the same ID
+                // does not need another lookup.
+                $productById[$resolvedId] = $resolvedProduct;
+
+                Log::warning('Purchase Note product ID repaired from existing Product Master row.', [
                     'item_index' => $index,
+                    'submitted_product_id' => $candidateId > 0 ? $candidateId : null,
                     'product_code' => $productCode,
-                    'product_id' => $item['product_id'],
+                    'resolved_product_id' => $resolvedId,
                     'request_path' => $request->path(),
                 ]);
             } elseif ($matches->count() > 1) {
-                Log::error('Purchase Note product ID could not be restored because product_code is not unique.', [
+                Log::error('Purchase Note product ID could not be repaired because product_code is not unique.', [
                     'item_index' => $index,
                     'product_code' => $productCode,
                     'matching_ids' => $matches->pluck('id')->all(),
+                    'request_path' => $request->path(),
+                ]);
+            } else {
+                Log::error('Purchase Note product ID could not be repaired because product_code does not exist in Product Master.', [
+                    'item_index' => $index,
+                    'submitted_product_id' => $candidateId > 0 ? $candidateId : null,
+                    'product_code' => $productCode,
                     'request_path' => $request->path(),
                 ]);
             }
         }
         unset($item);
 
+        // Merge whenever a row was repaired. Also merge when productId aliases were
+        // normalized so the validator always reads the repaired items array.
         if ($changed) {
             $request->merge(['items' => $items]);
+            return;
         }
+
+        // If no numeric value changed, still preserve normalized integer IDs.
+        $request->merge(['items' => $items]);
     }
     /**
      * Keep the Viber/Purchase Entry source quantity aligned when the user edits
