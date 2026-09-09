@@ -626,6 +626,7 @@ window.loadPaymentsHistoryTable = async function() {
     try {
         const url = new URL(routes().payors, window.location.origin);
         url.searchParams.set('page', paymentsHistoryPage);
+        url.searchParams.set('per_page', '15'); // W68_PAYMENTS_HISTORY_JS_15_20260909
         if (paymentsHistorySearch) url.searchParams.set('search', paymentsHistorySearch);
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
@@ -748,6 +749,7 @@ async function loadPayorsHistoryTable() {
         const params = new URLSearchParams();
         if (payorsHistorySearch) params.set('search', payorsHistorySearch);
         params.set('page', payorsHistoryPage);
+        params.set('per_page', '15'); // W68_PAYMENTS_PAYORS_HISTORY_JS_15_20260909
 
         const response = await fetch(`${routes().payors}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
         const data = await response.json();
@@ -781,7 +783,7 @@ async function loadPayorsHistoryTable() {
 
 function updatePayorsHistoryPagination(data = {}) {
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((payorsHistoryPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(payorsHistoryPage * perPage, total) : 0;
 
@@ -844,7 +846,7 @@ async function loadPayorHistoryInvoices() {
     try {
         const url = new URL(routes().payorHistory.replace(':customerId', currentPayorHistoryCustomerId), window.location.origin);
         url.searchParams.set('page', currentPayorHistoryPage);
-        url.searchParams.set('per_page', '50');
+        url.searchParams.set('per_page', '15');
         Object.entries(currentPayorHistoryFilters).forEach(([key, value]) => {
             if (key !== 'action' && String(value || '').trim() !== '') url.searchParams.set(key, String(value).trim());
         });
@@ -910,7 +912,7 @@ async function loadPayorHistoryInvoices() {
 function updatePayorHistoryPagination(data = {}) {
     const pagination = data.pagination || {};
     const total = Number(pagination.total || data.total || 0);
-    const perPage = Number(pagination.per_page || data.per_page || 50);
+    const perPage = Number(pagination.per_page || data.per_page || 15);
     const from = Number(pagination.from ?? (total ? ((currentPayorHistoryPage - 1) * perPage) + 1 : 0));
     const to = Number(pagination.to ?? (total ? Math.min(currentPayorHistoryPage * perPage, total) : 0));
 
@@ -1934,7 +1936,7 @@ function updatePaymentsHistoryPagination(data = {}) {
     paymentsHistoryLastPage = Number(data.last_page || 1);
 
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((paymentsHistoryPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(paymentsHistoryPage * perPage, total) : 0;
 

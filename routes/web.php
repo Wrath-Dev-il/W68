@@ -24617,7 +24617,8 @@ Route::get('/admin/payments/history/data', function (Request $request) {
 
     try {
         $page = max((int) $request->query('page', 1), 1);
-        $perPage = 20;
+        // W68_PAYMENTS_HISTORY_DATA_15_20260909
+        $perPage = 15;
         $search = trim((string) $request->query('search', ''));
         $paymentNo = trim((string) $request->query('payment_no', ''));
         $invoiceSearch = trim((string) $request->query('invoices', ''));
