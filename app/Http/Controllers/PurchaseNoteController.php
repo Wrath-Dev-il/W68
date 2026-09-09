@@ -994,7 +994,27 @@ class PurchaseNoteController extends Controller
             'supplier_code' => 'required|string',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|min:1|exists:masterlist.products,id',
+            // W68_PN_MASTERLIST_DIRECT_PRODUCT_VALIDATION_20260909
+            // Do not use the string exists:masterlist.products,id rule here.
+            // On the production multi-database setup this validation can reject
+            // a Product ID even after the controller has resolved it through
+            // the Product model. Validate directly through Product's explicit
+            // "masterlist" Eloquent connection instead.
+            'items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             'items.*.quantity' => 'required|integer|min:0',
             'items.*.unit' => 'nullable|string|max:50',
             'items.*.unit_price' => 'required|numeric|min:0',
@@ -1009,7 +1029,21 @@ class PurchaseNoteController extends Controller
             'transferred_items' => 'nullable|array',
             'transferred_items.*.source_purchase_note_id' => 'required|integer|exists:purchase.purchase_notes,id',
             'transferred_items.*.source_purchase_note_item_id' => 'required|integer|exists:purchase.purchase_note_items,id',
-            'transferred_items.*.product_id' => 'required|integer|exists:masterlist.products,id',
+            'transferred_items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             'transferred_items.*.quantity' => 'required|integer|min:1',
             'transferred_items.*.unit_price' => 'required|numeric|min:0',
             'transferred_items.*.total_price' => 'required|numeric|min:0',
@@ -1271,7 +1305,27 @@ class PurchaseNoteController extends Controller
             'date' => 'required|date',
             'linked_purchase_order_id' => 'nullable|integer|exists:purchase.purchase_orders,id',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|min:1|exists:masterlist.products,id',
+            // W68_PN_MASTERLIST_DIRECT_PRODUCT_VALIDATION_20260909
+            // Do not use the string exists:masterlist.products,id rule here.
+            // On the production multi-database setup this validation can reject
+            // a Product ID even after the controller has resolved it through
+            // the Product model. Validate directly through Product's explicit
+            // "masterlist" Eloquent connection instead.
+            'items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             // Zero quantity is valid for a Purchase Note placeholder item.
             // Negative quantities remain invalid.
             'items.*.quantity' => 'required|integer|min:0',
