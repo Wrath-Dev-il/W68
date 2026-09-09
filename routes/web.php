@@ -15421,32 +15421,24 @@ Route::delete('/admin/sales/sales-order/history-destroy/{id}', function ($id) {
             if ($pid > 0) $productIds[$pid] = true;
         }
 
-        // Find related ledger entries
-        $ledgerQuery = \App\Models\ProductLedger::where('transaction_type', 'OUT')
-            ->where('transaction_number', $orderNumber);
+        // Delete this Local invoice's Product Ledger OUT rows using the
+        // authoritative sales_order linkage, with a legacy sales-number fallback.
+        // The cleanup service also rebuilds every later balance_stock value.
+        $ledgerCleanup = app(\App\Services\SalesInvoiceLedgerDeleteService::class)
+            ->deleteForSalesOrder($so);
 
-        if (!empty($invoiceNumbers)) {
-            $ledgerQuery->where('reference_number', $invoiceNumbers);
+        foreach (($ledgerCleanup['affected_products'] ?? []) as $affectedProductId) {
+            $affectedProductId = (int) $affectedProductId;
+            if ($affectedProductId > 0) {
+                $productIds[$affectedProductId] = true;
+            }
         }
 
-        $ledgerRows = $ledgerQuery->get();
-
-        // Collect additional product IDs from ledger
-        foreach ($ledgerRows as $lr) {
-            $pid = (int) ($lr->product_id ?? 0);
-            if ($pid > 0) $productIds[$pid] = true;
-        }
-
-        \Illuminate\Support\Facades\Log::info("Sales Order #{$id} delete: {$ledgerRows->count()} ledger rows found.");
-
-        // Delete ledger rows
-        if ($ledgerRows->isNotEmpty()) {
-            \App\Models\ProductLedger::where('transaction_type', 'OUT')
-                ->where('transaction_number', $orderNumber)
-                ->when(!empty($invoiceNumbers), fn ($q) => $q->where('reference_number', $invoiceNumbers))
-                ->delete();
-        }
-
+        \Illuminate\Support\Facades\Log::info(
+            "Sales Order #{$id} delete: "
+            . (int) ($ledgerCleanup['deleted_entries'] ?? 0)
+            . " Product Ledger row(s) deleted and balances rebuilt."
+        );
         // Delete SO items
         \Illuminate\Support\Facades\DB::connection('sales')
             ->table('sales_order_items')
@@ -17838,38 +17830,25 @@ Route::delete('/admin/sales/sales-order/report/online-destroy/{id}', function ($
             }
         }
 
-        // --- Identify related ledger rows ---
-        $ledgerRows = collect();
-        if (!empty($salesNumbers)) {
-            $ledgerRows = \App\Models\ProductLedger::where('remarks', 'Online Report Generation')
-                ->whereIn('transaction_number', $salesNumbers)
-                ->get();
+        // Delete this Online invoice's Product Ledger OUT rows using
+        // source_type=online_report + source_id, durable link rows, and a
+        // conservative legacy Online Report fallback. Running balances are
+        // rebuilt before the Online Report itself is deleted.
+        $ledgerCleanup = app(\App\Services\SalesInvoiceLedgerDeleteService::class)
+            ->deleteForOnlineReport($report);
+
+        foreach (($ledgerCleanup['affected_products'] ?? []) as $affectedProductId) {
+            $affectedProductId = (int) $affectedProductId;
+            if ($affectedProductId > 0) {
+                $oldProductIds[$affectedProductId] = true;
+            }
         }
 
-        $totalExpectedItems = 0;
-        foreach ($notesData as $nd) {
-            $ndItems = $nd['items'] ?? [];
-            if (is_string($ndItems)) $ndItems = json_decode($ndItems, true) ?? [];
-            $totalExpectedItems += count($ndItems);
-        }
-
-        $totalLedgerRows = $ledgerRows->count();
-
-        \Illuminate\Support\Facades\Log::info("Online Invoice #{$id} delete: {$totalLedgerRows} ledger rows found, {$totalExpectedItems} expected items from notes_data.");
-
-        // Safety: if there ARE sales numbers but the ledger query returned 0 while notes_data has items, log a warning
-        if (!empty($salesNumbers) && $totalLedgerRows === 0 && $totalExpectedItems > 0) {
-            \Illuminate\Support\Facades\Log::warning("Online Invoice #{$id} delete: No ledger rows found for sales numbers: " . implode(',', $salesNumbers) . " but notes_data has {$totalExpectedItems} items.");
-        }
-
-        // --- Delete ledger rows ---
-        if ($ledgerRows->isNotEmpty()) {
-            \App\Models\ProductLedger::where('remarks', 'Online Report Generation')
-                ->whereIn('transaction_number', $salesNumbers)
-                ->delete();
-            \Illuminate\Support\Facades\Log::info("Online Invoice #{$id} delete: Deleted {$totalLedgerRows} ledger rows.");
-        }
-
+        \Illuminate\Support\Facades\Log::info(
+            "Online Invoice #{$id} delete: "
+            . (int) ($ledgerCleanup['deleted_entries'] ?? 0)
+            . " Product Ledger row(s) deleted and balances rebuilt."
+        );
         // --- Recalculate stock for affected products ---
         $affectedProductIds = array_keys($oldProductIds);
         if (!empty($affectedProductIds)) {
@@ -23144,23 +23123,41 @@ Route::get('/admin/payments/data', function () {
             ), static fn ($invoice) => $invoice !== ''));
         };
 
+        // W68_PAYMENTS_SAFE_STREAM_READ_20260909
+        // Same return-key normalization and unique-key summation as before,
+        // without creating Laravel Collections for every candidate document.
         $returnAmountFor = static function (array $keys, array $map) use ($normalizeInvKey): float {
-            $normalized = collect($keys)
-                ->flatMap(function ($value) use ($normalizeInvKey) {
-                    $raw = trim((string) $value);
-                    if ($raw === '') return [];
-                    $tokens = preg_split('/[,\s\/]+/', $raw) ?: [];
-                    $tokens[] = $raw;
-                    if (preg_match_all('/SN-\d+/i', $raw, $m) && !empty($m[0])) {
-                        $tokens = array_merge($tokens, $m[0]);
-                    }
-                    return $tokens;
-                })
-                ->map(fn ($value) => $normalizeInvKey($value))
-                ->filter()
-                ->unique();
+            $normalized = [];
 
-            return (float) $normalized->sum(fn ($key) => (float) ($map[$key] ?? 0));
+            foreach ($keys as $value) {
+                $raw = trim((string) $value);
+                if ($raw === '') {
+                    continue;
+                }
+
+                $tokens = preg_split('/[,\s\/]+/', $raw) ?: [];
+                $tokens[] = $raw;
+
+                if (preg_match_all('/SN-\d+/i', $raw, $matches) && !empty($matches[0])) {
+                    $tokens = array_merge($tokens, $matches[0]);
+                }
+
+                foreach ($tokens as $token) {
+                    $normalizedKey = $normalizeInvKey($token);
+
+                    if ($normalizedKey !== '') {
+                        $normalized[$normalizedKey] = true;
+                    }
+                }
+            }
+
+            $total = 0.0;
+
+            foreach (array_keys($normalized) as $normalizedKey) {
+                $total += (float) ($map[$normalizedKey] ?? 0);
+            }
+
+            return (float) $total;
         };
 
         $activeCandidatePayors = [];
@@ -23206,7 +23203,7 @@ Route::get('/admin/payments/data', function () {
                     ->orWhere('sn.status', 'Closed');
             })
             ->whereNotNull('so.customer_id')
-            ->get([
+            ->select([
                 'so.id as source_id',
                 'so.order_number as po_no',
                 'sn.sales_number as sales_note_no',
@@ -23219,7 +23216,8 @@ Route::get('/admin/payments/data', function () {
                 'so.created_at',
                 'so.updated_at',
                 'so.waybill_date',
-            ]);
+            ])
+            ->cursor();
 
         foreach ($candidateSalesOrders as $doc) {
             $paidRow = $paidRows->get('sales_order:' . $doc->source_id);
@@ -23244,15 +23242,24 @@ Route::get('/admin/payments/data', function () {
             $due = $autoSettledByReturn ? 0 : max($amount - $paid - $effectiveAdjustment, 0);
             if ($due <= 0 && $remainingReturnAdjustment <= 0) continue;
 
-            $dateCandidates = collect([
+            $effectiveDate = null;
+
+            foreach ([
                 $doc->order_date ?? null,
                 $doc->waybill_date ?? null,
                 $doc->created_at ?? null,
                 $doc->updated_at ?? null,
-            ])->filter();
-            $effectiveDate = $dateCandidates->isNotEmpty()
-                ? $dateCandidates->map(fn ($value) => \Carbon\Carbon::parse($value))->sort()->first()
-                : null;
+            ] as $dateCandidate) {
+                if (!$dateCandidate) {
+                    continue;
+                }
+
+                $parsedDate = \Carbon\Carbon::parse($dateCandidate);
+
+                if ($effectiveDate === null || $parsedDate->lt($effectiveDate)) {
+                    $effectiveDate = $parsedDate;
+                }
+            }
 
             $registerCandidate($doc->customer_id, $doc->customer_name, $effectiveDate);
         }
@@ -23261,7 +23268,7 @@ Route::get('/admin/payments/data', function () {
         $candidateConsignments = DB::connection('sales')->table('consignment_invoices')
             ->whereNotIn('status', ['Cancelled', 'Void'])
             ->whereNotNull('customer_id')
-            ->get([
+            ->select([
                 'id as source_id',
                 'invoice_number as invoice_no',
                 'customer_id',
@@ -23269,7 +23276,8 @@ Route::get('/admin/payments/data', function () {
                 'total_amount as amount',
                 'created_at',
                 'updated_at',
-            ]);
+            ])
+            ->cursor();
 
         foreach ($candidateConsignments as $doc) {
             $paidRow = $paidRows->get('consignment_invoice:' . $doc->source_id);
@@ -23294,7 +23302,7 @@ Route::get('/admin/payments/data', function () {
             ->where('order_number', 'LIKE', 'ONL-%')
             ->whereIn('status', ['Confirmed', 'Closed'])
             ->whereNotNull('customer_id')
-            ->get([
+            ->select([
                 'order_number',
                 'customer_id',
                 'customer_name',
@@ -23302,7 +23310,8 @@ Route::get('/admin/payments/data', function () {
                 'total_amount',
                 'created_at',
                 'updated_at',
-            ]);
+            ])
+            ->cursor();
 
         foreach ($candidateOnlineOrders as $order) {
             if (!preg_match('/^ONL-(\d+)-(\d+)/', (string) $order->order_number, $m)) continue;
@@ -23337,9 +23346,13 @@ Route::get('/admin/payments/data', function () {
                 $legacyReportsQ->whereNotIn('id', $reportIdChunk);
             }
         }
-        $legacyReports = $legacyReportsQ->get([
-            'id', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at'
-        ]);
+        // Stream potentially large notes_data instead of materializing the
+        // complete legacy Online Report history in one PHP Collection.
+        $legacyReports = $legacyReportsQ
+            ->select([
+                'id', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at'
+            ])
+            ->cursor();
 
         foreach ($legacyReports as $report) {
             $invoiceValues = $parsePaymentInvoiceValues($report->invoice_numbers ?? null);
@@ -23355,7 +23368,15 @@ Route::get('/admin/payments/data', function () {
                 $invoiceNo = trim((string) ($invoiceValues[$i] ?? ''));
                 $amount = (float) ($note['net_total'] ?? 0);
                 if ($amount <= 0 && isset($note['items']) && is_array($note['items'])) {
-                    $amount = (float) collect($note['items'])->sum(fn ($item) => is_array($item) ? (float) ($item['subtotal'] ?? 0) : 0);
+                    $itemSubtotal = 0.0;
+
+                    foreach ($note['items'] as $item) {
+                        if (is_array($item)) {
+                            $itemSubtotal += (float) ($item['subtotal'] ?? 0);
+                        }
+                    }
+
+                    $amount = (float) $itemSubtotal;
                 }
 
                 $isActionable = $amount <= 0;
