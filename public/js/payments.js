@@ -263,17 +263,26 @@ let currentGroupPrintMeta = { online_percent: 0, online_payment: 0 };
 let currentProcessedGroupReceipts = [];
 let currentGroupDraggedItemId = 0;
 
-function isRegularPaymentsContext() {
-    return String(routes().groupDetail || '').includes('/regular/');
+// W68_PAYMENTS_SPECIAL_GROUP_DRAG_LOCAL_ONLY_20260909
+function paymentsGroupDragContext() {
+    const detailUrl = String(routes().groupDetail || '');
+    if (detailUrl.includes('/regular/')) return 'regular';
+    if (detailUrl.includes('/special/')) return 'special';
+    return '';
+}
+
+function isPaymentsGroupDragEnabled() {
+    return paymentsGroupDragContext() !== '';
 }
 
 function processGroupOrderStorageKey(groupId) {
-    return `hatdog:regular:payments:group-order:${Number(groupId || 0)}`;
+    const context = paymentsGroupDragContext() || 'disabled';
+    return `hatdog:${context}:payments:group-order:${Number(groupId || 0)}`;
 }
 
 function applySavedProcessGroupOrder(items, groupId) {
     const rows = Array.isArray(items) ? [...items] : [];
-    if (!isRegularPaymentsContext() || !groupId || rows.length < 2) return rows;
+    if (!isPaymentsGroupDragEnabled() || !groupId || rows.length < 2) return rows;
 
     try {
         const saved = JSON.parse(localStorage.getItem(processGroupOrderStorageKey(groupId)) || '[]');
@@ -300,7 +309,7 @@ function applySavedProcessGroupOrder(items, groupId) {
 }
 
 function saveCurrentProcessGroupOrder() {
-    if (!isRegularPaymentsContext() || !currentGroupId || !currentGroupItems.length) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupId || !currentGroupItems.length) return;
     try {
         localStorage.setItem(
             processGroupOrderStorageKey(currentGroupId),
@@ -343,7 +352,7 @@ function syncProcessGroupOrderFromDom() {
 }
 
 window.beginProcessGroupDrag = function(event, itemId) {
-    if (!isRegularPaymentsContext()) return;
+    if (!isPaymentsGroupDragEnabled()) return;
     currentGroupDraggedItemId = Number(itemId || 0);
     if (!currentGroupDraggedItemId) {
         event.preventDefault();
@@ -358,7 +367,7 @@ window.beginProcessGroupDrag = function(event, itemId) {
 };
 
 window.overProcessGroupDrag = function(event, targetItemId, targetRow) {
-    if (!isRegularPaymentsContext() || !currentGroupDraggedItemId) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupDraggedItemId) return;
     if (Number(targetItemId || 0) === currentGroupDraggedItemId) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
@@ -375,7 +384,7 @@ window.overProcessGroupDrag = function(event, targetItemId, targetRow) {
 };
 
 window.dropProcessGroupDrag = function(event, targetItemId, targetRow) {
-    if (!isRegularPaymentsContext() || !currentGroupDraggedItemId || !targetRow) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupDraggedItemId || !targetRow) return;
     event.preventDefault();
 
     const draggedId = Number(currentGroupDraggedItemId || 0);
@@ -539,6 +548,7 @@ window.loadPaymentsTable = async function() {
     try {
         const url = new URL(routes().data, window.location.origin);
         url.searchParams.set('page', paymentsPage);
+        url.searchParams.set('per_page', '15'); // W68_PAYMENTS_PAGE_FIRST_15_20260909
 
         const data = await fetchPaymentsJson(
             url.toString(),
@@ -652,7 +662,7 @@ function updatePaymentsPagination(data = {}) {
     paymentsLastPage = Number(data.last_page || 1);
 
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((paymentsPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(paymentsPage * perPage, total) : 0;
 
@@ -1102,7 +1112,7 @@ async function loadGroupsTable() {
 
 function updateGroupsPagination(data = {}) {
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((groupsPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(groupsPage * perPage, total) : 0;
 
@@ -1441,7 +1451,7 @@ window.openProcessGroupModal = async function(groupId) {
         currentGroupPrintReturns = Array.isArray(data.returns) ? data.returns : [];
         if (titleEl) titleEl.textContent = group.title || `Group #${groupId}`;
         if (subtitleEl) {
-            const dragHint = isRegularPaymentsContext() ? ' · drag invoice numbers to rearrange' : '';
+            const dragHint = isPaymentsGroupDragEnabled() ? ' · drag invoice numbers to rearrange' : '';
             subtitleEl.textContent = `Grouped on ${group.grouped_date || '---'} · ${String(group.status || 'processed').replaceAll('_', ' ')}${dragHint}`;
         }
         renderProcessGroupRows(currentGroupItems);
@@ -1454,7 +1464,7 @@ window.openProcessGroupModal = async function(groupId) {
 function renderProcessGroupRows(items) {
     const tbody = document.getElementById('process-group-tbody');
     if (!tbody) return;
-    const dragEnabled = isRegularPaymentsContext();
+    const dragEnabled = isPaymentsGroupDragEnabled();
     tbody.innerHTML = items.length ? items.map((item, index) => `
         <tr class="hover:bg-slate-50 border-b border-slate-100 ${dragEnabled ? 'transition-shadow' : ''}" data-index="${index}" data-item-id="${Number(item.id || 0)}" ${dragEnabled ? `ondragover="window.overProcessGroupDrag(event, ${Number(item.id || 0)}, this)" ondrop="window.dropProcessGroupDrag(event, ${Number(item.id || 0)}, this)"` : ''}>
             <td class="p-4 text-center"><input type="checkbox" class="process-group-check accent-[#800000]" data-index="${index}" checked></td>

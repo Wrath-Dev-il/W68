@@ -22548,7 +22548,7 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
      * 3) Online Report snapshot
      * 4) Product Ledger (read-only historical fallback)
      */
-    function hatdogBuildPaymentOnlineInvoices(?int $customerId = null, string $search = '')
+    function hatdogBuildPaymentOnlineInvoices($customerId = null, string $search = '')
     {
         $rows = [];
         $rowAuthority = [];
@@ -22582,20 +22582,41 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
             ), static fn ($invoice) => $invoice !== ''));
         };
 
-        // Payments-only alias. Do not merge or rewrite customer rows in Masterlist.
+        // W68_PAYMENTS_MULTI_CUSTOMER_FILTER_20260909
+        // Payments-only aliases. The active Payments table can pass a page of
+        // customer IDs so Online Report resolution is limited to that page.
         $shopeePaymentCustomerIds = [1029, 1433];
-        $paymentCustomerIds = $customerId === null
+        $hasCustomerFilter = $customerId !== null;
+        $requestedCustomerIds = $customerId === null
             ? []
-            : (in_array((int) $customerId, $shopeePaymentCustomerIds, true)
-                ? $shopeePaymentCustomerIds
-                : [(int) $customerId]);
+            : (is_array($customerId) ? $customerId : [$customerId]);
+        $requestedCustomerIds = array_values(array_unique(array_filter(array_map(
+            static fn ($id) => (int) $id,
+            $requestedCustomerIds
+        ), static fn ($id) => $id > 0)));
+
+        if ($hasCustomerFilter && empty($requestedCustomerIds)) {
+            return [];
+        }
+
+        $paymentCustomerIds = [];
+        foreach ($requestedCustomerIds as $requestedCustomerId) {
+            if (in_array($requestedCustomerId, $shopeePaymentCustomerIds, true)) {
+                array_push($paymentCustomerIds, ...$shopeePaymentCustomerIds);
+            } else {
+                $paymentCustomerIds[] = $requestedCustomerId;
+            }
+        }
+        $paymentCustomerIds = array_values(array_unique($paymentCustomerIds));
+        $preferredShopeeCustomerId = collect($requestedCustomerIds)
+            ->first(fn ($id) => in_array((int) $id, $shopeePaymentCustomerIds, true));
 
         // Resolve finalized ONL Sales Orders BEFORE applying Online Report JSON filters.
         $onlineOrdersQ = DB::connection('sales')->table('sales_orders')
             ->where('order_number', 'LIKE', 'ONL-%')
             ->whereIn('status', ['Confirmed', 'Closed']);
 
-        if ($customerId !== null) {
+        if ($hasCustomerFilter) {
             $onlineOrdersQ->whereIn('customer_id', $paymentCustomerIds);
         }
 
@@ -22631,7 +22652,7 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
             ->select('id', 'status', 'prices', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at')
             ->whereIn('status', ['generated', 'migrated']);
 
-        if ($customerId !== null) {
+        if ($hasCustomerFilter) {
             // A matching finalized ONL Sales Order always keeps its report eligible.
             // notes_data customer matching is fallback-only for legacy/migrated rows.
             $reportIdsFromOrders = array_keys($orderReportIds);
@@ -22835,15 +22856,15 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
                     : trim((string) (($note['customer_name'] ?? '') ?: ($ledgerInfo['customer_name'] ?? '')));
 
                 // Apply customer filtering only after the authoritative ONL Sales Order is resolved.
-                if ($customerId !== null && !in_array($resolvedCustomerId, $paymentCustomerIds, true)) {
+                if ($hasCustomerFilter && !in_array($resolvedCustomerId, $paymentCustomerIds, true)) {
                     continue;
                 }
 
                 // Treat historical 1029/1433 Shopee IDs as one Payments read group only.
                 $outputCustomerId = $resolvedCustomerId;
                 if (in_array($resolvedCustomerId, $shopeePaymentCustomerIds, true)) {
-                    $outputCustomerId = $customerId !== null && in_array((int) $customerId, $shopeePaymentCustomerIds, true)
-                        ? (int) $customerId
+                    $outputCustomerId = $hasCustomerFilter && $preferredShopeeCustomerId
+                        ? (int) $preferredShopeeCustomerId
                         : 1029;
 
                     if ($outputCustomerId === 1029 && $resolvedCustomerId === 1433) {
@@ -22988,18 +23009,11 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
 
 Route::get('/admin/payments/data', function () {
     // W68_PAYMENTS_RUNTIME_GUARD
-    // This endpoint aggregates large historical datasets before pagination.
-    // HostForge was terminating the worker before Laravel could return JSON.
     @ini_set('memory_limit', '1024M');
     @set_time_limit(120);
     gc_enable();
-
     foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
-        try {
-            DB::connection($connectionName)->disableQueryLog();
-        } catch (\Throwable $ignored) {
-            // The route's normal try/catch remains authoritative for failures.
-        }
+        try { DB::connection($connectionName)->disableQueryLog(); } catch (\Throwable $ignored) {}
     }
 
     $user = session('user');
@@ -23090,6 +23104,324 @@ Route::get('/admin/payments/data', function () {
             }
         }
 
+        // W68_PAYMENTS_PAGE_FIRST_15_20260909
+        // Resolve only the 15 active payors needed for the requested page before
+        // loading full invoice/report details. This prevents one Payments request
+        // from decoding every Online Report and every historical invoice first.
+        $page = max((int) request()->query('page', 1), 1);
+        $perPage = 15;
+        $today = now()->startOfDay();
+        $shopeePaymentCustomerIds = [1029, 1433];
+        $normalizePaymentCustomerId = static fn ($id) => in_array((int) $id, $shopeePaymentCustomerIds, true)
+            ? 1029
+            : (int) $id;
+
+        $parsePaymentInvoiceValues = static function ($value): array {
+            if (is_array($value)) {
+                return array_values(array_filter(array_map(
+                    static fn ($invoice) => trim((string) $invoice),
+                    $value
+                ), static fn ($invoice) => $invoice !== ''));
+            }
+
+            $raw = trim((string) ($value ?? ''));
+            if ($raw === '') return [];
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map(
+                    static fn ($invoice) => trim((string) $invoice),
+                    $decoded
+                ), static fn ($invoice) => $invoice !== ''));
+            }
+
+            return array_values(array_filter(array_map(
+                static fn ($invoice) => trim((string) $invoice),
+                explode(',', $raw)
+            ), static fn ($invoice) => $invoice !== ''));
+        };
+
+        $returnAmountFor = static function (array $keys, array $map) use ($normalizeInvKey): float {
+            $normalized = collect($keys)
+                ->flatMap(function ($value) use ($normalizeInvKey) {
+                    $raw = trim((string) $value);
+                    if ($raw === '') return [];
+                    $tokens = preg_split('/[,\s\/]+/', $raw) ?: [];
+                    $tokens[] = $raw;
+                    if (preg_match_all('/SN-\d+/i', $raw, $m) && !empty($m[0])) {
+                        $tokens = array_merge($tokens, $m[0]);
+                    }
+                    return $tokens;
+                })
+                ->map(fn ($value) => $normalizeInvKey($value))
+                ->filter()
+                ->unique();
+
+            return (float) $normalized->sum(fn ($key) => (float) ($map[$key] ?? 0));
+        };
+
+        $activeCandidatePayors = [];
+        $registerCandidate = static function ($customerId, $customerName, $effectiveDate) use (&$activeCandidatePayors, $normalizePaymentCustomerId) {
+            $customerId = $normalizePaymentCustomerId($customerId);
+            if ($customerId <= 0) return;
+
+            $name = trim((string) $customerName);
+            if ($customerId === 1029 && $name === '') $name = 'SHOPEE ONLINE BUYERS';
+            if ($customerId === 1029 && stripos($name, 'shop') !== false) $name = 'SHOPEE ONLINE BUYERS';
+
+            $date = null;
+            if ($effectiveDate) {
+                try { $date = \Carbon\Carbon::parse($effectiveDate); } catch (\Throwable $ignored) {}
+            }
+
+            if (!isset($activeCandidatePayors[$customerId])) {
+                $activeCandidatePayors[$customerId] = [
+                    'customer_id' => $customerId,
+                    'name' => $name,
+                    'oldest_date' => $date,
+                ];
+                return;
+            }
+
+            if ($activeCandidatePayors[$customerId]['name'] === '' && $name !== '') {
+                $activeCandidatePayors[$customerId]['name'] = $name;
+            }
+            $oldest = $activeCandidatePayors[$customerId]['oldest_date'];
+            if ($date && (!$oldest || $date->lt($oldest))) {
+                $activeCandidatePayors[$customerId]['oldest_date'] = $date;
+            }
+        };
+
+        // LOCAL Sales Orders: read only the columns needed to decide whether a
+        // customer can appear in the active list. Full rows are loaded later for
+        // the selected 15 customers only.
+        $candidateSalesOrders = DB::connection('sales')->table('sales_orders as so')
+            ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
+            ->where('so.order_number', 'NOT LIKE', 'ONL-%')
+            ->where(function ($query) {
+                $query->whereIn('so.status', ['Closed', 'Confirmed'])
+                    ->orWhere('sn.status', 'Closed');
+            })
+            ->whereNotNull('so.customer_id')
+            ->get([
+                'so.id as source_id',
+                'so.order_number as po_no',
+                'sn.sales_number as sales_note_no',
+                'sn.net_total as sales_note_amount',
+                'sn.order_date',
+                DB::raw("COALESCE(NULLIF(so.invoice_numbers, ''), so.order_number) as invoice_no"),
+                'so.customer_id',
+                'so.customer_name',
+                'so.total_amount as amount',
+                'so.created_at',
+                'so.updated_at',
+                'so.waybill_date',
+            ]);
+
+        foreach ($candidateSalesOrders as $doc) {
+            $paidRow = $paidRows->get('sales_order:' . $doc->source_id);
+            $paid = (float) ($paidRow->paid_total ?? 0);
+            $recordedAdjustment = (float) ($paidRow->adjustment_total ?? 0);
+            $amount = (float) ($doc->amount ?? 0);
+            if ($amount <= 0) continue;
+
+            $returned = $returnAmountFor([
+                $doc->invoice_no ?? '',
+                $doc->po_no ?? '',
+                $doc->sales_note_no ?? '',
+            ], $returnMap);
+            $salesNoteAmount = (float) ($doc->sales_note_amount ?? 0);
+            $effectiveAdjustment = max($returned, $recordedAdjustment);
+            $remainingReturnAdjustment = min(max($returned - $recordedAdjustment, 0), max($amount - $paid, 0));
+            $autoSettledByReturn = $returned > 0 && (
+                $returned >= $amount
+                || ($salesNoteAmount > 0 && $returned >= $salesNoteAmount)
+                || $paid >= ($amount / 2)
+            );
+            $due = $autoSettledByReturn ? 0 : max($amount - $paid - $effectiveAdjustment, 0);
+            if ($due <= 0 && $remainingReturnAdjustment <= 0) continue;
+
+            $dateCandidates = collect([
+                $doc->order_date ?? null,
+                $doc->waybill_date ?? null,
+                $doc->created_at ?? null,
+                $doc->updated_at ?? null,
+            ])->filter();
+            $effectiveDate = $dateCandidates->isNotEmpty()
+                ? $dateCandidates->map(fn ($value) => \Carbon\Carbon::parse($value))->sort()->first()
+                : null;
+
+            $registerCandidate($doc->customer_id, $doc->customer_name, $effectiveDate);
+        }
+        unset($candidateSalesOrders);
+
+        $candidateConsignments = DB::connection('sales')->table('consignment_invoices')
+            ->whereNotIn('status', ['Cancelled', 'Void'])
+            ->whereNotNull('customer_id')
+            ->get([
+                'id as source_id',
+                'invoice_number as invoice_no',
+                'customer_id',
+                'customer_name',
+                'total_amount as amount',
+                'created_at',
+                'updated_at',
+            ]);
+
+        foreach ($candidateConsignments as $doc) {
+            $paidRow = $paidRows->get('consignment_invoice:' . $doc->source_id);
+            $paid = (float) ($paidRow->paid_total ?? 0);
+            $recordedAdjustment = (float) ($paidRow->adjustment_total ?? 0);
+            $amount = (float) ($doc->amount ?? 0);
+            if ($amount <= 0) continue;
+            $returned = $returnAmountFor([$doc->invoice_no ?? ''], $returnMap);
+            $effectiveAdjustment = max($returned, $recordedAdjustment);
+            $remainingReturnAdjustment = min(max($returned - $recordedAdjustment, 0), max($amount - $paid, 0));
+            $due = max($amount - $paid - $effectiveAdjustment, 0);
+            if ($due <= 0 && $remainingReturnAdjustment <= 0) continue;
+            $effectiveDate = $doc->created_at ?? $doc->updated_at ?? null;
+            $registerCandidate($doc->customer_id, $doc->customer_name, $effectiveDate);
+        }
+        unset($candidateConsignments);
+
+        // Modern ONLINE rows can be classified from finalized ONL Sales Orders
+        // without decoding every Online Report snapshot.
+        $modernOnlineReportIds = [];
+        $candidateOnlineOrders = DB::connection('sales')->table('sales_orders')
+            ->where('order_number', 'LIKE', 'ONL-%')
+            ->whereIn('status', ['Confirmed', 'Closed'])
+            ->whereNotNull('customer_id')
+            ->get([
+                'order_number',
+                'customer_id',
+                'customer_name',
+                'invoice_numbers',
+                'total_amount',
+                'created_at',
+                'updated_at',
+            ]);
+
+        foreach ($candidateOnlineOrders as $order) {
+            if (!preg_match('/^ONL-(\d+)-(\d+)/', (string) $order->order_number, $m)) continue;
+            $reportId = (int) $m[1];
+            $modernOnlineReportIds[$reportId] = true;
+            $invoiceValues = $parsePaymentInvoiceValues($order->invoice_numbers ?? null);
+            $invoiceNo = trim((string) ($invoiceValues[0] ?? ''));
+            $amount = (float) ($order->total_amount ?? 0);
+
+            // Zero totals still get a candidate slot because the normal Online
+            // resolver may recover their amount from Sales Order items/report data.
+            $isActionable = $amount <= 0;
+            if (!$isActionable && $invoiceNo !== '') {
+                $paidRow = $onlinePaidRows->get('online_report:' . $reportId . ':' . $invoiceNo);
+                $paid = (float) ($paidRow->paid_total ?? 0);
+                $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
+                $isActionable = max($amount - $paid - $returned, 0) > 0;
+            }
+            if ($isActionable) {
+                $registerCandidate($order->customer_id, $order->customer_name, $order->created_at ?? $order->updated_at ?? null);
+            }
+        }
+        unset($candidateOnlineOrders);
+
+        // Legacy/migrated Online Reports with no finalized ONL Sales Order are
+        // the only reports that still need snapshot inspection at candidate time.
+        // This is much smaller than decoding the complete Online Report history.
+        $legacyReportsQ = DB::connection('sales')->table('online_reports')
+            ->whereIn('status', ['generated', 'migrated']);
+        if (!empty($modernOnlineReportIds)) {
+            foreach (array_chunk(array_keys($modernOnlineReportIds), 1000) as $reportIdChunk) {
+                $legacyReportsQ->whereNotIn('id', $reportIdChunk);
+            }
+        }
+        $legacyReports = $legacyReportsQ->get([
+            'id', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at'
+        ]);
+
+        foreach ($legacyReports as $report) {
+            $invoiceValues = $parsePaymentInvoiceValues($report->invoice_numbers ?? null);
+            $notes = json_decode((string) ($report->notes_data ?? '[]'), true);
+            if (!is_array($notes)) $notes = [];
+            $count = max(count($invoiceValues), count($notes));
+
+            for ($i = 0; $i < $count; $i++) {
+                $note = $notes[$i] ?? (count($notes) === 1 ? $notes[0] : null);
+                if (!is_array($note)) continue;
+                $customerId = (int) ($note['customer_id'] ?? 0);
+                if ($customerId <= 0) continue;
+                $invoiceNo = trim((string) ($invoiceValues[$i] ?? ''));
+                $amount = (float) ($note['net_total'] ?? 0);
+                if ($amount <= 0 && isset($note['items']) && is_array($note['items'])) {
+                    $amount = (float) collect($note['items'])->sum(fn ($item) => is_array($item) ? (float) ($item['subtotal'] ?? 0) : 0);
+                }
+
+                $isActionable = $amount <= 0;
+                if (!$isActionable && $invoiceNo !== '') {
+                    $paidRow = $onlinePaidRows->get('online_report:' . (int) $report->id . ':' . $invoiceNo);
+                    $paid = (float) ($paidRow->paid_total ?? 0);
+                    $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
+                    $isActionable = max($amount - $paid - $returned, 0) > 0;
+                }
+                if ($isActionable) {
+                    $registerCandidate(
+                        $customerId,
+                        (string) ($note['customer_name'] ?? ''),
+                        $report->created_at ?? $report->updated_at ?? null
+                    );
+                }
+            }
+        }
+        unset($legacyReports, $modernOnlineReportIds);
+
+        // Fill missing names from Masterlist without requiring every Online-only
+        // buyer to have a Masterlist row.
+        $candidateIds = array_keys($activeCandidatePayors);
+        if (!empty($candidateIds)) {
+            $masterNames = DB::connection('masterlist')->table('customers')
+                ->whereIn('id', $candidateIds)
+                ->pluck('name', 'id');
+            foreach ($activeCandidatePayors as $candidateId => &$candidate) {
+                if (trim((string) $candidate['name']) === '') {
+                    $candidate['name'] = trim((string) ($masterNames[$candidateId] ?? '')) ?: ('Customer #' . $candidateId);
+                }
+            }
+            unset($candidate);
+        }
+
+        $activeCandidatePayors = collect($activeCandidatePayors)
+            ->sortBy(fn ($row) => mb_strtolower((string) ($row['name'] ?? '')))
+            ->values();
+
+        $total = $activeCandidatePayors->count();
+        $lastPage = max((int) ceil($total / $perPage), 1);
+        $page = min($page, $lastPage);
+        $pageCustomerIds = $activeCandidatePayors
+            ->slice(($page - 1) * $perPage, $perPage)
+            ->pluck('customer_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        // Expand read aliases only for source-table filtering. Output remains the
+        // same Payments read identity as before.
+        $sourceCustomerIds = $pageCustomerIds;
+        if (in_array(1029, $sourceCustomerIds, true)) $sourceCustomerIds[] = 1433;
+        if (in_array(1433, $sourceCustomerIds, true)) $sourceCustomerIds[] = 1029;
+        $sourceCustomerIds = array_values(array_unique($sourceCustomerIds));
+
+        $agingStats = ['30' => 0, '60' => 0, '90' => 0, '120' => 0, '150' => 0];
+        foreach ($activeCandidatePayors as $candidate) {
+            $oldest = $candidate['oldest_date'] ?? null;
+            $ageDays = $oldest ? $oldest->copy()->startOfDay()->diffInDays($today) : 0;
+            $bucket = match (true) {
+                $ageDays <= 31 => '30',
+                $ageDays <= 61 => '60',
+                $ageDays <= 91 => '90',
+                $ageDays <= 121 => '120',
+                default => '150',
+            };
+            $agingStats[$bucket]++;
+        }
+
         $salesOrders = DB::connection('sales')->table('sales_orders as so')
             ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
             ->where('so.order_number', 'NOT LIKE', 'ONL-%')
@@ -23097,6 +23429,7 @@ Route::get('/admin/payments/data', function () {
                 $query->whereIn('so.status', ['Closed', 'Confirmed'])
                     ->orWhere('sn.status', 'Closed');
             })
+            ->whereIn('so.customer_id', $sourceCustomerIds)
             ->select(
                 DB::raw("'sales_order' as source_type"),
                 'so.id as source_id',
@@ -23117,6 +23450,7 @@ Route::get('/admin/payments/data', function () {
 
         $consignmentInvoices = DB::connection('sales')->table('consignment_invoices')
             ->whereNotIn('status', ['Cancelled', 'Void'])
+            ->whereIn('customer_id', $sourceCustomerIds)
             ->select(
                 DB::raw("'consignment_invoice' as source_type"),
                 'id as source_id',
@@ -23133,7 +23467,7 @@ Route::get('/admin/payments/data', function () {
             )
             ->get();
 
-        $onlineInvoices = hatdogBuildPaymentOnlineInvoices();
+        $onlineInvoices = collect(hatdogBuildPaymentOnlineInvoices($pageCustomerIds));
 
         $documents = $salesOrders->concat($consignmentInvoices)->concat($onlineInvoices)
             ->filter(fn ($doc) => $doc->customer_id && (float) $doc->amount > 0)
@@ -23201,33 +23535,6 @@ Route::get('/admin/payments/data', function () {
             ->pluck('terms', 'id');
 
         $unpaidDocuments = $documents->filter(fn ($doc) => $doc->due_amount > 0);
-        $agingStats = ['30' => 0, '60' => 0, '90' => 0, '120' => 0, '150' => 0];
-        $today = now()->startOfDay();
-
-        $unpaidDocuments
-            ->groupBy('customer_id')
-            ->each(function ($docs) use (&$agingStats, $today) {
-                $oldest = $docs
-                    ->filter(fn ($doc) => !empty($doc->effective_date))
-                    ->sortBy(fn ($doc) => $doc->effective_date?->timestamp)
-                    ->first();
-
-                $ageDays = $oldest && $oldest->effective_date
-                    ? $oldest->effective_date->copy()->startOfDay()->diffInDays($today)
-                    : 0;
-
-                // The business aging cards roll over the day after a full month:
-                // May 1 still counts in 30 on June 1, then moves to 60 on June 2.
-                $bucket = match (true) {
-                    $ageDays <= 31 => '30',
-                    $ageDays <= 61 => '60',
-                    $ageDays <= 91 => '90',
-                    $ageDays <= 121 => '120',
-                    default => '150',
-                };
-
-                $agingStats[$bucket]++;
-            });
 
         $payors = $documents
             ->groupBy('customer_id')
@@ -23295,10 +23602,9 @@ Route::get('/admin/payments/data', function () {
             ->sortBy('name')
             ->values();
 
-        $page = max((int) request()->query('page', 1), 1);
-        $perPage = 50;
-        $total = $payors->count();
-        $pagedPayors = $payors->slice(($page - 1) * $perPage, $perPage)->values();
+        // The expensive invoice/report work above was already restricted to
+        // this page's 15 active customer IDs. Do not paginate it a second time.
+        $pagedPayors = $payors->values();
 
         return response()->json([
             'success' => true,
@@ -23307,7 +23613,7 @@ Route::get('/admin/payments/data', function () {
             'page' => $page,
             'per_page' => $perPage,
             'total' => $total,
-            'last_page' => max((int) ceil($total / $perPage), 1),
+            'last_page' => $lastPage,
         ]);
     } catch (\Throwable $e) {
         Log::error('Payments data error: ' . $e->getMessage());
