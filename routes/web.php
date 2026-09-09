@@ -26844,6 +26844,16 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         $yearSales = DB::connection('ledger')->table('product_ledgers')
             ->whereIn('product_id', $allProductIds)
             ->whereYear('date', $year)
+            // W68_COST_REPORT_IGNORE_INVENTORY_ADJUSTMENTS_20260909
+            // Inventory Adjustment OUT rows change stock only. They are not
+            // customer sales and must never be included in Cost Report Sales.
+            ->where(function ($salesMovementQuery) {
+                $salesMovementQuery
+                    ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
+                    ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
+            })
             ->selectRaw('product_id, SUM(' . $outColumn . ') as total_out')
             ->groupBy('product_id')
             ->pluck('total_out', 'product_id');
