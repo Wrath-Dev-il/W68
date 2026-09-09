@@ -2774,6 +2774,25 @@ function openPrintablePaymentLayout({
     // Put the company title, sub-title, customer meta, and transaction column labels
     // inside THEAD. Chrome repeats THEAD on every printed page, which is much more
     // reliable than a fixed-position header and keeps Letter pages aligned.
+    // W68_PAYMENTS_GROUP_EDITABLE_PRINT_20260909
+    // Group prints open as an editable browser-only report. Users can change any
+    // visible report text/amount before printing. Nothing here is saved to DB.
+    const groupEditablePreview = isGroupPayment;
+    const groupEditToolbar = groupEditablePreview ? `
+        <div class="w68-group-edit-toolbar" contenteditable="false">
+            <div>
+                <strong>EDITABLE GROUP REPORT</strong>
+                <span>Click anywhere in the report below, type your changes, then print. Changes are print-only and are not saved.</span>
+            </div>
+            <div class="w68-group-edit-actions">
+                <button type="button" onclick="window.print()">PRINT REPORT</button>
+                <button type="button" onclick="window.close()">CLOSE</button>
+            </div>
+        </div>` : '';
+    const groupReportOpen = groupEditablePreview
+        ? '<div id="w68-group-editable-report" contenteditable="true" spellcheck="false">'
+        : '';
+    const groupReportClose = groupEditablePreview ? '</div>' : '';
     const printable = `<!doctype html><html><head><meta charset="utf-8"><title>Collection Invoice ${escapeHtml(collectionNo)}</title><style>
 @page{size:Letter portrait;margin:.38in .35in .42in}
 *{box-sizing:border-box}
@@ -2801,13 +2820,23 @@ th{font-size:8.5px;font-weight:800;text-align:left}
 .summary strong{text-align:right}
 .summary .retotal{border-top:1px solid #111;margin-top:2px;padding-top:6px;font-size:10px}
 .blank-row td{height:18px}
+.w68-group-edit-toolbar{position:sticky;top:0;z-index:9999;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#4A0E0E;color:#fff;padding:10px 14px;margin:0 0 12px;font-family:Arial,sans-serif;box-shadow:0 3px 12px rgba(0,0,0,.18)}
+.w68-group-edit-toolbar strong{display:block;font-size:11px;letter-spacing:.08em}
+.w68-group-edit-toolbar span{display:block;margin-top:2px;font-size:9px;font-weight:600;opacity:.8}
+.w68-group-edit-actions{display:flex;gap:8px;flex:0 0 auto}
+.w68-group-edit-actions button{border:0;border-radius:7px;padding:8px 12px;font-size:9px;font-weight:900;cursor:pointer;background:#FFD700;color:#4A0E0E}
+#w68-group-editable-report{outline:2px dashed rgba(122,92,0,.42);outline-offset:5px;min-height:240px}
+#w68-group-editable-report:focus{outline:2px dashed #9A7200}
 @media print{
+  .w68-group-edit-toolbar{display:none!important}
+  #w68-group-editable-report{outline:none!important}
   html,body{width:auto;height:auto}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .transaction-table thead,.detail-table thead{display:table-header-group}
   .section-block,.summary{page-break-inside:avoid}
 }
 </style></head><body>
+${groupEditToolbar}${groupReportOpen}
 <table class="transaction-table">
 <thead>
 <tr><th colspan="5" class="doc-head-cell"><div class="company">W68 AUTO PARTS &amp; SERVICE CENTER</div><div class="subtitle">Collection Invoice</div><div class="meta"><div class="meta-row"><span class="meta-label">Customer:</span><span class="meta-value">${escapeHtml(customer.name || '---')}</span></div><div class="meta-row"><span class="meta-label">Collection No.:</span><span class="meta-value">${escapeHtml(collectionNo)}</span></div><div class="meta-row"><span class="meta-label">Address:</span><span class="meta-value">${escapeHtml(customer.address || '---')}</span></div><div class="meta-row"><span class="meta-label">DATE:</span><span class="meta-value">${escapeHtml(paymentDate || '---')}</span></div></div></th></tr>
@@ -2820,6 +2849,7 @@ ${Array.from({ length: invoiceBlanks }, () => blankCells(5)).join('')}
 <tr><td colspan="2" class="right"><strong>TOTAL</strong></td><td class="right"><strong>${money.format(totalInvoice)}</strong></td><td class="right"><strong>${money.format(totalAdjustment)}</strong></td><td class="right"><strong>${money.format(totalPaid)}</strong></td></tr>
 </tbody></table>
 ${secondarySection}${summary}
+${groupReportClose}
 </body></html>`;
 
     const printWindow = window.open('', '_blank', 'width=900,height=700');
@@ -2831,6 +2861,11 @@ ${secondarySection}${summary}
     printWindow.document.write(printable);
     printWindow.document.close();
     printWindow.focus();
+    if (groupEditablePreview) {
+        // Do not auto-open the browser print dialog. The user edits the preview
+        // first and presses PRINT REPORT when ready.
+        return;
+    }
     setTimeout(() => printWindow.print(), 300);
 }
 
