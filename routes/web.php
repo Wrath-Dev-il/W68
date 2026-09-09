@@ -15058,7 +15058,15 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
 
                     return [
                         'product_id' => $resolvedProductId,
-                        'product_code' => (string) ($item->product_code ?? ''),
+                        // W68_SALES_NOTE_PRINT_PRODUCT_CODE_FALLBACK
+                        // Some Sales Note item rows have a blank product_code even
+                        // though product_id correctly points to Product Master.
+                        // Always print Product Master's Item Code as the fallback.
+                        'product_code' => (string) (
+                            trim((string) ($item->product_code ?? '')) !== ''
+                                ? $item->product_code
+                                : ($product->product_code ?? '')
+                        ),
                         'description' => implode(' | ', $descParts),
                         'part_number' => $product ? $product->part_number : '',
                         'quantity' => $item->quantity,
