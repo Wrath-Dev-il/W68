@@ -13,6 +13,12 @@
             data: "{{ url('/admin/system-security/archived/data') }}",
             restore: "{{ url('/admin/system-security/archived/restore') }}"
         };
+        // W68_DEVELOPER_ONLINE_REPORT_ROUTES_20260910
+        window.developerOnlineReportRoutes = {
+            stats: "{{ route('developer.online-report-ledger-sync-stats') }}",
+            unsynced: "{{ route('developer.unsynced-reports-list') }}",
+            syncReportTemplate: "{{ route('developer.sync-report', ['id' => '__REPORT_ID__']) }}"
+        };
         window.developerInventoryRoutes = {
             mismatches: "{{ route('developer.inventory-control.stock-mismatches') }}",
             syncMismatchBase: "{{ url('/developer/stock-mismatches') }}",
