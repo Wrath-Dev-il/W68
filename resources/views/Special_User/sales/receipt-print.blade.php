@@ -124,6 +124,24 @@
          * Sales Invoice uses the same UNIT PRICE anchor: DATE / TERMS / TIN start at 68%.
          * Vertical positioning is unchanged, so TERMS keeps its current ADDRESS alignment.
          */
+        /* W68_SALES_INVOICE_HEADER_WIDTH_20260910
+         * CUSTOMER / ADDRESS may extend to 70%.
+         * Description ends at 68%, so this is only slightly longer.
+         */
+        body.print-invoice .header-left {
+            width: 70%;
+            max-width: none;
+            padding-right: 0.1cm;
+        }
+
+        body.print-invoice .header-left .customer-line,
+        body.print-invoice .header-left .address-line {
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
         body.print-invoice .header-right-content {
             left: 68%;
             right: auto;
@@ -252,6 +270,164 @@
                     $displayPrintDate = $rawPrintDate;
                 }
             }
+            // W68_SALES_PRINT_BRAND_FIX_20260910
+            // Product Master "Brand" is stored in core4_masterlist.products.category.
+            // Resolve all brands once for this print to avoid one query per item.
+            $printBrandById = collect();
+            $printBrandByCode = collect();
+
+            try {
+                $printRows = collect($items ?? []);
+
+                $printProductIds = $printRows
+                    ->map(static fn ($row) => (int) ($row['product_id'] ?? 0))
+                    ->filter(static fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
+
+                $printProductCodes = $printRows
+                    ->map(static fn ($row) => trim((string) ($row['product_code'] ?? '')))
+                    ->filter(static fn ($code) => $code !== '')
+                    ->unique()
+                    ->values();
+
+                if ($printProductIds->isNotEmpty() || $printProductCodes->isNotEmpty()) {
+
+                    $brandQuery = \Illuminate\Support\Facades\DB::connection('masterlist')
+                        ->table('products')
+                        ->select([
+                            'id',
+                            'product_code',
+                            'category',
+                        ]);
+
+                    $brandQuery->where(function ($query) use (
+                        $printProductIds,
+                        $printProductCodes
+                    ) {
+                        if ($printProductIds->isNotEmpty()) {
+                            $query->whereIn(
+                                'id',
+                                $printProductIds->all()
+                            );
+                        }
+
+                        if ($printProductCodes->isNotEmpty()) {
+                            if ($printProductIds->isNotEmpty()) {
+                                $query->orWhereIn(
+                                    'product_code',
+                                    $printProductCodes->all()
+                                );
+                            } else {
+                                $query->whereIn(
+                                    'product_code',
+                                    $printProductCodes->all()
+                                );
+                            }
+                        }
+                    });
+
+                    $brandProducts = $brandQuery->get();
+
+                    $printBrandById = $brandProducts
+                        ->mapWithKeys(static function ($product) {
+                            return [
+                                (int) $product->id =>
+                                    trim((string) $product->category)
+                            ];
+                        });
+
+                    $printBrandByCode = $brandProducts
+                        ->mapWithKeys(static function ($product) {
+                            return [
+                                trim((string) $product->product_code) =>
+                                    trim((string) $product->category)
+                            ];
+                        });
+                }
+            } catch (\Throwable $brandLookupError) {
+                // Printing must still work even if an old product cannot
+                // be resolved from Product Master.
+                $printBrandById = collect();
+                $printBrandByCode = collect();
+            }
+
+            $printDetailAlreadyIncluded = static function (
+                $existing,
+                $candidate
+            ): bool {
+                $normalize = static function ($value): string {
+                    $value = strtoupper(trim((string) $value));
+
+                    $value = preg_replace(
+                        '/[^A-Z0-9]+/u',
+                        ' ',
+                        $value
+                    ) ?? '';
+
+                    return trim(
+                        preg_replace('/\s+/u', ' ', $value) ?? ''
+                    );
+                };
+
+                $existingNormalized = $normalize($existing);
+                $candidateNormalized = $normalize($candidate);
+
+                if ($candidateNormalized === '') {
+                    return true;
+                }
+
+                if ($existingNormalized === '') {
+                    return false;
+                }
+
+                return str_contains(
+                    $existingNormalized,
+                    $candidateNormalized
+                );
+            };
+
+            $resolvePrintBrand = static function ($item) use (
+                $printBrandById,
+                $printBrandByCode
+            ): string {
+
+                // Use a brand/category already supplied with the print first.
+                $brand = trim((string) (
+                    $item['brand']
+                    ?? $item['category']
+                    ?? ''
+                ));
+
+                if ($brand !== '') {
+                    return $brand;
+                }
+
+                $productId = (int) ($item['product_id'] ?? 0);
+
+                if ($productId > 0) {
+                    $brand = trim((string) (
+                        $printBrandById->get($productId) ?? ''
+                    ));
+                }
+
+                if ($brand !== '') {
+                    return $brand;
+                }
+
+                $productCode = trim((string) (
+                    $item['product_code'] ?? ''
+                ));
+
+                if ($productCode !== '') {
+                    $brand = trim((string) (
+                        $printBrandByCode->get($productCode) ?? ''
+                    ));
+                }
+
+                return $brand;
+            };
+
         @endphp
         <div class="header-info">
             <div class="header-left">
@@ -322,6 +498,20 @@
                     $printDescription = trim((string) ($item['description'] ?? ''));
                     if ($printDescription !== '') {
                         $details[] = $printDescription;
+                    }
+
+                    // W68_SPECIAL_PRINT_BRAND_ROW_20260910
+                    // Description + Brand + Application + Position.
+                    $printBrand = $resolvePrintBrand($item);
+
+                    if (
+                        $printBrand !== ''
+                        && !$printDetailAlreadyIncluded(
+                            implode(' ', $details),
+                            $printBrand
+                        )
+                    ) {
+                        $details[] = $printBrand;
                     }
 
                     foreach (['application', 'position'] as $detailKey) {
