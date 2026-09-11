@@ -142,10 +142,14 @@
             word-break: normal;
         }
 
+        /* W68_SALES_INVOICE_PREPRINTED_LABEL_GAP_20260911
+         * Physical Sales Invoice already has DATE / TERMS / TIN labels.
+         * Leave 1.5cm blank space before their printed values.
+         */
         body.print-invoice .header-right-content {
-            left: 68%;
+            left: calc(68% + 1.5cm);
             right: auto;
-            width: 32%;
+            width: calc(32% - 1.5cm);
             top: 0;
         }
         /* Sales Invoice header values are 1px smaller than the 16px header base. */

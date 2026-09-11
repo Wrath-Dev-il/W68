@@ -142,10 +142,14 @@
             word-break: normal;
         }
 
+        /* W68_SALES_INVOICE_PREPRINTED_LABEL_GAP_20260911
+         * Physical Sales Invoice already has DATE / TERMS / TIN labels.
+         * Leave 1.5cm blank space before their printed values.
+         */
         body.print-invoice .header-right-content {
-            left: 68%;
+            left: calc(68% + 1.5cm);
             right: auto;
-            width: 32%;
+            width: calc(32% - 1.5cm);
             top: 0;
         }
         /* Sales Invoice header values are 1px smaller than the 16px header base. */
@@ -500,8 +504,17 @@
                         $details[] = $printDescription;
                     }
 
-                    // W68_SPECIAL_PRINT_BRAND_ROW_20260910
-                    // Description + Brand + Application + Position.
+                    foreach (['application', 'position'] as $detailKey) {
+                        $detailValue = trim((string) ($item[$detailKey] ?? ''));
+                        $existingText = implode(' ', $details);
+                        if ($detailValue !== '' && !$alreadyIncluded($existingText, $detailValue)) {
+                            $details[] = $detailValue;
+                        }
+                    }
+
+                    // W68_SPECIAL_PRINT_BRAND_LAST_20260911
+                    // Final format:
+                    // Description + Application + Position + Brand
                     $printBrand = $resolvePrintBrand($item);
 
                     if (
@@ -514,13 +527,6 @@
                         $details[] = $printBrand;
                     }
 
-                    foreach (['application', 'position'] as $detailKey) {
-                        $detailValue = trim((string) ($item[$detailKey] ?? ''));
-                        $existingText = implode(' ', $details);
-                        if ($detailValue !== '' && !$alreadyIncluded($existingText, $detailValue)) {
-                            $details[] = $detailValue;
-                        }
-                    }
                     $formatPrintQty = static function ($value): string {
                         $number = (float) $value;
                         return floor($number) == $number
