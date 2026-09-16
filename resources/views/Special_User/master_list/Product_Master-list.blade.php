@@ -145,6 +145,7 @@
                         <th class="py-2.5 px-4 text-center w-[50px] checkbox-col"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
                         <th class="py-2.5 px-4 w-[80px]">Picture</th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
+<th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[150px] sortable-header" data-sort-key="position" onclick="window.handleSortClick('position')" style="cursor:pointer;user-select:none;">Position <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="partNumber" onclick="window.handleSortClick('partNumber')" style="cursor:pointer;user-select:none;">Part No# <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[250px] sortable-header" data-sort-key="description" onclick="window.handleSortClick('description')" style="cursor:pointer;user-select:none;">Description <span class="sort-indicator">&#8597;</span></th>
@@ -162,6 +163,7 @@
                         <th class="px-4 checkbox-col"></th>
                         <th class="px-4"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="productCode" name="product_code" placeholder="Code..." class="column-search-input py-1 text-[10px] w-full"></th>
+<th class="p-1.5 px-4"><input data-col="productCode2" id="search-product-code2" name="search[productCode2]" data-search-key="productCode2" data-field="productCode2" data-column="productCode2" type="text" placeholder="Code 2..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="position" name="position" placeholder="Pos..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="partNumber" name="part_number" placeholder="Part No..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="description" name="description" placeholder="Desc..." class="column-search-input py-1 text-[10px] w-full"></th>

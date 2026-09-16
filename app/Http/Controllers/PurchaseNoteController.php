@@ -27,6 +27,20 @@ class PurchaseNoteController extends Controller
      * script open that sends product_code but omits product_id. This method does
      * not generate a new ID; it retrieves the existing master-list primary key.
      */
+    /**
+     * Repair Purchase Note item product IDs before Laravel validation.
+     *
+     * W68_PN_AUTHORITATIVE_PRODUCT_ID_REPAIR_20260909
+     *
+     * A positive browser/Viber product_id is not automatically trusted:
+     * - if the ID exists and matches the submitted product_code, keep it;
+     * - if the ID is stale, invalid, or belongs to another product_code,
+     *   resolve the real core4_masterlist.products.id from product_code;
+     * - never generate a replacement ID.
+     *
+     * This prevents "The selected items.N.product_id is invalid." while also
+     * preventing a stale positive ID from silently saving the wrong product.
+     */
     private function hydrateMissingItemProductIds(Request $request): void
     {
         $items = $request->input('items');
@@ -36,6 +50,8 @@ class PurchaseNoteController extends Controller
         }
 
         $changed = false;
+        $productById = [];
+        $productMatchesByCode = [];
 
         foreach ($items as $index => &$item) {
             if (!is_array($item)) {
@@ -43,45 +59,112 @@ class PurchaseNoteController extends Controller
             }
 
             $candidateId = $item['product_id'] ?? $item['productId'] ?? null;
-            if (is_numeric($candidateId) && (int) $candidateId > 0) {
-                $item['product_id'] = (int) $candidateId;
-                continue;
-            }
-
+            $candidateId = is_numeric($candidateId) ? (int) $candidateId : 0;
             $productCode = trim((string) ($item['product_code'] ?? $item['code'] ?? ''));
+
+            $candidateProduct = null;
+
+            if ($candidateId > 0) {
+                if (!array_key_exists($candidateId, $productById)) {
+                    $productById[$candidateId] = Product::on('masterlist')
+                        ->select(['id', 'product_code'])
+                        ->find($candidateId);
+                }
+
+                $candidateProduct = $productById[$candidateId];
+
+                if ($candidateProduct) {
+                    $masterCode = trim((string) ($candidateProduct->product_code ?? ''));
+
+                    // When code is present, both ID and code must describe the same
+                    // Product Master row. This catches stale/wrong positive IDs.
+                    if ($productCode === '' || strcasecmp($masterCode, $productCode) === 0) {
+                        $item['product_id'] = (int) $candidateProduct->id;
+                        continue;
+                    }
+
+                    Log::warning('Purchase Note request contained a product_id/product_code mismatch; repairing from Product Master.', [
+                        'item_index' => $index,
+                        'submitted_product_id' => $candidateId,
+                        'submitted_product_code' => $productCode,
+                        'id_product_code' => $masterCode,
+                        'request_path' => $request->path(),
+                    ]);
+                } else {
+                    Log::warning('Purchase Note request contained a stale/invalid positive product_id; repairing from Product Master.', [
+                        'item_index' => $index,
+                        'submitted_product_id' => $candidateId,
+                        'submitted_product_code' => $productCode,
+                        'request_path' => $request->path(),
+                    ]);
+                }
+            }
+
             if ($productCode === '') {
+                // Leave validation to report the genuinely unresolved row.
                 continue;
             }
 
-            $matches = Product::on('masterlist')
-                ->whereRaw('TRIM(product_code) = ?', [$productCode])
-                ->limit(2)
-                ->get(['id', 'product_code']);
+            $codeKey = strtoupper($productCode);
+
+            if (!array_key_exists($codeKey, $productMatchesByCode)) {
+                $productMatchesByCode[$codeKey] = Product::on('masterlist')
+                    ->whereRaw('TRIM(product_code) = ?', [$productCode])
+                    ->limit(2)
+                    ->get(['id', 'product_code']);
+            }
+
+            $matches = $productMatchesByCode[$codeKey];
 
             if ($matches->count() === 1) {
-                $item['product_id'] = (int) $matches->first()->id;
-                $changed = true;
+                $resolvedProduct = $matches->first();
+                $resolvedId = (int) $resolvedProduct->id;
 
-                Log::warning('Purchase Note request arrived without product_id; existing master-list ID restored.', [
+                if ($candidateId !== $resolvedId) {
+                    $changed = true;
+                }
+
+                $item['product_id'] = $resolvedId;
+                $item['productId'] = $resolvedId;
+
+                // Cache the authoritative row so another item using the same ID
+                // does not need another lookup.
+                $productById[$resolvedId] = $resolvedProduct;
+
+                Log::warning('Purchase Note product ID repaired from existing Product Master row.', [
                     'item_index' => $index,
+                    'submitted_product_id' => $candidateId > 0 ? $candidateId : null,
                     'product_code' => $productCode,
-                    'product_id' => $item['product_id'],
+                    'resolved_product_id' => $resolvedId,
                     'request_path' => $request->path(),
                 ]);
             } elseif ($matches->count() > 1) {
-                Log::error('Purchase Note product ID could not be restored because product_code is not unique.', [
+                Log::error('Purchase Note product ID could not be repaired because product_code is not unique.', [
                     'item_index' => $index,
                     'product_code' => $productCode,
                     'matching_ids' => $matches->pluck('id')->all(),
+                    'request_path' => $request->path(),
+                ]);
+            } else {
+                Log::error('Purchase Note product ID could not be repaired because product_code does not exist in Product Master.', [
+                    'item_index' => $index,
+                    'submitted_product_id' => $candidateId > 0 ? $candidateId : null,
+                    'product_code' => $productCode,
                     'request_path' => $request->path(),
                 ]);
             }
         }
         unset($item);
 
+        // Merge whenever a row was repaired. Also merge when productId aliases were
+        // normalized so the validator always reads the repaired items array.
         if ($changed) {
             $request->merge(['items' => $items]);
+            return;
         }
+
+        // If no numeric value changed, still preserve normalized integer IDs.
+        $request->merge(['items' => $items]);
     }
     /**
      * Keep the Viber/Purchase Entry source quantity aligned when the user edits
@@ -149,6 +232,7 @@ class PurchaseNoteController extends Controller
             }
         }
     }
+
 
     private function resolveAuditActor(): array
     {
@@ -578,7 +662,6 @@ class PurchaseNoteController extends Controller
                     // Purchase Note item arrangement is the original insert order.
                     // Always keep it stable whenever the note is opened again for Edit.
                     ->orderBy('id', 'asc');
-
                 if (!empty($transferredOutItemIds)) {
                     $query->whereNotIn('id', $transferredOutItemIds);
                 }
@@ -911,7 +994,27 @@ class PurchaseNoteController extends Controller
             'supplier_code' => 'required|string',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|min:1|exists:masterlist.products,id',
+            // W68_PN_MASTERLIST_DIRECT_PRODUCT_VALIDATION_20260909
+            // Do not use the string exists:masterlist.products,id rule here.
+            // On the production multi-database setup this validation can reject
+            // a Product ID even after the controller has resolved it through
+            // the Product model. Validate directly through Product's explicit
+            // "masterlist" Eloquent connection instead.
+            'items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             'items.*.quantity' => 'required|integer|min:0',
             'items.*.unit' => 'nullable|string|max:50',
             'items.*.unit_price' => 'required|numeric|min:0',
@@ -926,7 +1029,21 @@ class PurchaseNoteController extends Controller
             'transferred_items' => 'nullable|array',
             'transferred_items.*.source_purchase_note_id' => 'required|integer|exists:purchase.purchase_notes,id',
             'transferred_items.*.source_purchase_note_item_id' => 'required|integer|exists:purchase.purchase_note_items,id',
-            'transferred_items.*.product_id' => 'required|integer|exists:masterlist.products,id',
+            'transferred_items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             'transferred_items.*.quantity' => 'required|integer|min:1',
             'transferred_items.*.unit_price' => 'required|numeric|min:0',
             'transferred_items.*.total_price' => 'required|numeric|min:0',
@@ -1126,6 +1243,7 @@ class PurchaseNoteController extends Controller
                     }
                 }
 
+
                 $this->writePurchaseNoteAudit('Created', $purchaseNote, [
                     'after' => $this->buildPurchaseNoteAuditSnapshot($purchaseNote),
                 ]);
@@ -1187,7 +1305,27 @@ class PurchaseNoteController extends Controller
             'date' => 'required|date',
             'linked_purchase_order_id' => 'nullable|integer|exists:purchase.purchase_orders,id',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|min:1|exists:masterlist.products,id',
+            // W68_PN_MASTERLIST_DIRECT_PRODUCT_VALIDATION_20260909
+            // Do not use the string exists:masterlist.products,id rule here.
+            // On the production multi-database setup this validation can reject
+            // a Product ID even after the controller has resolved it through
+            // the Product model. Validate directly through Product's explicit
+            // "masterlist" Eloquent connection instead.
+            'items.*.product_id' => [
+                'required',
+                'integer',
+                'min:1',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $productId = (int) $value;
+
+                    if (
+                        $productId <= 0 ||
+                        !Product::on('masterlist')->whereKey($productId)->exists()
+                    ) {
+                        $fail("The selected {$attribute} does not exist in Product Master.");
+                    }
+                },
+            ],
             // Zero quantity is valid for a Purchase Note placeholder item.
             // Negative quantities remain invalid.
             'items.*.quantity' => 'required|integer|min:0',
@@ -1359,6 +1497,7 @@ class PurchaseNoteController extends Controller
                         ]);
                     }
                 }
+
 
                 // Recalculate the Purchase Note header from ALL surviving PN rows,
                 // not only the currently selected invoice.
@@ -1679,6 +1818,17 @@ class PurchaseNoteController extends Controller
                 'before' => $auditSnapshot,
             ]);
 
+            // ALL USERS: Admin, Regular and Special Purchase Note delete routes
+            // reach this shared controller. If the note came from Viber/Purchase
+            // Entry, release its source rows before the note is deleted so the
+            // items become available again instead of keeping a dead note ID.
+            $releasedViberItems = ViberListItem::where('purchase_note_id', $purchaseNote->id)
+                ->update([
+                    'purchase_note_id' => null,
+                    'shipped_at' => null,
+                    'updated_at' => now(),
+                ]);
+
             $deletedCounts = [
                 'purchase_notes' => 1,
                 'purchase_note_items' => count($items),
@@ -1686,6 +1836,7 @@ class PurchaseNoteController extends Controller
                 'purchase_order_items' => $relatedPOItems->count(),
                 'purchase_returns' => $relatedReturns->count(),
                 'purchase_return_items' => $relatedReturnItems->count(),
+                'viber_list_items_released' => $releasedViberItems,
             ];
 
             // FK-safe order: return items → returns → PO items → POs → note items → note
@@ -1710,7 +1861,7 @@ class PurchaseNoteController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Purchase Note and all related Purchase Orders, Order Items, Purchase Returns, and Return Items archived and deleted successfully.',
+                'message' => 'Purchase Note and all related records archived and deleted successfully. Linked Viber items were released and their note ID was returned to NULL.',
                 'deleted' => $deletedCounts,
             ]);
         } catch (\Exception $e) {

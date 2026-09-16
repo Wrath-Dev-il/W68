@@ -143,6 +143,7 @@
                         <th class="py-2.5 px-4 text-center w-[50px]"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
                         <th class="py-2.5 px-4 w-[80px]">Picture</th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
+<th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[150px] sortable-header" data-sort-key="position" onclick="window.handleSortClick('position')" style="cursor:pointer;user-select:none;">Position <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="partNumber" onclick="window.handleSortClick('partNumber')" style="cursor:pointer;user-select:none;">Part No# <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[250px] sortable-header" data-sort-key="description" onclick="window.handleSortClick('description')" style="cursor:pointer;user-select:none;">Description <span class="sort-indicator">&#8597;</span></th>
@@ -160,6 +161,7 @@
                         <th class="px-4"></th>
                         <th class="px-4"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="productCode" name="product_code" placeholder="Code..." class="column-search-input py-1 text-[10px] w-full"></th>
+<th class="p-1.5 px-4"><input data-col="productCode2" id="search-product-code2" name="search[productCode2]" data-search-key="productCode2" data-field="productCode2" data-column="productCode2" type="text" placeholder="Code 2..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="position" name="position" placeholder="Pos..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="partNumber" name="part_number" placeholder="Part No..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="description" name="description" placeholder="Desc..." class="column-search-input py-1 text-[10px] w-full"></th>
@@ -268,11 +270,38 @@
                                     <input type="text" name="part_number" placeholder="e.g. PN-9920" class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-sm focus:border-maroon focus:ring-4 focus:ring-maroon/5 outline-none transition-all">
                                 </div>
                             </div>
+                            <!-- Item Code 2 & Pricelist Code -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                                        Item Code 2
+                                        <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
+                                    </label>
 
-                            <!-- Pricelist Code -->
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pricelist Code <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span></label>
-                                <input type="text" name="pricelist_code" id="add-pricelist-code" maxlength="255" placeholder="Optional pricelist code" class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all">
+                                    <input
+                                        type="text"
+                                        name="product_code2"
+                                        maxlength="255"
+                                        placeholder="Enter second item code"
+                                        class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-sm focus:border-maroon focus:ring-4 focus:ring-maroon/5 outline-none transition-all"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                                        Pricelist Code
+                                        <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="pricelist_code"
+                                        id="add-pricelist-code"
+                                        maxlength="255"
+                                        placeholder="Optional pricelist code"
+                                        class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
+                                    >
+                                </div>
                             </div>
 
                             <!-- Row 2: Description -->
@@ -494,22 +523,82 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Product Code</label>
-                                    <input id="view-prod-code" data-view-field="product_code" type="text" readonly class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-bold text-slate-800 outline-none">
+                                    <textarea
+    id="view-prod-code"
+    data-view-field="product_code"
+    rows="2"
+    wrap="soft"
+    readonly
+    class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-bold text-slate-800 outline-none resize-none leading-5"
+    style="overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;"
+></textarea>
                                 </div>
                                 <div>
                                     <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Part Number</label>
-                                    <input id="view-prod-part" data-view-field="part_number" type="text" readonly class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none">
+                                    <textarea
+    id="view-prod-part"
+    data-view-field="part_number"
+    rows="2"
+    wrap="soft"
+    readonly
+    class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none resize-none leading-5"
+    style="overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;"
+></textarea>
                                 </div>
                             </div>
+                                                        <div class="grid grid-cols-2 gap-2">
+
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                        Product Code 2
+                                    </label>
+
+                                    <textarea
+                                        id="view-prod-code2"
+                                        data-view-field="product_code2"
+                                        rows="2"
+                                        wrap="soft"
+                                        readonly
+                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none resize-none leading-5"
+                                        style="overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;"
+                                    ></textarea>
+                                </div>
+
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                        Pricelist Code
+                                    </label>
+
+                                    <input
+                                        id="view-pricelist-code"
+                                        data-view-field="pricelist_code"
+                                        type="text"
+                                        readonly
+                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                                    >
+                                </div>
+
+                            </div>
+
                             <div class="grid grid-cols-2 gap-2">
+
+                                <div></div>
+
                                 <div>
-                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Pricelist Code</label>
-                                    <input id="view-pricelist-code" data-view-field="pricelist_code" type="text" readonly class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none">
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                        Brand <span class="text-red-500">*</span>
+                                    </label>
+
+                                    <input
+                                        id="view-prod-cat"
+                                        data-view-field="category"
+                                        type="text"
+                                        required
+                                        readonly
+                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                                    >
                                 </div>
-                                <div>
-                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Brand <span class="text-red-500">*</span></label>
-                                    <input id="view-prod-cat" data-view-field="category" type="text" required readonly class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none">
-                                </div>
+
                             </div>
                             <div>
                                 <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Description</label>

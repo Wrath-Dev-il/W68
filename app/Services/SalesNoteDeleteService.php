@@ -52,6 +52,20 @@ class SalesNoteDeleteService
             DB::connection('masterlist')->beginTransaction();
 
             $salesNumber = $note->sales_number;
+
+            // If this Sales Note came from the W68 online portal, keep the
+            // portal order record but mark it as cancelled when the note is deleted.
+            $cancelledPortalOrders = 0;
+            if (Schema::connection('sales')->hasTable('w68_portal_orders')) {
+                $cancelledPortalOrders = DB::connection('sales')
+                    ->table('w68_portal_orders')
+                    ->where('sales_note_id', $note->id)
+                    ->update([
+                        'portal_status' => 'CANCELLED',
+                        'updated_at' => now(),
+                    ]);
+            }
+
             $items = $note->items->map(fn ($item) => $item->toArray())->values()->all();
 
             $deletedBy = $user->name ?? $user->username ?? $user->User_ID ?? 'Admin';
@@ -258,6 +272,7 @@ class SalesNoteDeleteService
                 'sales_order_items' => $salesOrderItems->count(),
                 'sales_returns' => $salesReturns->count(),
                 'sales_return_items' => $salesReturnItems->count(),
+                'portal_orders_cancelled' => $cancelledPortalOrders,
             ];
 
             return response()->json([

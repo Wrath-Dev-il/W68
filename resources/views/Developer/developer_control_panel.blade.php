@@ -56,6 +56,21 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <button type="button" id="developer-online-order-btn" class="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-[#4A0A15] hover:text-[#4A0A15]" title="Online Order Notifications" aria-label="Online Order Notifications">
+                            <span id="developer-online-order-badge" class="hidden absolute -right-1 -top-1 min-w-5 h-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-extrabold text-white">0</span>
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"></path><path d="m4 6 8 6 8-6"></path></svg>
+                        </button>
+                        <div id="developer-online-order-dropdown" class="hidden absolute right-0 z-50 mt-3 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+                            <div class="flex items-center justify-between border-b-2 border-[#FFC72C] bg-[#4A0A15] px-4 py-3 text-white">
+                                <span class="text-sm font-extrabold">Online Orders</span>
+                                <span id="developer-online-order-count" class="rounded-full bg-[#FFC72C] px-2 py-0.5 text-xs font-bold text-[#4A0A15]">0 Active</span>
+                            </div>
+                            <div id="developer-online-order-list" class="max-h-80 overflow-y-auto">
+                                <div class="p-8 text-center text-sm text-slate-400">Loading online orders...</div>
+                            </div>
+                        </div>
+                    </div>
                     <button type="button" id="importDataBtn" class="inline-flex items-center gap-2 rounded-lg bg-[#4A0A15] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#3a0810]">
                         <svg class="h-4 w-4 text-[#FFC72C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1067,5 +1082,76 @@
     <div id="developerToast" class="developer-toast" role="status" aria-live="polite">
         <span id="developerToastText">Ready</span>
     </div>
+
+    <script>
+        (function () {
+            const listUrl = @json(route('online-orders.notifications'));
+            const noteBase = @json(url('/online-orders/sales-note'));
+            const button = document.getElementById('developer-online-order-btn');
+            const dropdown = document.getElementById('developer-online-order-dropdown');
+            const badge = document.getElementById('developer-online-order-badge');
+            const count = document.getElementById('developer-online-order-count');
+            const list = document.getElementById('developer-online-order-list');
+
+            function esc(value) {
+                return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            }
+
+            function money(value) {
+                const number = Number.parseFloat(value || 0);
+                return Number.isFinite(number) ? number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+            }
+
+            async function loadDeveloperOnlineOrders() {
+                if (!list || !badge || !count) return;
+                try {
+                    const response = await fetch(listUrl, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' });
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const data = await response.json();
+                    if (!data.success) throw new Error(data.message || 'Unable to load');
+                    const orders = data.orders || [];
+                    count.textContent = orders.length + ' Active';
+                    if (orders.length) {
+                        badge.textContent = orders.length > 99 ? '99+' : String(orders.length);
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                        list.innerHTML = orders.map(function (order) {
+                            const id = Number.parseInt(order.sales_note_id, 10) || 0;
+                            return `<button type="button" data-url="${noteBase}/${id}" class="developer-online-order-item block w-full border-b border-slate-100 p-4 text-left transition hover:bg-amber-50">
+                                <div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="truncate text-xs font-extrabold text-slate-900">${esc(order.order_code || 'Online Order')}</p><p class="mt-0.5 text-[11px] font-bold text-[#4A0A15]">${esc(order.sales_number || '---')}</p><p class="mt-1 truncate text-[11px] text-slate-500">${esc(order.customer_name || '---')}</p></div><div class="text-right"><span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-700">${esc(order.sales_note_status || 'Open')}</span><p class="mt-2 text-[10px] font-bold text-slate-600">PHP ${esc(money(order.total_amount))}</p></div></div>
+                            </button>`;
+                        }).join('');
+                    } else {
+                        badge.classList.add('hidden');
+                        badge.classList.remove('flex');
+                        list.innerHTML = '<div class="p-8 text-center text-sm text-slate-400">No active online orders</div>';
+                    }
+                } catch (error) {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                    count.textContent = 'Unavailable';
+                    list.innerHTML = '<div class="p-8 text-center text-sm text-red-500">Unable to load online orders</div>';
+                }
+            }
+
+            button?.addEventListener('click', function (event) {
+                event.stopPropagation();
+                dropdown?.classList.toggle('hidden');
+            });
+            document.addEventListener('click', function (event) {
+                const item = event.target.closest('.developer-online-order-item');
+                if (item?.dataset.url) {
+                    window.location.href = item.dataset.url;
+                    return;
+                }
+                if (!event.target.closest('#developer-online-order-dropdown') && !event.target.closest('#developer-online-order-btn')) {
+                    dropdown?.classList.add('hidden');
+                }
+            });
+            loadDeveloperOnlineOrders();
+            window.setInterval(loadDeveloperOnlineOrders, 60000);
+        })();
+    </script>
+
 </body>
 </html>

@@ -9,11 +9,11 @@ let filteredHistory = [];
 let currentFilterStatus = 'All';
 let selectedItem = null;
 let currentPage = 1;
-let searchFilters = { code: '', name: '', desc: '', app: '', qty: '', diff: '' };
+let searchFilters = { code: '', name: '', desc: '', app: '', qty: '' };
 let adjustedRows = [];
 let adjustedPage = 1;
 let adjustedLoaded = false;
-let adjustedSearchFilters = { code: '', qty: '', unit: '' };
+let adjustedSearchFilters = { code: '', part: '', qty: '', unit: '' };
 let selectedAdjustmentForDelete = null;
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -55,7 +55,7 @@ function showSuccess(title, message) {
 }
 
 function setupAdjustedSearchListeners() {
-    ['code', 'qty', 'unit'].forEach(key => {
+    ['code', 'part', 'qty', 'unit'].forEach(key => {
         const input = document.getElementById(`adjusted-search-${key}`);
         if (!input) return;
         input.addEventListener('input', () => {
@@ -96,11 +96,12 @@ window.fetchAdjusted = function(page = 1) {
     const tbody = document.getElementById('adjusted-tbody');
     if (!tbody || !window.adjustmentRoutes?.adjusted) return;
 
-    tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-slate-400 italic"><div class="flex items-center justify-center gap-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-maroon"></i><span>Loading adjustments...</span></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400 italic"><div class="flex items-center justify-center gap-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-maroon"></i><span>Loading adjustments...</span></div></td></tr>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const params = new URLSearchParams({ page });
     if (adjustedSearchFilters.code) params.append('search[code]', adjustedSearchFilters.code);
+    if (adjustedSearchFilters.part) params.append('search[part]', adjustedSearchFilters.part);
     if (adjustedSearchFilters.qty) params.append('search[qty]', adjustedSearchFilters.qty);
     if (adjustedSearchFilters.unit) params.append('search[unit]', adjustedSearchFilters.unit);
 
@@ -121,7 +122,7 @@ window.fetchAdjusted = function(page = 1) {
         })
         .catch(err => {
             console.error(err);
-            tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-red-500 italic">${escapeHtml(err.message || 'Error loading adjustments.')}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500 italic">${escapeHtml(err.message || 'Error loading adjustments.')}</td></tr>`;
         });
 };
 
@@ -139,13 +140,14 @@ function renderAdjustedTable() {
     if (!tbody) return;
 
     if (!adjustedRows.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-slate-400 italic">No inventory adjustments found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400 italic">No inventory adjustments found.</td></tr>';
         return;
     }
 
     tbody.innerHTML = adjustedRows.map(row => `
         <tr class="hover:bg-slate-50 transition-colors">
             <td class="py-4 px-6 font-black text-slate-800">${escapeHtml(row.product_code || '---')}</td>
+            <td class="py-4 px-6 font-bold text-slate-700">${escapeHtml(row.part_number || '---')}</td>
             <td class="py-4 px-6 text-center font-black text-maroon">${escapeHtml(row.adjusted_qty)}</td>
             <td class="py-4 px-6 font-bold uppercase text-slate-600">${escapeHtml(row.unit || '---')}</td>
             <td class="py-4 px-3 text-center">
@@ -293,11 +295,10 @@ function setupColumnSearchListeners() {
         input.addEventListener('input', () => {
             const inputs = document.querySelectorAll('.col-search-input');
             searchFilters.code = inputs[0]?.value.trim() || '';
-            searchFilters.name = inputs[1]?.value.trim() || '';
+            searchFilters.part = inputs[1]?.value.trim() || '';
             searchFilters.desc = inputs[2]?.value.trim() || '';
             searchFilters.app  = inputs[3]?.value.trim() || '';
             searchFilters.qty  = inputs[4]?.value.trim() || '';
-            searchFilters.diff = inputs[5]?.value.trim() || '';
             debouncedFetch();
         });
     });
@@ -308,7 +309,7 @@ window.fetchProducts = function(page = 1) {
     const tbody = document.getElementById('adjustment-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-slate-400 italic"><div class="flex items-center justify-center space-x-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-maroon"></i><span>Loading products...</span></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400 italic"><div class="flex items-center justify-center space-x-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-maroon"></i><span>Loading products...</span></div></td></tr>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const params = new URLSearchParams({
@@ -317,7 +318,7 @@ window.fetchProducts = function(page = 1) {
     });
 
     if (searchFilters.code) params.append('search[code]', searchFilters.code);
-    if (searchFilters.name) params.append('search[name]', searchFilters.name);
+    if (searchFilters.part) params.append('search[part]', searchFilters.part);
     if (searchFilters.desc) params.append('search[desc]', searchFilters.desc);
     if (searchFilters.app)  params.append('search[app]', searchFilters.app);
     if (searchFilters.qty)  params.append('search[qty]', searchFilters.qty);
@@ -332,12 +333,12 @@ window.fetchProducts = function(page = 1) {
                 renderPagination(r.pagination);
                 updateStats(r.stats);
             } else {
-                tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-red-400 italic">Failed to load data.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-red-400 italic">Failed to load data.</td></tr>';
             }
         })
         .catch(err => {
             console.error(err);
-            tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-red-400 italic">Error loading data.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-red-400 italic">Error loading data.</td></tr>';
         });
 }
 
@@ -363,7 +364,7 @@ function renderAdjustmentTable() {
     if (!tbody) return;
 
     if (!filteredItems.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-slate-400 italic">No products found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400 italic">No products found.</td></tr>';
         return;
     }
 
@@ -377,13 +378,10 @@ function renderAdjustmentTable() {
                     </span>
                 </div>
             </td>
-            <td class="py-4 px-6 font-bold text-slate-700">${item.name}</td>
+            <td class="py-4 px-6 font-bold text-slate-700">${item.partNumber || item.name || '---'}</td>
             <td class="py-4 px-6 text-slate-400 max-w-[200px] truncate">${item.desc}</td>
             <td class="py-4 px-6 text-slate-500">${item.app}</td>
-            <td class="py-4 px-6 text-center font-black text-slate-800">${item.actualQty}</td>
-            <td class="py-4 px-6 text-center font-black ${item.diff > 0 ? 'text-emerald-600' : item.diff < 0 ? 'text-maroon' : 'text-slate-300'}">
-                ${item.diff > 0 ? '+' : ''}${item.diff}
-            </td>
+            <td class="py-4 px-6 text-center font-black text-slate-800">${item.computerStock}</td>
             <td class="py-4 px-6">
                 <div class="flex items-center justify-center gap-2">
                     <button onclick="openAdjustModal(${item.id})" class="px-3 py-1.5 bg-maroon/5 text-maroon text-[10px] font-bold rounded-lg hover:bg-maroon hover:text-white transition-all">Adjust</button>
@@ -449,11 +447,10 @@ function renderPagination(pagination) {
 window.filterAdjTable = function() {
     const inputs = document.querySelectorAll('.col-search-input');
     searchFilters.code = inputs[0]?.value.trim() || '';
-    searchFilters.name = inputs[1]?.value.trim() || '';
+    searchFilters.part = inputs[1]?.value.trim() || '';
     searchFilters.desc = inputs[2]?.value.trim() || '';
     searchFilters.app  = inputs[3]?.value.trim() || '';
     searchFilters.qty  = inputs[4]?.value.trim() || '';
-    searchFilters.diff = inputs[5]?.value.trim() || '';
     debouncedFetch();
 }
 
@@ -463,9 +460,9 @@ window.openAdjustModal = function(id) {
 
     document.getElementById('adj-item-name').textContent = selectedItem.desc;
     document.getElementById('adj-item-code').textContent = selectedItem.code;
-    document.getElementById('adj-actual-qty').textContent = selectedItem.actualQty;
+    document.getElementById('adj-actual-qty').textContent = selectedItem.computerStock;
     document.getElementById('adj-diff-qty').textContent = '0';
-    document.getElementById('adj-total-projected').textContent = selectedItem.actualQty;
+    document.getElementById('adj-total-projected').textContent = selectedItem.computerStock;
     document.getElementById('adj-input-qty').value = '';
     document.getElementById('adj-input-unit').value = selectedItem.unit || '';
 
@@ -477,12 +474,12 @@ window.calculateAdjTotal = function() {
     if (input === '') {
         document.getElementById('adj-diff-qty').textContent = '0';
         document.getElementById('adj-diff-qty').className = 'w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-lg font-black shadow-inner text-slate-400';
-        document.getElementById('adj-total-projected').textContent = selectedItem.actualQty;
+        document.getElementById('adj-total-projected').textContent = selectedItem.computerStock;
         return;
     }
 
     const newActual = parseInt(input) || 0;
-    const onHand = selectedItem.onHand;
+    const onHand = selectedItem.computerStock;
     const diff = newActual - onHand;
 
     document.getElementById('adj-diff-qty').textContent = (diff > 0 ? '+' : '') + diff;
@@ -652,7 +649,7 @@ window.resetFilters = function() {
     
     const inputs = document.querySelectorAll('.col-search-input');
     inputs.forEach(i => i.value = '');
-    searchFilters = { code: '', name: '', desc: '', app: '', qty: '', diff: '' };
+    searchFilters = { code: '', name: '', desc: '', app: '', qty: '' };
 
     fetchProducts(1);
     toggleModal('filter-modal', false);

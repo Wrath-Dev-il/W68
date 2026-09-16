@@ -227,6 +227,10 @@ function selectedInvoiceRowsInClickOrder() {
         });
 }
 let paymentsPage = 1;
+// W68_PAYMENTS_ACTIVE_PAYOR_GLOBAL_SEARCH_20260909
+let paymentsActivePayorSearch = '';
+let paymentsActivePayorSearchTimer = null;
+let paymentsActiveRequestSeq = 0;
 let paymentsLastPage = 1;
 let paymentsHistoryPage = 1;
 let paymentsHistoryLastPage = 1;
@@ -263,17 +267,26 @@ let currentGroupPrintMeta = { online_percent: 0, online_payment: 0 };
 let currentProcessedGroupReceipts = [];
 let currentGroupDraggedItemId = 0;
 
-function isRegularPaymentsContext() {
-    return String(routes().groupDetail || '').includes('/regular/');
+// W68_PAYMENTS_SPECIAL_GROUP_DRAG_LOCAL_ONLY_20260909
+function paymentsGroupDragContext() {
+    const detailUrl = String(routes().groupDetail || '');
+    if (detailUrl.includes('/regular/')) return 'regular';
+    if (detailUrl.includes('/special/')) return 'special';
+    return '';
+}
+
+function isPaymentsGroupDragEnabled() {
+    return paymentsGroupDragContext() !== '';
 }
 
 function processGroupOrderStorageKey(groupId) {
-    return `hatdog:regular:payments:group-order:${Number(groupId || 0)}`;
+    const context = paymentsGroupDragContext() || 'disabled';
+    return `hatdog:${context}:payments:group-order:${Number(groupId || 0)}`;
 }
 
 function applySavedProcessGroupOrder(items, groupId) {
     const rows = Array.isArray(items) ? [...items] : [];
-    if (!isRegularPaymentsContext() || !groupId || rows.length < 2) return rows;
+    if (!isPaymentsGroupDragEnabled() || !groupId || rows.length < 2) return rows;
 
     try {
         const saved = JSON.parse(localStorage.getItem(processGroupOrderStorageKey(groupId)) || '[]');
@@ -300,7 +313,7 @@ function applySavedProcessGroupOrder(items, groupId) {
 }
 
 function saveCurrentProcessGroupOrder() {
-    if (!isRegularPaymentsContext() || !currentGroupId || !currentGroupItems.length) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupId || !currentGroupItems.length) return;
     try {
         localStorage.setItem(
             processGroupOrderStorageKey(currentGroupId),
@@ -343,7 +356,7 @@ function syncProcessGroupOrderFromDom() {
 }
 
 window.beginProcessGroupDrag = function(event, itemId) {
-    if (!isRegularPaymentsContext()) return;
+    if (!isPaymentsGroupDragEnabled()) return;
     currentGroupDraggedItemId = Number(itemId || 0);
     if (!currentGroupDraggedItemId) {
         event.preventDefault();
@@ -358,7 +371,7 @@ window.beginProcessGroupDrag = function(event, itemId) {
 };
 
 window.overProcessGroupDrag = function(event, targetItemId, targetRow) {
-    if (!isRegularPaymentsContext() || !currentGroupDraggedItemId) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupDraggedItemId) return;
     if (Number(targetItemId || 0) === currentGroupDraggedItemId) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
@@ -375,7 +388,7 @@ window.overProcessGroupDrag = function(event, targetItemId, targetRow) {
 };
 
 window.dropProcessGroupDrag = function(event, targetItemId, targetRow) {
-    if (!isRegularPaymentsContext() || !currentGroupDraggedItemId || !targetRow) return;
+    if (!isPaymentsGroupDragEnabled() || !currentGroupDraggedItemId || !targetRow) return;
     event.preventDefault();
 
     const draggedId = Number(currentGroupDraggedItemId || 0);
@@ -470,6 +483,66 @@ function setText(id, value) {
     if (el) el.textContent = value || '---';
 }
 
+async function fetchPaymentsJson(url, fallbackMessage = 'Unable to load payments.') {
+    const request = async () => {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+
+        const text = await response.text();
+
+        if (!text || !text.trim()) {
+            const error = new Error(
+                `${fallbackMessage} Server returned an empty response${response.status ? ` (HTTP ${response.status})` : ''}.`
+            );
+            error.emptyResponse = true;
+            error.status = response.status;
+            throw error;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (_) {
+            const error = new Error(
+                `${fallbackMessage} Server returned an invalid response${response.status ? ` (HTTP ${response.status})` : ''}.`
+            );
+            error.invalidJson = true;
+            error.status = response.status;
+            throw error;
+        }
+
+        if (!response.ok || data.success === false) {
+            throw new Error(
+                data.message ||
+                `${fallbackMessage}${response.status ? ` (HTTP ${response.status})` : ''}`
+            );
+        }
+
+        return data;
+    };
+
+    try {
+        return await request();
+    } catch (error) {
+        // HostForge may occasionally terminate an application response before
+        // Laravel can write its JSON body. Retry that empty/invalid response once
+        // instead of immediately crashing on Response.json().
+        if (!error?.emptyResponse && !error?.invalidJson) {
+            throw error;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return await request();
+    }
+}
+
 window.loadPaymentsTable = async function() {
     const tbody = document.getElementById('payments-tbody');
     if (!tbody) return;
@@ -477,11 +550,17 @@ window.loadPaymentsTable = async function() {
     tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading closed P.O records...</td></tr>`;
 
     try {
+        const requestSeq = ++paymentsActiveRequestSeq;
         const url = new URL(routes().data, window.location.origin);
         url.searchParams.set('page', paymentsPage);
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!data.success) throw new Error(data.message || 'Unable to load payments.');
+        url.searchParams.set('per_page', '15'); // W68_PAYMENTS_PAGE_FIRST_15_20260909
+        if (paymentsActivePayorSearch) url.searchParams.set('search', paymentsActivePayorSearch);
+
+        const data = await fetchPaymentsJson(
+            url.toString(),
+            'Unable to load payments.'
+        );
+        if (requestSeq !== paymentsActiveRequestSeq) return;
 
         if (!data.payors.length) {
             tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No closed P.O records with unpaid balances.</td></tr>`;
@@ -547,6 +626,7 @@ window.loadPaymentsHistoryTable = async function() {
     try {
         const url = new URL(routes().payors, window.location.origin);
         url.searchParams.set('page', paymentsHistoryPage);
+        url.searchParams.set('per_page', '15'); // W68_PAYMENTS_HISTORY_JS_15_20260909
         if (paymentsHistorySearch) url.searchParams.set('search', paymentsHistorySearch);
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
@@ -590,7 +670,7 @@ function updatePaymentsPagination(data = {}) {
     paymentsLastPage = Number(data.last_page || 1);
 
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((paymentsPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(paymentsPage * perPage, total) : 0;
 
@@ -669,6 +749,7 @@ async function loadPayorsHistoryTable() {
         const params = new URLSearchParams();
         if (payorsHistorySearch) params.set('search', payorsHistorySearch);
         params.set('page', payorsHistoryPage);
+        params.set('per_page', '15'); // W68_PAYMENTS_PAYORS_HISTORY_JS_15_20260909
 
         const response = await fetch(`${routes().payors}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
         const data = await response.json();
@@ -702,7 +783,7 @@ async function loadPayorsHistoryTable() {
 
 function updatePayorsHistoryPagination(data = {}) {
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((payorsHistoryPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(payorsHistoryPage * perPage, total) : 0;
 
@@ -765,7 +846,7 @@ async function loadPayorHistoryInvoices() {
     try {
         const url = new URL(routes().payorHistory.replace(':customerId', currentPayorHistoryCustomerId), window.location.origin);
         url.searchParams.set('page', currentPayorHistoryPage);
-        url.searchParams.set('per_page', '50');
+        url.searchParams.set('per_page', '15');
         Object.entries(currentPayorHistoryFilters).forEach(([key, value]) => {
             if (key !== 'action' && String(value || '').trim() !== '') url.searchParams.set(key, String(value).trim());
         });
@@ -831,7 +912,7 @@ async function loadPayorHistoryInvoices() {
 function updatePayorHistoryPagination(data = {}) {
     const pagination = data.pagination || {};
     const total = Number(pagination.total || data.total || 0);
-    const perPage = Number(pagination.per_page || data.per_page || 50);
+    const perPage = Number(pagination.per_page || data.per_page || 15);
     const from = Number(pagination.from ?? (total ? ((currentPayorHistoryPage - 1) * perPage) + 1 : 0));
     const to = Number(pagination.to ?? (total ? Math.min(currentPayorHistoryPage * perPage, total) : 0));
 
@@ -1040,7 +1121,7 @@ async function loadGroupsTable() {
 
 function updateGroupsPagination(data = {}) {
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((groupsPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(groupsPage * perPage, total) : 0;
 
@@ -1379,7 +1460,7 @@ window.openProcessGroupModal = async function(groupId) {
         currentGroupPrintReturns = Array.isArray(data.returns) ? data.returns : [];
         if (titleEl) titleEl.textContent = group.title || `Group #${groupId}`;
         if (subtitleEl) {
-            const dragHint = isRegularPaymentsContext() ? ' · drag invoice numbers to rearrange' : '';
+            const dragHint = isPaymentsGroupDragEnabled() ? ' · drag invoice numbers to rearrange' : '';
             subtitleEl.textContent = `Grouped on ${group.grouped_date || '---'} · ${String(group.status || 'processed').replaceAll('_', ' ')}${dragHint}`;
         }
         renderProcessGroupRows(currentGroupItems);
@@ -1392,7 +1473,7 @@ window.openProcessGroupModal = async function(groupId) {
 function renderProcessGroupRows(items) {
     const tbody = document.getElementById('process-group-tbody');
     if (!tbody) return;
-    const dragEnabled = isRegularPaymentsContext();
+    const dragEnabled = isPaymentsGroupDragEnabled();
     tbody.innerHTML = items.length ? items.map((item, index) => `
         <tr class="hover:bg-slate-50 border-b border-slate-100 ${dragEnabled ? 'transition-shadow' : ''}" data-index="${index}" data-item-id="${Number(item.id || 0)}" ${dragEnabled ? `ondragover="window.overProcessGroupDrag(event, ${Number(item.id || 0)}, this)" ondrop="window.dropProcessGroupDrag(event, ${Number(item.id || 0)}, this)"` : ''}>
             <td class="p-4 text-center"><input type="checkbox" class="process-group-check accent-[#800000]" data-index="${index}" checked></td>
@@ -1855,7 +1936,7 @@ function updatePaymentsHistoryPagination(data = {}) {
     paymentsHistoryLastPage = Number(data.last_page || 1);
 
     const total = Number(data.total || 0);
-    const perPage = Number(data.per_page || 50);
+    const perPage = Number(data.per_page || 15);
     const from = total ? ((paymentsHistoryPage - 1) * perPage) + 1 : 0;
     const to = total ? Math.min(paymentsHistoryPage * perPage, total) : 0;
 
@@ -1906,9 +1987,21 @@ window.filterTableByColumns = function(tbodyId, filterRowId) {
 };
 
 window.filterPaymentsTable = function() {
-    window.filterTableByColumns('payments-tbody', 'payments-active-filter-row');
-};
+    const payorInput = document.querySelector('#payments-active-filter-row input[data-col="0"]');
+    const nextPayorSearch = String(payorInput?.value || '').trim();
 
+    // Keep instant filtering for the currently visible rows while the global
+    // server search is debounced.
+    window.filterTableByColumns('payments-tbody', 'payments-active-filter-row');
+
+    if (nextPayorSearch === paymentsActivePayorSearch) return;
+    clearTimeout(paymentsActivePayorSearchTimer);
+    paymentsActivePayorSearchTimer = setTimeout(() => {
+        paymentsActivePayorSearch = nextPayorSearch;
+        paymentsPage = 1;
+        loadPaymentsTable();
+    }, 250);
+};
 window.filterPaymentsHistoryTable = function() {
     const input = document.getElementById('payments-history-payor-search');
     paymentsHistorySearch = input ? input.value.trim() : '';
@@ -2702,6 +2795,25 @@ function openPrintablePaymentLayout({
     // Put the company title, sub-title, customer meta, and transaction column labels
     // inside THEAD. Chrome repeats THEAD on every printed page, which is much more
     // reliable than a fixed-position header and keeps Letter pages aligned.
+    // W68_PAYMENTS_GROUP_EDITABLE_PRINT_20260909
+    // Group prints open as an editable browser-only report. Users can change any
+    // visible report text/amount before printing. Nothing here is saved to DB.
+    const groupEditablePreview = isGroupPayment;
+    const groupEditToolbar = groupEditablePreview ? `
+        <div class="w68-group-edit-toolbar" contenteditable="false">
+            <div>
+                <strong>EDITABLE GROUP REPORT</strong>
+                <span>Click anywhere in the report below, type your changes, then print. Changes are print-only and are not saved.</span>
+            </div>
+            <div class="w68-group-edit-actions">
+                <button type="button" onclick="window.print()">PRINT REPORT</button>
+                <button type="button" onclick="window.close()">CLOSE</button>
+            </div>
+        </div>` : '';
+    const groupReportOpen = groupEditablePreview
+        ? '<div id="w68-group-editable-report" contenteditable="true" spellcheck="false">'
+        : '';
+    const groupReportClose = groupEditablePreview ? '</div>' : '';
     const printable = `<!doctype html><html><head><meta charset="utf-8"><title>Collection Invoice ${escapeHtml(collectionNo)}</title><style>
 @page{size:Letter portrait;margin:.38in .35in .42in}
 *{box-sizing:border-box}
@@ -2729,13 +2841,23 @@ th{font-size:8.5px;font-weight:800;text-align:left}
 .summary strong{text-align:right}
 .summary .retotal{border-top:1px solid #111;margin-top:2px;padding-top:6px;font-size:10px}
 .blank-row td{height:18px}
+.w68-group-edit-toolbar{position:sticky;top:0;z-index:9999;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#4A0E0E;color:#fff;padding:10px 14px;margin:0 0 12px;font-family:Arial,sans-serif;box-shadow:0 3px 12px rgba(0,0,0,.18)}
+.w68-group-edit-toolbar strong{display:block;font-size:11px;letter-spacing:.08em}
+.w68-group-edit-toolbar span{display:block;margin-top:2px;font-size:9px;font-weight:600;opacity:.8}
+.w68-group-edit-actions{display:flex;gap:8px;flex:0 0 auto}
+.w68-group-edit-actions button{border:0;border-radius:7px;padding:8px 12px;font-size:9px;font-weight:900;cursor:pointer;background:#FFD700;color:#4A0E0E}
+#w68-group-editable-report{outline:2px dashed rgba(122,92,0,.42);outline-offset:5px;min-height:240px}
+#w68-group-editable-report:focus{outline:2px dashed #9A7200}
 @media print{
+  .w68-group-edit-toolbar{display:none!important}
+  #w68-group-editable-report{outline:none!important}
   html,body{width:auto;height:auto}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .transaction-table thead,.detail-table thead{display:table-header-group}
   .section-block,.summary{page-break-inside:avoid}
 }
 </style></head><body>
+${groupEditToolbar}${groupReportOpen}
 <table class="transaction-table">
 <thead>
 <tr><th colspan="5" class="doc-head-cell"><div class="company">W68 AUTO PARTS &amp; SERVICE CENTER</div><div class="subtitle">Collection Invoice</div><div class="meta"><div class="meta-row"><span class="meta-label">Customer:</span><span class="meta-value">${escapeHtml(customer.name || '---')}</span></div><div class="meta-row"><span class="meta-label">Collection No.:</span><span class="meta-value">${escapeHtml(collectionNo)}</span></div><div class="meta-row"><span class="meta-label">Address:</span><span class="meta-value">${escapeHtml(customer.address || '---')}</span></div><div class="meta-row"><span class="meta-label">DATE:</span><span class="meta-value">${escapeHtml(paymentDate || '---')}</span></div></div></th></tr>
@@ -2748,6 +2870,7 @@ ${Array.from({ length: invoiceBlanks }, () => blankCells(5)).join('')}
 <tr><td colspan="2" class="right"><strong>TOTAL</strong></td><td class="right"><strong>${money.format(totalInvoice)}</strong></td><td class="right"><strong>${money.format(totalAdjustment)}</strong></td><td class="right"><strong>${money.format(totalPaid)}</strong></td></tr>
 </tbody></table>
 ${secondarySection}${summary}
+${groupReportClose}
 </body></html>`;
 
     const printWindow = window.open('', '_blank', 'width=900,height=700');
@@ -2759,6 +2882,11 @@ ${secondarySection}${summary}
     printWindow.document.write(printable);
     printWindow.document.close();
     printWindow.focus();
+    if (groupEditablePreview) {
+        // Do not auto-open the browser print dialog. The user edits the preview
+        // first and presses PRINT REPORT when ready.
+        return;
+    }
     setTimeout(() => printWindow.print(), 300);
 }
 

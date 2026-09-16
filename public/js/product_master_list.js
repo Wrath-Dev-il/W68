@@ -116,7 +116,14 @@ function setupEventListeners() {
     
     document.querySelectorAll(".column-search-input").forEach(input => {
         input.addEventListener("input", (e) => {
-            const col = e.target.getAttribute("data-col");
+            const col =
+                e.target.getAttribute("data-col") ||
+                e.target.getAttribute("data-search-key") ||
+                e.target.getAttribute("data-field") ||
+                e.target.getAttribute("data-column");
+
+            if (!col) return;
+
             filters.search[col] = e.target.value.toLowerCase().trim();
             debouncedFilter();
         });
@@ -721,6 +728,17 @@ function renderProductTable() {
                             <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">Product Code</span>
                         </div>
                         ${escapeHtml(product.product_code)}
+                    </div>
+                    ` : ''}</td>
+<td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
+                    ${product.product_code2 || ''}
+                    ${product.product_code2 ? `
+                    <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
+                        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5 text-gold"></i>
+                            <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">Product Code 2</span>
+                        </div>
+                        ${escapeHtml(product.product_code2)}
                     </div>
                     ` : ''}</td>
                 ${renderFloatingInfoCell(product.position || product.Position, 'Position', 'map-pin', 'py-3 px-4 text-slate-600 align-middle truncate')}
@@ -2339,6 +2357,7 @@ function setViewFieldValue(id, value) {
 function renderCurrentViewProduct(product) {
     if (!product) return;
     setViewFieldValue('view-prod-code', product.product_code || '');
+    setViewFieldValue('view-prod-code2', product.product_code2 || '');
     setViewFieldValue('view-pricelist-code', product.pricelist_code || '');
     setViewFieldValue('view-prod-part', product.part_number || '');
     setViewFieldValue('view-prod-cat', product.category || '');
@@ -2544,6 +2563,7 @@ window.saveProductViewChanges = async function() {
     const get = id => document.getElementById(id)?.value ?? '';
     const payload = {
         product_code: get('view-prod-code').trim(),
+        product_code2: get('view-prod-code2').trim(),
         pricelist_code: get('view-pricelist-code').trim(),
         part_number: get('view-prod-part').trim(),
         specification: get('view-prod-spec').trim(),
@@ -2821,3 +2841,6 @@ window.applyViewPictureManager = function() {
     toggleModal('view-picture-manager-modal', false);
     window.updateProductViewDirtyState();
 };
+
+
+

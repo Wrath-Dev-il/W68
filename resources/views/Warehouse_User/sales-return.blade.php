@@ -125,6 +125,7 @@
                     <thead class="bg-slate-50/80 border-b border-slate-100">
                         <tr class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                             <th class="p-5 text-center w-12"><input type="checkbox" id="select-all-returns" class="accent-maroon cursor-pointer"></th>
+                            <th class="p-5">Return Number</th>
                             <th class="p-5">Invoice No.</th>
                             <th class="p-5">Customer</th>
                             <th class="p-5">Return Date</th>
@@ -132,6 +133,7 @@
                             <th class="p-5 text-center">Action</th>
                         </tr>
                         <tr class="bg-slate-50/30 border-b border-slate-100">
+                            <th class="p-2 px-5"></th>
                             <th class="p-2 px-5"></th>
                             <th class="p-2 px-5"><input type="text" onkeyup="searchSalesReturn(0, this.value)" placeholder="Search Invoice..." class="column-search-input text-[9px] w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-maroon/10"></th>
                             <th class="p-2 px-5"><input type="text" onkeyup="searchSalesReturn(1, this.value)" placeholder="Search Customer..." class="column-search-input text-[9px] w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-maroon/10"></th>
@@ -141,7 +143,7 @@
                         </tr>
                     </thead>
                     <tbody id="sales-return-tbody" class="text-xs divide-y divide-slate-50">
-                        <tr><td colspan="6" class="p-12 text-center text-slate-300 italic">No sales returns found.</td></tr>
+                        <tr><td colspan="7" class="p-12 text-center text-slate-300 italic">No sales returns found.</td></tr>
                     </tbody>
                 </table>
             </div>

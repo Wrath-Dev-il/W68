@@ -43,7 +43,7 @@ let returnState = { page: 1, invoice: '', customer: '' };
 window.loadSalesReturns = async function() {
     const tbody = document.getElementById('sales-return-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="p-12 text-center text-slate-300 italic">Loading sales returns...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="p-12 text-center text-slate-300 italic">Loading sales returns...</td></tr>';
     
     try {
         const url = new URL(window.salesReturnRoutes.history, window.location.origin);
@@ -58,6 +58,7 @@ window.loadSalesReturns = async function() {
             tbody.innerHTML = r.returns.map(ret => `
                 <tr class="hover:bg-maroon/[0.02] transition-colors group">
                     <td class="p-5 text-center"><input type="checkbox" value="${ret.id}" class="accent-maroon cursor-pointer return-checkbox"></td>
+                    <td class="p-5 font-mono font-bold text-slate-700">${ret.return_number || '---'}</td>
                     <td class="p-5 font-mono font-bold text-maroon">${ret.invoice_no}</td>
                     <td class="p-5 text-slate-700 font-medium">${ret.customer_name}</td>
                     <td class="p-5 text-slate-500">${new Date(ret.created_at).toLocaleDateString()}</td>
@@ -98,11 +99,11 @@ window.loadSalesReturns = async function() {
                 };
             }
         } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="p-12 text-center text-slate-300 italic">No sales returns found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-12 text-center text-slate-300 italic">No sales returns found.</td></tr>';
             updateReturnPaginationUI(1, 1, 0);
         }
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-12 text-center text-red-400">Error loading data.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="p-12 text-center text-red-400">Error loading data.</td></tr>';
     }
 };
 

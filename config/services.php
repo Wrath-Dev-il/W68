@@ -46,4 +46,8 @@ return [
         'auto_stock_sync' => env('SHOPEE_AUTO_STOCK_SYNC', false),
     ],
 
+    'w68_pricelist' => [
+        'url' => env('W68_PRICELIST_URL'),
+    ],
+
 ];

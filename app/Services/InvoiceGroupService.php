@@ -228,7 +228,7 @@ class InvoiceGroupService
     {
         $search = trim((string) $request->input('search', ''));
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 50;
+        $perPage = 15; // W68_PAYMENTS_GROUP_PAGE_15_20260909
         $activity = strtolower(trim((string) $request->input('activity', 'active')));
         if (!in_array($activity, ['active', 'not_active', 'all'], true)) {
             $activity = 'active';
@@ -1839,27 +1839,158 @@ class InvoiceGroupService
 
     private function resolveCustomer(string $sourceType, int $sourceId, string $invoiceNo = ''): ?array
     {
-        $customerId = null;
+        // W68_PAYMENTS_CUSTOMER_SOURCE_FALLBACK_20260909
+        // Payments must not fail just because an authoritative Sales/Online
+        // customer no longer has a matching Masterlist row. Resolve the source
+        // identity first, then prefer Masterlist only when it exists.
+        $customerId = 0;
+        $customerName = '';
 
         if ($sourceType === 'sales_order') {
-            $customerId = DB::connection('sales')->table('sales_orders')->where('id', $sourceId)->value('customer_id');
+            $source = DB::connection('sales')->table('sales_orders')
+                ->where('id', $sourceId)
+                ->first(['customer_id', 'customer_name']);
+            $customerId = (int) ($source->customer_id ?? 0);
+            $customerName = trim((string) ($source->customer_name ?? ''));
         } elseif ($sourceType === 'consignment_invoice') {
-            $customerId = DB::connection('sales')->table('consignment_invoices')->where('id', $sourceId)->value('customer_id');
+            $source = DB::connection('sales')->table('consignment_invoices')
+                ->where('id', $sourceId)
+                ->first(['customer_id', 'customer_name']);
+            $customerId = (int) ($source->customer_id ?? 0);
+            $customerName = trim((string) ($source->customer_name ?? ''));
         } elseif ($sourceType === 'online_report') {
-            $note = $this->onlineNoteByInvoice($sourceId, $invoiceNo);
-            $customerId = $note ? (int) ($note['customer_id'] ?? 0) : null;
+            $normalize = static fn ($value) => strtoupper((string) preg_replace('/\s+/', '', trim((string) $value)));
+            $targetInvoice = $normalize($invoiceNo);
+
+            // 1) Finalized ONL Sales Order is authoritative when available.
+            $orders = DB::connection('sales')->table('sales_orders')
+                ->where('order_number', 'LIKE', 'ONL-' . $sourceId . '-%')
+                ->whereIn('status', ['Confirmed', 'Closed'])
+                ->orderByDesc('id')
+                ->get(['customer_id', 'customer_name', 'invoice_numbers']);
+
+            $matchedOrder = $orders->first(function ($order) use ($normalize, $targetInvoice) {
+                if ($targetInvoice === '') return true;
+                $raw = trim((string) ($order->invoice_numbers ?? ''));
+                $decoded = json_decode($raw, true);
+                $values = is_array($decoded) ? $decoded : preg_split('/\s*,\s*/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+                foreach ((array) $values as $value) {
+                    if ($normalize($value) === $targetInvoice) return true;
+                }
+                return false;
+            });
+
+            if ($matchedOrder) {
+                $customerId = (int) ($matchedOrder->customer_id ?? 0);
+                $customerName = trim((string) ($matchedOrder->customer_name ?? ''));
+            }
+
+            // 2) Online Report snapshot fallback. It can also fill a missing
+            // name even when the finalized order already supplied the ID.
+            if ($customerId <= 0 || $customerName === '') {
+                $note = $this->onlineNoteByInvoice($sourceId, $invoiceNo);
+                if ($note) {
+                    if ($customerId <= 0) {
+                        $customerId = (int) ($note['customer_id'] ?? 0);
+                    }
+                    if ($customerName === '') {
+                        $customerName = trim((string) ($note['customer_name'] ?? ($note['customer'] ?? '')));
+                    }
+                }
+            }
+
+            // 3) Product Ledger is the last read-only fallback for damaged
+            // historical Online Report snapshots. It is read-only and does not
+            // alter any Ledger or Masterlist record.
+            if ($customerId <= 0 || $customerName === '') {
+                $ledgerRows = DB::connection('ledger')->table('product_ledgers')
+                    ->where('source_type', 'online_report')
+                    ->where('source_id', $sourceId)
+                    ->whereNotNull('customer_id')
+                    ->orderByDesc('id')
+                    ->get(['customer_id', 'entity_name', 'reference_number']);
+
+                $ledgerMatch = $ledgerRows->first(function ($row) use ($normalize, $targetInvoice) {
+                    if ($targetInvoice === '') return true;
+                    return $normalize($row->reference_number ?? '') === $targetInvoice;
+                });
+
+                if (!$ledgerMatch && $ledgerRows->pluck('customer_id')->filter()->unique()->count() === 1) {
+                    $ledgerMatch = $ledgerRows->first();
+                }
+
+                if ($ledgerMatch) {
+                    if ($customerId <= 0) {
+                        $customerId = (int) ($ledgerMatch->customer_id ?? 0);
+                    }
+                    if ($customerName === '') {
+                        $customerName = trim((string) ($ledgerMatch->entity_name ?? ''));
+                    }
+                }
+            }
         }
 
-        if (!$customerId) {
+        // If only a source name survived, resolve an exact Masterlist name.
+        if ($customerId <= 0 && $customerName !== '') {
+            $byName = DB::connection('masterlist')->table('customers')
+                ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($customerName))])
+                ->first(['id', 'name']);
+            if ($byName) {
+                return ['id' => (int) $byName->id, 'name' => (string) $byName->name];
+            }
+        }
+
+        if ($customerId <= 0) {
             return null;
         }
 
-        $customer = DB::connection('masterlist')->table('customers')->where('id', $customerId)->first();
-        if (!$customer) {
-            return null;
+        // Historical Shopee customer IDs 1029/1433 are one Payments read group.
+        $masterIds = in_array($customerId, [1029, 1433], true)
+            ? array_values(array_unique([$customerId, $customerId === 1029 ? 1433 : 1029]))
+            : [$customerId];
+
+        $masterCustomers = DB::connection('masterlist')->table('customers')
+            ->whereIn('id', $masterIds)
+            ->get(['id', 'name'])
+            ->keyBy('id');
+
+        $customer = $masterCustomers->get($customerId)
+            ?? collect($masterIds)->map(fn ($id) => $masterCustomers->get($id))->filter()->first();
+
+        if ($customer) {
+            return ['id' => (int) $customer->id, 'name' => (string) $customer->name];
         }
 
-        return ['id' => (int) $customer->id, 'name' => (string) $customer->name];
+        // If the exact source row had no name, recover the latest known
+        // Sales-side name for that authoritative customer ID before failing.
+        if ($customerName === '') {
+            $customerName = trim((string) (
+                DB::connection('sales')->table('sales_orders')
+                    ->where('customer_id', $customerId)
+                    ->whereNotNull('customer_name')
+                    ->where('customer_name', '<>', '')
+                    ->orderByDesc('id')
+                    ->value('customer_name') ?? ''
+            ));
+        }
+        if ($customerName === '') {
+            $customerName = trim((string) (
+                DB::connection('sales')->table('consignment_invoices')
+                    ->where('customer_id', $customerId)
+                    ->whereNotNull('customer_name')
+                    ->where('customer_name', '<>', '')
+                    ->orderByDesc('id')
+                    ->value('customer_name') ?? ''
+            ));
+        }
+
+        // Online-only/legacy buyer: keep the authoritative source ID and name.
+        // No Masterlist row is created or altered.
+        if ($customerName !== '') {
+            return ['id' => $customerId, 'name' => $customerName];
+        }
+
+        return null;
     }
 
     private function buildSettlementMap(): array

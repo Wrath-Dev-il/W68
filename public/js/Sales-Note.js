@@ -62,6 +62,21 @@ document.addEventListener('DOMContentLoaded', () => {
             debounce(() => loadSalesNotesByTab(), 300);
         });
     });
+
+    // Online-order envelope deep link: open the requested Sales Note from any page.
+    const portalSalesNoteId = new URLSearchParams(window.location.search).get('portal_sales_note');
+    if (portalSalesNoteId && /^\d+$/.test(portalSalesNoteId)) {
+        window.setTimeout(() => {
+            if (typeof window.viewSalesDetail === 'function') {
+                window.viewSalesDetail(Number.parseInt(portalSalesNoteId, 10));
+
+                // Keep refreshes clean after the modal has been opened once.
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('portal_sales_note');
+                window.history.replaceState({}, '', cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + cleanUrl.hash);
+            }
+        }, 150);
+    }
 });
 
 window.toggleModal = function(modalId, show) {

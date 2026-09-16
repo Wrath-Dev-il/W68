@@ -12,6 +12,7 @@ class Product extends Model
     protected $fillable = [
         'shopee_item_id',
         'product_code',
+        'product_code2',
         'pricelist_code',
         'part_number',
         'category',

@@ -352,7 +352,7 @@ unset($item);
 </div>
 
 <div class="no-print" style="position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #800000;padding:10px 20px;display:flex;justify-content:center;gap:12px;z-index:999;box-shadow:0 -4px 20px rgba(0,0,0,0.08);">
-    <button onclick="window.history.back()" style="padding:10px 24px;background:#fff;border:2px solid #e2e8f0;border-radius:10px;font-size:12px;font-weight:bold;color:#475569;cursor:pointer;display:flex;align-items:center;gap:6px;"><span>&larr;</span> Go Back</button>
+    <button onclick="window.location.href='{{ route('special.sales-order') }}'" style="padding:10px 24px;background:#fff;border:2px solid #e2e8f0;border-radius:10px;font-size:12px;font-weight:bold;color:#475569;cursor:pointer;display:flex;align-items:center;gap:6px;"><span>&larr;</span> Go Back</button>
     <button onclick="window.print()" style="padding:10px 24px;background:#800000;border:none;border-radius:10px;font-size:12px;font-weight:bold;color:#fff;cursor:pointer;box-shadow:0 4px 12px rgba(128,0,0,0.3);display:flex;align-items:center;gap:6px;">Print Report</button>
     <button onclick="saveAsPDF()" id="pdf-btn" style="padding:10px 24px;background:#1e40af;border:none;border-radius:10px;font-size:12px;font-weight:bold;color:#fff;cursor:pointer;box-shadow:0 4px 12px rgba(30,64,175,0.3);display:flex;align-items:center;gap:6px;">Save as PDF</button>
 </div>

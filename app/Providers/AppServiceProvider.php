@@ -24,6 +24,95 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // W68_PAYMENTS_PHASE1_TIMING_20260909
+        // READ-ONLY diagnostics for the Active Payments request.
+        // Does not alter queries, payment formulas, balances, statuses or database data.
+        if (!$this->app->runningInConsole() && request()->is('admin/payments/data')) {
+            $__w68PaymentsStartedAt = microtime(true);
+            $__w68PaymentsPage = max(1, (int) request()->query('page', 1));
+            $__w68PaymentsHasSearch = trim((string) request()->query('search', '')) !== '';
+
+            $__w68PaymentsPerf = [
+                'query_count' => 0,
+                'query_ms' => 0.0,
+                'connections' => [],
+            ];
+
+            \Illuminate\Support\Facades\DB::listen(
+                function ($query) use (&$__w68PaymentsPerf) {
+                    $connectionName = 'unknown';
+
+                    try {
+                        if (
+                            isset($query->connection) &&
+                            method_exists($query->connection, 'getName')
+                        ) {
+                            $connectionName = (string) $query->connection->getName();
+                        } elseif (isset($query->connectionName)) {
+                            $connectionName = (string) $query->connectionName;
+                        }
+                    } catch (\Throwable $e) {
+                        $connectionName = 'unknown';
+                    }
+
+                    $queryMs = (float) ($query->time ?? 0);
+
+                    $__w68PaymentsPerf['query_count']++;
+                    $__w68PaymentsPerf['query_ms'] += $queryMs;
+
+                    if (!isset($__w68PaymentsPerf['connections'][$connectionName])) {
+                        $__w68PaymentsPerf['connections'][$connectionName] = [
+                            'query_count' => 0,
+                            'query_ms' => 0.0,
+                        ];
+                    }
+
+                    $__w68PaymentsPerf['connections'][$connectionName]['query_count']++;
+                    $__w68PaymentsPerf['connections'][$connectionName]['query_ms'] += $queryMs;
+                }
+            );
+
+            $this->app->terminating(
+                function () use (
+                    $__w68PaymentsStartedAt,
+                    $__w68PaymentsPage,
+                    $__w68PaymentsHasSearch,
+                    &$__w68PaymentsPerf
+                ) {
+                    $durationMs = (microtime(true) - $__w68PaymentsStartedAt) * 1000;
+                    $queryMs = (float) $__w68PaymentsPerf['query_ms'];
+
+                    foreach ($__w68PaymentsPerf['connections'] as &$connectionStats) {
+                        $connectionStats['query_ms'] = round(
+                            (float) $connectionStats['query_ms'],
+                            1
+                        );
+                    }
+                    unset($connectionStats);
+
+                    ksort($__w68PaymentsPerf['connections']);
+
+                    \Illuminate\Support\Facades\Log::info(
+                        'W68_PAYMENTS_PERF',
+                        [
+                            'endpoint' => '/admin/payments/data',
+                            'page' => $__w68PaymentsPage,
+                            'search' => $__w68PaymentsHasSearch,
+                            'duration_ms' => round($durationMs, 1),
+                            'query_count' => (int) $__w68PaymentsPerf['query_count'],
+                            'query_ms' => round($queryMs, 1),
+                            'php_other_ms' => round(max(0, $durationMs - $queryMs), 1),
+                            'peak_memory_mb' => round(
+                                memory_get_peak_usage(true) / 1048576,
+                                1
+                            ),
+                            'connections' => $__w68PaymentsPerf['connections'],
+                        ]
+                    );
+                }
+            );
+        }
+
         ProductLedger::observe(ProductLedgerObserver::class);
 
         View::composer([

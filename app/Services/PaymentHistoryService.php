@@ -11,7 +11,8 @@ class PaymentHistoryService
     {
         $search = trim((string) $request->input('search', ''));
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 50;
+        // W68_PAYMENTS_HISTORY_PAYORS_15_20260909
+        $perPage = 15;
 
         $query = DB::connection('accounting')->table('process_payments as pp')
             ->leftJoin('process_payment_invoices as ppi', 'ppi.process_payment_id', '=', 'pp.id')
@@ -64,7 +65,8 @@ class PaymentHistoryService
         // Legacy method name retained for route compatibility. The payload is now
         // one row per Payment No. for the selected Payor.
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = max(1, min(100, (int) $request->input('per_page', 50)));
+        // W68_PAYMENTS_HISTORY_DETAIL_15_20260909
+        $perPage = max(1, min(15, (int) $request->input('per_page', 15)));
         $filters = [
             'payment_no' => trim((string) $request->input('payment_no', '')),
             'invoices' => trim((string) $request->input('invoices', '')),

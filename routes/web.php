@@ -25,8 +25,18 @@ use App\Http\Controllers\PurchaseViberController;
 use App\Http\Controllers\PayableChequeVoucherController;
 use App\Http\Controllers\ShopeeWebhookController;
 use App\Http\Controllers\DeveloperInventoryControlController;
+use App\Http\Controllers\CustomerPortalAccessController;
+use App\Support\W68PricelistUrl;
 
 // CRITICAL: This route must be defined early to avoid conflicts
+/* W68_VIBER_EXISTING_NOTE_ROUTES_START
+ | Admin + Regular only. Controller performs the account-type check too.
+ */
+Route::get('/admin/purchase/viber-list/available-existing-notes', [\App\Http\Controllers\PurchaseViberController::class, 'availableExistingNotes']);
+Route::post('/admin/purchase/viber-list/add-to-existing-note', [\App\Http\Controllers\PurchaseViberController::class, 'addToExistingNote']);
+Route::get('/regular/purchase/viber-list/available-existing-notes', [\App\Http\Controllers\PurchaseViberController::class, 'availableExistingNotes']);
+Route::post('/regular/purchase/viber-list/add-to-existing-note', [\App\Http\Controllers\PurchaseViberController::class, 'addToExistingNote']);
+/* W68_VIBER_EXISTING_NOTE_ROUTES_END */
 Route::match(['GET', 'POST'], '/admin/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('admin.purchase.note.verify-password');
 Route::match(['GET', 'POST'], '/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('purchase.note.verify-password');
 Route::match(['GET', 'POST'], '/regular/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('regular.purchase.note.verify-password');
@@ -875,6 +885,30 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
             abort(403);
         }
 
+        // W68_PAYMENTS_DIRECT_PROXY_FIX
+        // Payments data is a large read-only aggregation. For Regular/Special,
+        // call the already-registered Admin route Closure directly instead of
+        // booting a nested Laravel HTTP request via app()->handle().
+        if ($adminRouteName === 'admin.payments.data') {
+            @ini_set('memory_limit', '1024M');
+            @set_time_limit(120);
+
+            foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+                try {
+                    DB::connection($connectionName)->disableQueryLog();
+                } catch (\Throwable $ignored) {
+                    // Keep Payments readable even if one optional connection
+                    // is unavailable before the actual route handles it.
+                }
+            }
+
+            $targetRoute = app('router')->getRoutes()->getByName('admin.payments.data');
+            $targetAction = $targetRoute ? $targetRoute->getAction('uses') : null;
+
+            if ($targetAction instanceof \Closure) {
+                return $targetAction();
+            }
+        }
         $currentRequest = request();
         $targetUri = route($adminRouteName, $routeParameters, false);
         $subRequest = \Illuminate\Http\Request::create(
@@ -1629,6 +1663,113 @@ Route::get('/dashboard', function () {
     return redirect()->route('login')->with('error', 'Unsupported account type.');
 })->name('dashboard');
 
+
+
+// Online portal order navbar notifications (all internal user types).
+// An order is active only when it exists in w68_portal_orders and its Sales Note is Open.
+Route::get('/online-orders/notifications', function () {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    try {
+        $orders = DB::connection('sales')
+            ->table('w68_portal_orders as po')
+            ->join('sales_notes as sn', 'sn.id', '=', 'po.sales_note_id')
+            ->whereRaw("LOWER(TRIM(sn.status)) = 'open'")
+            ->orderByDesc('po.created_at')
+            ->orderByDesc('po.id')
+            ->get([
+                'po.id as portal_order_id',
+                'po.order_code',
+                'po.sales_note_id',
+                'po.sales_number',
+                'po.original_total',
+                'po.discount_total',
+                'po.total_amount',
+                'po.portal_status',
+                'po.created_at as portal_created_at',
+                'sn.customer_name',
+                'sn.order_date',
+                'sn.status as sales_note_status',
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'count' => $orders->count(),
+            'orders' => $orders,
+        ]);
+    } catch (\Throwable $e) {
+        Log::warning('Unable to load online portal order notifications.', [
+            'message' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'count' => 0,
+            'orders' => [],
+            'message' => 'Unable to load online orders.',
+        ], 500);
+    }
+})->name('online-orders.notifications');
+
+Route::get('/online-orders/sales-note/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) return redirect()->route('login');
+    if (is_array($user)) $user = (object) $user;
+
+    $portalOrder = DB::connection('sales')
+        ->table('w68_portal_orders as po')
+        ->join('sales_notes as sn', 'sn.id', '=', 'po.sales_note_id')
+        ->where('po.sales_note_id', (int) $id)
+        ->select([
+            'po.id as portal_order_id',
+            'po.order_code',
+            'po.sales_note_id',
+            'po.sales_number',
+            'po.total_amount',
+            'po.created_at as portal_created_at',
+            'sn.customer_name',
+            'sn.order_date',
+            'sn.status as sales_note_status',
+        ])
+        ->first();
+
+    abort_if(!$portalOrder, 404, 'Online Sales Note not found.');
+
+    $accountType = (int) ($user->account_type ?? 0);
+
+    // Use each user's existing Sales Note page and auto-open the requested note.
+    if ($accountType === 1 || $accountType === 4) {
+        return redirect()->route('admin.sales-note', ['portal_sales_note' => (int) $id]);
+    }
+    if ($accountType === 2) {
+        return redirect()->route('regular.sales-note', ['portal_sales_note' => (int) $id]);
+    }
+    if ($accountType === 3) {
+        return redirect()->route('special.sales-note', ['portal_sales_note' => (int) $id]);
+    }
+
+    // Warehouse users do not have a Sales Note module, so show a safe read-only detail page.
+    if ($accountType === 5) {
+        $note = \App\Models\SalesNote::on('sales')->with('items')->findOrFail((int) $id);
+        $sidebarFullName = trim((string) (($user->User_First_Name ?? 'Warehouse') . ' ' . ($user->User_Last_Name ?? 'User')));
+
+        return view('Warehouse_User.sales.online-order-sales-note', [
+            'user' => $user,
+            'account_type' => 5,
+            'note' => $note,
+            'portalOrder' => $portalOrder,
+            'sidebarAvatarUrl' => '',
+            'sidebarFullName' => $sidebarFullName !== '' ? $sidebarFullName : 'Warehouse User',
+            'sidebarRoleLabel' => 'Warehouse User',
+        ])->with('page_title', 'Online Sales Note');
+    }
+
+    abort(403);
+})->whereNumber('id')->name('online-orders.sales-note');
+
 Route::prefix('special')->name('special.')->group(function () {
     Route::get('/dashboard', function () {
         $user = session('user');
@@ -1663,8 +1804,7 @@ Route::prefix('special')->name('special.')->group(function () {
         $dashboardData = Cache::rememberForever('special_dashboard_summary_v1', function () {
             $totalProducts = DB::connection('masterlist')->table('products')->count();
             $newlyAddedCount = DB::connection('masterlist')->table('products')->where('status', 'Newly')->count();
-            $lowStockProducts = DB::connection('masterlist')->table('products')->where('on_hand', '<', 20)->get();
-            $lowStockCount = $lowStockProducts->count();
+            $lowStockCount = DB::connection('masterlist')->table('products')->where('on_hand', '<', 20)->count();
             $totalSuppliers = DB::connection('masterlist')->table('suppliers')->count();
             $totalCustomers = DB::connection('masterlist')->table('customers')->count();
             $outColumn = hatdogSchemaHasColumnCached('ledger', 'product_ledgers', 'out') ? 'out' : 'quantity_out';
@@ -1880,6 +2020,7 @@ Route::prefix('special')->name('special.')->group(function () {
             $before = $product->toArray();
             $validated = $req->validate([
                 'product_code' => "required|unique:masterlist.products,product_code,$id",
+                'product_code2' => 'nullable|string|max:255',
                 'pricelist_code' => 'nullable|string|max:255',
                 'part_number' => 'required|string',
                 'specification' => 'nullable|string',
@@ -2200,6 +2341,24 @@ Route::prefix('special')->name('special.')->group(function () {
         return hatdogSupplierProfileJson($request, $supplierId, [1, 2, 3], 'getUnregisteredPurchaseOrders', 'Unable to load supplier unregistered purchase orders.', 'Unable to load the supplier\'s unregistered Purchase Orders.');
     })->name('masterlist.supplier.unregistered-purchase-orders');
     Route::get('/master-list/customer-master', fn () => hatdogSpecialUserView('Special_User.master_list.Customer_Master-list'))->name('customer-master');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/data', fn () => hatdogRegularProxyToAdminRoute('admin.customer-master.data'))->name('customer-master.data');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/create', fn () => hatdogRegularProxyToAdminRoute('admin.customer-master.create'))->name('customer-master.create');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/update/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.update', ['id' => $id]))->name('customer-master.update');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/delete/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.delete', ['id' => $id]))->name('customer-master.delete');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/purchase-history/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.purchase-history', ['id' => $id]))->name('customer-master.purchase-history');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/payment-history/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.payment-history', ['id' => $id]))->name('customer-master.payment-history');
+    Route::match(['GET', 'POST'], '/master-list/customer-master/payment-history/{id}/invoice/{salesOrderId}', fn ($id, $salesOrderId) => hatdogRegularProxyToAdminRoute('admin.customer-master.payment-history-detail', ['id' => $id, 'salesOrderId' => $salesOrderId]))->name('customer-master.payment-history-detail');
+    Route::get('/master-list/customer-master/notes/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.notes.show', ['id' => $id]))->name('customer-master.notes.show');
+    Route::post('/master-list/customer-master/notes/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.notes.save', ['id' => $id]))->name('customer-master.notes.save');
+    Route::get('/master-list/customer-master/portal-access/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.status', ['id' => $id]))->name('customer-master.portal.status');
+    Route::post('/master-list/customer-master/portal-access/{id}/generate', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.generate', ['id' => $id]))->name('customer-master.portal.generate');
+    Route::post('/master-list/customer-master/portal-access/{id}/validity', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.validity', ['id' => $id]))->name('customer-master.portal.validity');
+    Route::post('/master-list/customer-master/portal-access/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.delete', ['id' => $id]))->name('customer-master.portal.delete');
+    Route::get('/master-list/customer-master/brand-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.index', ['id' => $id]))->name('customer-master.brand-discounts.index');
+    Route::get('/master-list/customer-master/brand-discounts/{id}/brands', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.brands', ['id' => $id]))->name('customer-master.brand-discounts.brands');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/add', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.add', ['id' => $id]))->name('customer-master.brand-discounts.add');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/save', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.save', ['id' => $id]))->name('customer-master.brand-discounts.save');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.delete', ['id' => $id]))->name('customer-master.brand-discounts.delete');
     Route::get('/master-list/forwarder-master', fn () => hatdogSpecialUserView('Special_User.master_list.Forwarder_Master-list'))->name('forwarder-master');
 
     Route::get('/inventory/inventory-adjustment', fn () => hatdogSpecialUserView('Special_User.Inventory.inventory_adjustment'))->name('inv-adjust');
@@ -3292,8 +3451,10 @@ Route::prefix('regular')->name('regular.')->group(function () {
         $dashboardData = Cache::rememberForever('regular_dashboard_summary_v1', function () {
             $totalProducts = DB::connection('masterlist')->table('products')->count();
             $newlyAddedCount = DB::connection('masterlist')->table('products')->where('status', 'Newly')->count();
-            $lowStockProducts = DB::connection('masterlist')->table('products')->where('on_hand', '<', 20)->get();
-            $lowStockCount = $lowStockProducts->count();
+            $lowStockCount = DB::connection('masterlist')
+                ->table('products')
+                ->where('on_hand', '<', 20)
+                ->count();
             $totalSuppliers = DB::connection('masterlist')->table('suppliers')->count();
             $totalCustomers = DB::connection('masterlist')->table('customers')->count();
             $outColumn = hatdogSchemaHasColumnCached('ledger', 'product_ledgers', 'out') ? 'out' : 'quantity_out';
@@ -3479,6 +3640,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
 
                 $db = match($col) {
                     'productCode' => 'product_code',
+                    'productCode2' => 'product_code2',
                     'partNumber' => 'part_number',
                     'restockLevel' => 'Re_order_level',
                     'sellingPrice' => 'selling_price',
@@ -3513,6 +3675,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
 
         $sortableColumns = [
             'productCode' => 'product_code',
+                    'productCode2' => 'product_code2',
             'description' => 'description',
             'application' => 'application',
             'brand' => 'category',
@@ -3621,7 +3784,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
     Route::post('/master-list/product-master/create', function (\Illuminate\Http\Request $req) {
         $user = session('user'); if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
         try {
-            $v = $req->validate(['product_code' => 'required|unique:masterlist.products,product_code', 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
+            $v = $req->validate(['product_code' => 'required|unique:masterlist.products,product_code', 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
             $v['pricelist_code'] = isset($v['pricelist_code']) && trim((string) $v['pricelist_code']) !== '' ? trim((string) $v['pricelist_code']) : null;
             $v['description'] ??= ''; $v['application'] ??= ''; $v['position'] ??= ''; $v['unit'] ??= ''; $v['cost'] ??= 0; $v['price_online'] = $v['price_online'] ?? 0; $v['specification'] = isset($v['specification']) && trim((string) $v['specification']) !== '' ? trim((string) $v['specification']) : null;
             $product = \App\Models\Product::create($v);
@@ -3635,7 +3798,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
         $user = session('user'); if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
         try {
             $product = \App\Models\Product::findOrFail($id); $before = $product->toArray();
-            $v = $req->validate(['product_code' => "required|unique:masterlist.products,product_code,$id", 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
+            $v = $req->validate(['product_code' => "required|unique:masterlist.products,product_code,$id", 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
             $v['pricelist_code'] = isset($v['pricelist_code']) && trim((string) $v['pricelist_code']) !== '' ? trim((string) $v['pricelist_code']) : null;
             $v['description'] ??= ''; $v['application'] ??= ''; $v['position'] ??= ''; $v['unit'] ??= ''; $v['price_online'] = $v['price_online'] ?? 0; $v['specification'] = isset($v['specification']) && trim((string) $v['specification']) !== '' ? trim((string) $v['specification']) : null;
             // Product Master inline editor must never directly alter inventory or cost.
@@ -3735,6 +3898,15 @@ Route::prefix('regular')->name('regular.')->group(function () {
     Route::match(['GET', 'POST'], '/master-list/customer-master/payment-history/{id}/invoice/{salesOrderId}', fn ($id, $salesOrderId) => hatdogRegularProxyToAdminRoute('admin.customer-master.payment-history-detail', ['id' => $id, 'salesOrderId' => $salesOrderId]))->name('customer-master.payment-history-detail');
     Route::get('/master-list/customer-master/notes/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.notes.show', ['id' => $id]))->name('customer-master.notes.show');
     Route::post('/master-list/customer-master/notes/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.notes.save', ['id' => $id]))->name('customer-master.notes.save');
+    Route::get('/master-list/customer-master/portal-access/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.status', ['id' => $id]))->name('customer-master.portal.status');
+    Route::post('/master-list/customer-master/portal-access/{id}/generate', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.generate', ['id' => $id]))->name('customer-master.portal.generate');
+    Route::post('/master-list/customer-master/portal-access/{id}/validity', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.validity', ['id' => $id]))->name('customer-master.portal.validity');
+    Route::post('/master-list/customer-master/portal-access/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.portal.delete', ['id' => $id]))->name('customer-master.portal.delete');
+    Route::get('/master-list/customer-master/brand-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.index', ['id' => $id]))->name('customer-master.brand-discounts.index');
+    Route::get('/master-list/customer-master/brand-discounts/{id}/brands', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.brands', ['id' => $id]))->name('customer-master.brand-discounts.brands');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/add', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.add', ['id' => $id]))->name('customer-master.brand-discounts.add');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/save', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.save', ['id' => $id]))->name('customer-master.brand-discounts.save');
+    Route::post('/master-list/customer-master/brand-discounts/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.delete', ['id' => $id]))->name('customer-master.brand-discounts.delete');
 
     Route::match(['GET', 'POST'], '/master-list/forwarder-master/data', fn () => hatdogRegularProxyToAdminRoute('admin.forwarder-master.data'))->name('forwarder-master.data');
     Route::match(['GET', 'POST'], '/master-list/forwarder-master/create', fn () => hatdogRegularProxyToAdminRoute('admin.forwarder-master.create'))->name('forwarder-master.create');
@@ -6916,6 +7088,7 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     // Column search filters
     $searchMap = [
         'productCode' => 'product_code',
+                    'productCode2' => 'product_code2',
         'partNumber' => 'part_number',
         'description' => 'description',
         'application' => 'application',
@@ -6962,6 +7135,7 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     // Dynamic column sorting
     $sortableColumns = [
         'productCode' => 'product_code',
+                    'productCode2' => 'product_code2',
         'description' => 'description',
         'application' => 'application',
         'brand' => 'category',
@@ -7099,6 +7273,7 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
     try {
         $validated = $request->validate([
             'product_code' => 'required|string|unique:masterlist.products,product_code',
+            'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'specification' => 'nullable|string',
@@ -7947,6 +8122,20 @@ Route::get('/admin/masterlist/customer', function () {
     return view('Admin.master_list.Customer_Master-list', compact('user'));
 })->name('admin.customer-master');
 
+// Customer Pricelist Portal Authorization
+Route::get('/admin/masterlist/customer/portal-access/{id}', [CustomerPortalAccessController::class, 'status'])
+    ->whereNumber('id')
+    ->name('admin.customer-master.portal.status');
+Route::post('/admin/masterlist/customer/portal-access/{id}/generate', [CustomerPortalAccessController::class, 'generate'])
+    ->whereNumber('id')
+    ->name('admin.customer-master.portal.generate');
+Route::post('/admin/masterlist/customer/portal-access/{id}/validity', [CustomerPortalAccessController::class, 'updateValidity'])
+    ->whereNumber('id')
+    ->name('admin.customer-master.portal.validity');
+Route::post('/admin/masterlist/customer/portal-access/{id}/delete', [CustomerPortalAccessController::class, 'delete'])
+    ->whereNumber('id')
+    ->name('admin.customer-master.portal.delete');
+
 // Fetch all customers from core4_masterlist.customers
 Route::get('/admin/masterlist/customer/data', function (Request $request) {
     $user = session('user');
@@ -8013,8 +8202,81 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         ];
     }
 
+    $customerIds = $customers->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()->all();
+    $portalAuthorizations = collect();
+
+    if (!empty($customerIds) && Schema::connection('masterlist')->hasTable('customer_portal_authorizations')) {
+        $portalAuthorizations = DB::connection('masterlist')
+            ->table('customer_portal_authorizations')
+            ->whereIn('customer_id', $customerIds)
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->customer_id);
+    }
+
+    $portalBaseUrl = W68PricelistUrl::baseUrl($request);
+    $now = now();
+    $formatQrRemaining = static function (int $seconds): string {
+        if ($seconds <= 0) return 'Expired';
+        if ($seconds < 60) return '< 1 min';
+
+        $days = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+
+        if ($days > 0) {
+            return $days . ' day' . ($days === 1 ? '' : 's') . ($hours > 0 ? ' ' . $hours . ' hr' : '');
+        }
+
+        if ($hours > 0) {
+            return $hours . ' hr' . ($minutes > 0 ? ' ' . $minutes . ' min' : '');
+        }
+
+        return $minutes . ' min';
+    };
+    $portalSummaryFor = static function ($customerId) use ($portalAuthorizations, $portalBaseUrl, $now, $formatQrRemaining): array {
+        $authorization = $portalAuthorizations->get((int) $customerId);
+
+        if (!$authorization) {
+            return [
+                'active' => false,
+                'expired' => false,
+                'url' => null,
+                'validation_label' => 'No QR',
+                'remaining_label' => 'N/A',
+                'expires_at' => null,
+            ];
+        }
+
+        $expiresAt = \Carbon\Carbon::parse($authorization->expires_at);
+        $active = $expiresAt->isFuture();
+        $url = null;
+        $validationLabel = $active ? 'Active' : 'Expired';
+
+        if ($active) {
+            try {
+                $token = \Illuminate\Support\Facades\Crypt::decryptString((string) $authorization->token_encrypted);
+                $url = $portalBaseUrl . '/authorized-access/' . rawurlencode($token);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $validationLabel = 'Invalid QR';
+                $active = false;
+            }
+        }
+
+        $remainingSeconds = $active ? max(0, $now->diffInSeconds($expiresAt, false)) : 0;
+
+        return [
+            'active' => $active,
+            'expired' => !$active && $expiresAt->isPast(),
+            'url' => $url,
+            'validation_label' => $validationLabel,
+            'remaining_label' => $active ? $formatQrRemaining((int) $remainingSeconds) : ($expiresAt->isPast() ? 'Expired' : 'N/A'),
+            'expires_at' => $expiresAt->toIso8601String(),
+        ];
+    };
+
     return response()->json([
-        'customers' => $customers->map(function ($c) {
+        'customers' => $customers->map(function ($c) use ($portalSummaryFor) {
             return [
                 'id' => $c->id,
                 'name' => $c->name,
@@ -8025,6 +8287,7 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
                 'pricingRemarks' => $c->pricing_remarks,
                 'terms' => $c->terms,
                 'type' => $c->type ? $c->type->name : 'Regular',
+                'portal' => $portalSummaryFor($c->id),
                 'bank' => [
                     'code' => $c->bankAccount ? $c->bankAccount->bank_code : '',
                     'accNo' => $c->bankAccount ? $c->bankAccount->account_number : '',
@@ -8799,6 +9062,231 @@ Route::post('/admin/masterlist/customer/notes/{id}', function (Request $request,
     }
 })->name('admin.customer-master.notes.save');
 
+Route::get('/admin/masterlist/customer/brand-discounts/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
+        }
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $discounts = DB::connection('masterlist')
+            ->table('customer_brand_discounts')
+            ->where('customer_id', $id)
+            ->orderBy('brand')
+            ->get(['id', 'brand', 'discount_percentage'])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'brand' => (string) $row->brand,
+                'discount_percentage' => (float) $row->discount_percentage,
+            ])
+            ->values();
+
+        return response()->json(['success' => true, 'discounts' => $discounts]);
+    } catch (\Throwable $e) {
+        Log::error('Customer brand discounts load error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.brand-discounts.index');
+
+Route::get('/admin/masterlist/customer/brand-discounts/{id}/brands', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
+        }
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $search = trim((string) $request->query('search', ''));
+        $brandQuery = DB::connection('masterlist')
+            ->table('products')
+            ->select('category')
+            ->whereNotNull('category')
+            ->where('category', '!=', '');
+
+        if ($search !== '') {
+            $brandQuery->where('category', 'LIKE', '%' . $search . '%');
+        }
+
+        $assigned = DB::connection('masterlist')
+            ->table('customer_brand_discounts')
+            ->where('customer_id', $id)
+            ->pluck('brand')
+            ->map(fn ($brand) => mb_strtolower(trim((string) $brand)))
+            ->flip();
+
+        $brands = $brandQuery
+            ->distinct()
+            ->orderBy('category')
+            ->limit(1000)
+            ->pluck('category')
+            ->map(function ($brand) use ($assigned) {
+                $brand = trim((string) $brand);
+                return [
+                    'brand' => $brand,
+                    'assigned' => $assigned->has(mb_strtolower($brand)),
+                ];
+            })
+            ->values();
+
+        return response()->json(['success' => true, 'brands' => $brands]);
+    } catch (\Throwable $e) {
+        Log::error('Customer brand list error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.brand-discounts.brands');
+
+Route::post('/admin/masterlist/customer/brand-discounts/{id}/add', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
+        }
+
+        $validated = $request->validate([
+            'brands' => ['required', 'array', 'min:1'],
+            'brands.*' => ['required', 'string', 'max:255'],
+        ]);
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id', 'name']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $brands = collect($validated['brands'])
+            ->map(fn ($brand) => trim((string) $brand))
+            ->filter()
+            ->unique(fn ($brand) => mb_strtolower($brand))
+            ->values();
+
+        $validBrandMap = DB::connection('masterlist')
+            ->table('products')
+            ->whereIn('category', $brands->all())
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->pluck('category')
+            ->mapWithKeys(fn ($brand) => [mb_strtolower(trim((string) $brand)) => trim((string) $brand)]);
+
+        $now = now();
+        $rows = $brands
+            ->map(fn ($brand) => $validBrandMap->get(mb_strtolower($brand)))
+            ->filter()
+            ->unique(fn ($brand) => mb_strtolower($brand))
+            ->map(fn ($brand) => [
+                'customer_id' => (int) $id,
+                'brand' => $brand,
+                'discount_percentage' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->values()
+            ->all();
+
+        if (empty($rows)) {
+            return response()->json(['success' => false, 'message' => 'No valid Product Master brands were selected.'], 422);
+        }
+
+        DB::connection('masterlist')
+            ->table('customer_brand_discounts')
+            ->upsert($rows, ['customer_id', 'brand'], ['updated_at']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Brand discount added successfully.',
+            'added_count' => count($rows),
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer brand discount add error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.brand-discounts.add');
+
+Route::post('/admin/masterlist/customer/brand-discounts/{id}/save', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
+        }
+
+        $validated = $request->validate([
+            'brand' => ['required', 'string', 'max:255'],
+            'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $brand = trim((string) $validated['brand']);
+        $discount = round((float) $validated['discount_percentage'], 2);
+
+        $updated = DB::connection('masterlist')
+            ->table('customer_brand_discounts')
+            ->where('customer_id', $id)
+            ->where('brand', $brand)
+            ->update([
+                'discount_percentage' => $discount,
+                'updated_at' => now(),
+            ]);
+
+        if (!$updated) {
+            return response()->json(['success' => false, 'message' => 'Brand discount row was not found for this customer.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Brand discount saved.',
+            'brand' => $brand,
+            'discount_percentage' => $discount,
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer brand discount save error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.brand-discounts.save');
+
+Route::post('/admin/masterlist/customer/brand-discounts/{id}/delete', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
+        }
+
+        $validated = $request->validate([
+            'brand' => ['required', 'string', 'max:255'],
+        ]);
+
+        $deleted = DB::connection('masterlist')
+            ->table('customer_brand_discounts')
+            ->where('customer_id', $id)
+            ->where('brand', trim((string) $validated['brand']))
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => $deleted ? 'Brand discount deleted.' : 'Brand discount was already deleted.',
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer brand discount delete error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.brand-discounts.delete');
+
 // Forwarder Master List View
 Route::get('/admin/masterlist/forwarder', function () {
     $user = session('user');
@@ -9160,7 +9648,7 @@ Route::get('/admin/inventory/adjustment/data', function (\Illuminate\Http\Reques
         $query->where('application', 'LIKE', '%' . $search['app'] . '%');
     }
     if (!empty($search['qty'])) {
-        $query->where('actual_qty', 'LIKE', '%' . $search['qty'] . '%');
+        $query->where('on_hand', 'LIKE', '%' . $search['qty'] . '%');
     }
 
     // Status filters (e.g. New / Old status)
@@ -9191,6 +9679,7 @@ Route::get('/admin/inventory/adjustment/data', function (\Illuminate\Http\Reques
                 'desc' => $p->description ?? '---',
                 'app' => $p->application ?? '---',
                 'onHand' => $onHand,
+                'computerStock' => (int) $onHand,
                 'actualQty' => $actualQty ?? 0,
                 'unit' => trim((string) ($p->unit ?? '')),
                 'diff' => $diff,
@@ -15026,7 +15515,15 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
 
                     return [
                         'product_id' => $resolvedProductId,
-                        'product_code' => (string) ($item->product_code ?? ''),
+                        // W68_SALES_NOTE_PRINT_PRODUCT_CODE_FALLBACK
+                        // Some Sales Note item rows have a blank product_code even
+                        // though product_id correctly points to Product Master.
+                        // Always print Product Master's Item Code as the fallback.
+                        'product_code' => (string) (
+                            trim((string) ($item->product_code ?? '')) !== ''
+                                ? $item->product_code
+                                : ($product->product_code ?? '')
+                        ),
                         'description' => implode(' | ', $descParts),
                         'part_number' => $product ? $product->part_number : '',
                         'quantity' => $item->quantity,
@@ -18576,6 +19073,12 @@ $_resolvedPrice = (float) ($_resolvedPrice ?? 0);
             }
 
             foreach ($correctedYears as $correctedYear => $correctedValues) {
+                // Historical manual corrections are only for 2023-2025.
+                // 2026 and later must always use the live Product Ledger so
+                // sales created today immediately appear in Online Print.
+                if ((int) $correctedYear >= 2026) {
+                    continue;
+                }
                 $salesByProduct[$correctedProductId . '-' . $correctedYear . '-local'] = $correctedValues['local'];
                 $salesByProduct[$correctedProductId . '-' . $correctedYear . '-online'] = $correctedValues['online'];
             }
@@ -22502,7 +23005,7 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
      * 3) Online Report snapshot
      * 4) Product Ledger (read-only historical fallback)
      */
-    function hatdogBuildPaymentOnlineInvoices(?int $customerId = null, string $search = '')
+    function hatdogBuildPaymentOnlineInvoices($customerId = null, string $search = '')
     {
         $rows = [];
         $rowAuthority = [];
@@ -22536,20 +23039,41 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
             ), static fn ($invoice) => $invoice !== ''));
         };
 
-        // Payments-only alias. Do not merge or rewrite customer rows in Masterlist.
+        // W68_PAYMENTS_MULTI_CUSTOMER_FILTER_20260909
+        // Payments-only aliases. The active Payments table can pass a page of
+        // customer IDs so Online Report resolution is limited to that page.
         $shopeePaymentCustomerIds = [1029, 1433];
-        $paymentCustomerIds = $customerId === null
+        $hasCustomerFilter = $customerId !== null;
+        $requestedCustomerIds = $customerId === null
             ? []
-            : (in_array((int) $customerId, $shopeePaymentCustomerIds, true)
-                ? $shopeePaymentCustomerIds
-                : [(int) $customerId]);
+            : (is_array($customerId) ? $customerId : [$customerId]);
+        $requestedCustomerIds = array_values(array_unique(array_filter(array_map(
+            static fn ($id) => (int) $id,
+            $requestedCustomerIds
+        ), static fn ($id) => $id > 0)));
+
+        if ($hasCustomerFilter && empty($requestedCustomerIds)) {
+            return [];
+        }
+
+        $paymentCustomerIds = [];
+        foreach ($requestedCustomerIds as $requestedCustomerId) {
+            if (in_array($requestedCustomerId, $shopeePaymentCustomerIds, true)) {
+                array_push($paymentCustomerIds, ...$shopeePaymentCustomerIds);
+            } else {
+                $paymentCustomerIds[] = $requestedCustomerId;
+            }
+        }
+        $paymentCustomerIds = array_values(array_unique($paymentCustomerIds));
+        $preferredShopeeCustomerId = collect($requestedCustomerIds)
+            ->first(fn ($id) => in_array((int) $id, $shopeePaymentCustomerIds, true));
 
         // Resolve finalized ONL Sales Orders BEFORE applying Online Report JSON filters.
         $onlineOrdersQ = DB::connection('sales')->table('sales_orders')
             ->where('order_number', 'LIKE', 'ONL-%')
             ->whereIn('status', ['Confirmed', 'Closed']);
 
-        if ($customerId !== null) {
+        if ($hasCustomerFilter) {
             $onlineOrdersQ->whereIn('customer_id', $paymentCustomerIds);
         }
 
@@ -22585,7 +23109,7 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
             ->select('id', 'status', 'prices', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at')
             ->whereIn('status', ['generated', 'migrated']);
 
-        if ($customerId !== null) {
+        if ($hasCustomerFilter) {
             // A matching finalized ONL Sales Order always keeps its report eligible.
             // notes_data customer matching is fallback-only for legacy/migrated rows.
             $reportIdsFromOrders = array_keys($orderReportIds);
@@ -22789,15 +23313,15 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
                     : trim((string) (($note['customer_name'] ?? '') ?: ($ledgerInfo['customer_name'] ?? '')));
 
                 // Apply customer filtering only after the authoritative ONL Sales Order is resolved.
-                if ($customerId !== null && !in_array($resolvedCustomerId, $paymentCustomerIds, true)) {
+                if ($hasCustomerFilter && !in_array($resolvedCustomerId, $paymentCustomerIds, true)) {
                     continue;
                 }
 
                 // Treat historical 1029/1433 Shopee IDs as one Payments read group only.
                 $outputCustomerId = $resolvedCustomerId;
                 if (in_array($resolvedCustomerId, $shopeePaymentCustomerIds, true)) {
-                    $outputCustomerId = $customerId !== null && in_array((int) $customerId, $shopeePaymentCustomerIds, true)
-                        ? (int) $customerId
+                    $outputCustomerId = $hasCustomerFilter && $preferredShopeeCustomerId
+                        ? (int) $preferredShopeeCustomerId
                         : 1029;
 
                     if ($outputCustomerId === 1029 && $resolvedCustomerId === 1433) {
@@ -22941,6 +23465,14 @@ if (!function_exists('hatdogBuildPaymentOnlineInvoices')) {
 }
 
 Route::get('/admin/payments/data', function () {
+    // W68_PAYMENTS_RUNTIME_GUARD
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(120);
+    gc_enable();
+    foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+        try { DB::connection($connectionName)->disableQueryLog(); } catch (\Throwable $ignored) {}
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -23029,6 +23561,324 @@ Route::get('/admin/payments/data', function () {
             }
         }
 
+        // W68_PAYMENTS_PAGE_FIRST_15_20260909
+        // Resolve only the 15 active payors needed for the requested page before
+        // loading full invoice/report details. This prevents one Payments request
+        // from decoding every Online Report and every historical invoice first.
+        $page = max((int) request()->query('page', 1), 1);
+        $perPage = 15;
+        $today = now()->startOfDay();
+        $shopeePaymentCustomerIds = [1029, 1433];
+        $normalizePaymentCustomerId = static fn ($id) => in_array((int) $id, $shopeePaymentCustomerIds, true)
+            ? 1029
+            : (int) $id;
+
+        $parsePaymentInvoiceValues = static function ($value): array {
+            if (is_array($value)) {
+                return array_values(array_filter(array_map(
+                    static fn ($invoice) => trim((string) $invoice),
+                    $value
+                ), static fn ($invoice) => $invoice !== ''));
+            }
+
+            $raw = trim((string) ($value ?? ''));
+            if ($raw === '') return [];
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map(
+                    static fn ($invoice) => trim((string) $invoice),
+                    $decoded
+                ), static fn ($invoice) => $invoice !== ''));
+            }
+
+            return array_values(array_filter(array_map(
+                static fn ($invoice) => trim((string) $invoice),
+                explode(',', $raw)
+            ), static fn ($invoice) => $invoice !== ''));
+        };
+
+        $returnAmountFor = static function (array $keys, array $map) use ($normalizeInvKey): float {
+            $normalized = collect($keys)
+                ->flatMap(function ($value) use ($normalizeInvKey) {
+                    $raw = trim((string) $value);
+                    if ($raw === '') return [];
+                    $tokens = preg_split('/[,\s\/]+/', $raw) ?: [];
+                    $tokens[] = $raw;
+                    if (preg_match_all('/SN-\d+/i', $raw, $m) && !empty($m[0])) {
+                        $tokens = array_merge($tokens, $m[0]);
+                    }
+                    return $tokens;
+                })
+                ->map(fn ($value) => $normalizeInvKey($value))
+                ->filter()
+                ->unique();
+
+            return (float) $normalized->sum(fn ($key) => (float) ($map[$key] ?? 0));
+        };
+
+        $activeCandidatePayors = [];
+        $registerCandidate = static function ($customerId, $customerName, $effectiveDate) use (&$activeCandidatePayors, $normalizePaymentCustomerId) {
+            $customerId = $normalizePaymentCustomerId($customerId);
+            if ($customerId <= 0) return;
+
+            $name = trim((string) $customerName);
+            if ($customerId === 1029 && $name === '') $name = 'SHOPEE ONLINE BUYERS';
+            if ($customerId === 1029 && stripos($name, 'shop') !== false) $name = 'SHOPEE ONLINE BUYERS';
+
+            $date = null;
+            if ($effectiveDate) {
+                try { $date = \Carbon\Carbon::parse($effectiveDate); } catch (\Throwable $ignored) {}
+            }
+
+            if (!isset($activeCandidatePayors[$customerId])) {
+                $activeCandidatePayors[$customerId] = [
+                    'customer_id' => $customerId,
+                    'name' => $name,
+                    'oldest_date' => $date,
+                ];
+                return;
+            }
+
+            if ($activeCandidatePayors[$customerId]['name'] === '' && $name !== '') {
+                $activeCandidatePayors[$customerId]['name'] = $name;
+            }
+            $oldest = $activeCandidatePayors[$customerId]['oldest_date'];
+            if ($date && (!$oldest || $date->lt($oldest))) {
+                $activeCandidatePayors[$customerId]['oldest_date'] = $date;
+            }
+        };
+
+        // LOCAL Sales Orders: read only the columns needed to decide whether a
+        // customer can appear in the active list. Full rows are loaded later for
+        // the selected 15 customers only.
+        $candidateSalesOrders = DB::connection('sales')->table('sales_orders as so')
+            ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
+            ->where('so.order_number', 'NOT LIKE', 'ONL-%')
+            ->where(function ($query) {
+                $query->whereIn('so.status', ['Closed', 'Confirmed'])
+                    ->orWhere('sn.status', 'Closed');
+            })
+            ->whereNotNull('so.customer_id')
+            ->get([
+                'so.id as source_id',
+                'so.order_number as po_no',
+                'sn.sales_number as sales_note_no',
+                'sn.net_total as sales_note_amount',
+                'sn.order_date',
+                DB::raw("COALESCE(NULLIF(so.invoice_numbers, ''), so.order_number) as invoice_no"),
+                'so.customer_id',
+                'so.customer_name',
+                'so.total_amount as amount',
+                'so.created_at',
+                'so.updated_at',
+                'so.waybill_date',
+            ]);
+
+        foreach ($candidateSalesOrders as $doc) {
+            $paidRow = $paidRows->get('sales_order:' . $doc->source_id);
+            $paid = (float) ($paidRow->paid_total ?? 0);
+            $recordedAdjustment = (float) ($paidRow->adjustment_total ?? 0);
+            $amount = (float) ($doc->amount ?? 0);
+            if ($amount <= 0) continue;
+
+            $returned = $returnAmountFor([
+                $doc->invoice_no ?? '',
+                $doc->po_no ?? '',
+                $doc->sales_note_no ?? '',
+            ], $returnMap);
+            $salesNoteAmount = (float) ($doc->sales_note_amount ?? 0);
+            $effectiveAdjustment = max($returned, $recordedAdjustment);
+            $remainingReturnAdjustment = min(max($returned - $recordedAdjustment, 0), max($amount - $paid, 0));
+            $autoSettledByReturn = $returned > 0 && (
+                $returned >= $amount
+                || ($salesNoteAmount > 0 && $returned >= $salesNoteAmount)
+                || $paid >= ($amount / 2)
+            );
+            $due = $autoSettledByReturn ? 0 : max($amount - $paid - $effectiveAdjustment, 0);
+            if ($due <= 0 && $remainingReturnAdjustment <= 0) continue;
+
+            $dateCandidates = collect([
+                $doc->order_date ?? null,
+                $doc->waybill_date ?? null,
+                $doc->created_at ?? null,
+                $doc->updated_at ?? null,
+            ])->filter();
+            $effectiveDate = $dateCandidates->isNotEmpty()
+                ? $dateCandidates->map(fn ($value) => \Carbon\Carbon::parse($value))->sort()->first()
+                : null;
+
+            $registerCandidate($doc->customer_id, $doc->customer_name, $effectiveDate);
+        }
+        unset($candidateSalesOrders);
+
+        $candidateConsignments = DB::connection('sales')->table('consignment_invoices')
+            ->whereNotIn('status', ['Cancelled', 'Void'])
+            ->whereNotNull('customer_id')
+            ->get([
+                'id as source_id',
+                'invoice_number as invoice_no',
+                'customer_id',
+                'customer_name',
+                'total_amount as amount',
+                'created_at',
+                'updated_at',
+            ]);
+
+        foreach ($candidateConsignments as $doc) {
+            $paidRow = $paidRows->get('consignment_invoice:' . $doc->source_id);
+            $paid = (float) ($paidRow->paid_total ?? 0);
+            $recordedAdjustment = (float) ($paidRow->adjustment_total ?? 0);
+            $amount = (float) ($doc->amount ?? 0);
+            if ($amount <= 0) continue;
+            $returned = $returnAmountFor([$doc->invoice_no ?? ''], $returnMap);
+            $effectiveAdjustment = max($returned, $recordedAdjustment);
+            $remainingReturnAdjustment = min(max($returned - $recordedAdjustment, 0), max($amount - $paid, 0));
+            $due = max($amount - $paid - $effectiveAdjustment, 0);
+            if ($due <= 0 && $remainingReturnAdjustment <= 0) continue;
+            $effectiveDate = $doc->created_at ?? $doc->updated_at ?? null;
+            $registerCandidate($doc->customer_id, $doc->customer_name, $effectiveDate);
+        }
+        unset($candidateConsignments);
+
+        // Modern ONLINE rows can be classified from finalized ONL Sales Orders
+        // without decoding every Online Report snapshot.
+        $modernOnlineReportIds = [];
+        $candidateOnlineOrders = DB::connection('sales')->table('sales_orders')
+            ->where('order_number', 'LIKE', 'ONL-%')
+            ->whereIn('status', ['Confirmed', 'Closed'])
+            ->whereNotNull('customer_id')
+            ->get([
+                'order_number',
+                'customer_id',
+                'customer_name',
+                'invoice_numbers',
+                'total_amount',
+                'created_at',
+                'updated_at',
+            ]);
+
+        foreach ($candidateOnlineOrders as $order) {
+            if (!preg_match('/^ONL-(\d+)-(\d+)/', (string) $order->order_number, $m)) continue;
+            $reportId = (int) $m[1];
+            $modernOnlineReportIds[$reportId] = true;
+            $invoiceValues = $parsePaymentInvoiceValues($order->invoice_numbers ?? null);
+            $invoiceNo = trim((string) ($invoiceValues[0] ?? ''));
+            $amount = (float) ($order->total_amount ?? 0);
+
+            // Zero totals still get a candidate slot because the normal Online
+            // resolver may recover their amount from Sales Order items/report data.
+            $isActionable = $amount <= 0;
+            if (!$isActionable && $invoiceNo !== '') {
+                $paidRow = $onlinePaidRows->get('online_report:' . $reportId . ':' . $invoiceNo);
+                $paid = (float) ($paidRow->paid_total ?? 0);
+                $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
+                $isActionable = max($amount - $paid - $returned, 0) > 0;
+            }
+            if ($isActionable) {
+                $registerCandidate($order->customer_id, $order->customer_name, $order->created_at ?? $order->updated_at ?? null);
+            }
+        }
+        unset($candidateOnlineOrders);
+
+        // Legacy/migrated Online Reports with no finalized ONL Sales Order are
+        // the only reports that still need snapshot inspection at candidate time.
+        // This is much smaller than decoding the complete Online Report history.
+        $legacyReportsQ = DB::connection('sales')->table('online_reports')
+            ->whereIn('status', ['generated', 'migrated']);
+        if (!empty($modernOnlineReportIds)) {
+            foreach (array_chunk(array_keys($modernOnlineReportIds), 1000) as $reportIdChunk) {
+                $legacyReportsQ->whereNotIn('id', $reportIdChunk);
+            }
+        }
+        $legacyReports = $legacyReportsQ->get([
+            'id', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at'
+        ]);
+
+        foreach ($legacyReports as $report) {
+            $invoiceValues = $parsePaymentInvoiceValues($report->invoice_numbers ?? null);
+            $notes = json_decode((string) ($report->notes_data ?? '[]'), true);
+            if (!is_array($notes)) $notes = [];
+            $count = max(count($invoiceValues), count($notes));
+
+            for ($i = 0; $i < $count; $i++) {
+                $note = $notes[$i] ?? (count($notes) === 1 ? $notes[0] : null);
+                if (!is_array($note)) continue;
+                $customerId = (int) ($note['customer_id'] ?? 0);
+                if ($customerId <= 0) continue;
+                $invoiceNo = trim((string) ($invoiceValues[$i] ?? ''));
+                $amount = (float) ($note['net_total'] ?? 0);
+                if ($amount <= 0 && isset($note['items']) && is_array($note['items'])) {
+                    $amount = (float) collect($note['items'])->sum(fn ($item) => is_array($item) ? (float) ($item['subtotal'] ?? 0) : 0);
+                }
+
+                $isActionable = $amount <= 0;
+                if (!$isActionable && $invoiceNo !== '') {
+                    $paidRow = $onlinePaidRows->get('online_report:' . (int) $report->id . ':' . $invoiceNo);
+                    $paid = (float) ($paidRow->paid_total ?? 0);
+                    $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
+                    $isActionable = max($amount - $paid - $returned, 0) > 0;
+                }
+                if ($isActionable) {
+                    $registerCandidate(
+                        $customerId,
+                        (string) ($note['customer_name'] ?? ''),
+                        $report->created_at ?? $report->updated_at ?? null
+                    );
+                }
+            }
+        }
+        unset($legacyReports, $modernOnlineReportIds);
+
+        // Fill missing names from Masterlist without requiring every Online-only
+        // buyer to have a Masterlist row.
+        $candidateIds = array_keys($activeCandidatePayors);
+        if (!empty($candidateIds)) {
+            $masterNames = DB::connection('masterlist')->table('customers')
+                ->whereIn('id', $candidateIds)
+                ->pluck('name', 'id');
+            foreach ($activeCandidatePayors as $candidateId => &$candidate) {
+                if (trim((string) $candidate['name']) === '') {
+                    $candidate['name'] = trim((string) ($masterNames[$candidateId] ?? '')) ?: ('Customer #' . $candidateId);
+                }
+            }
+            unset($candidate);
+        }
+
+        $activeCandidatePayors = collect($activeCandidatePayors)
+            ->sortBy(fn ($row) => mb_strtolower((string) ($row['name'] ?? '')))
+            ->values();
+
+        $total = $activeCandidatePayors->count();
+        $lastPage = max((int) ceil($total / $perPage), 1);
+        $page = min($page, $lastPage);
+        $pageCustomerIds = $activeCandidatePayors
+            ->slice(($page - 1) * $perPage, $perPage)
+            ->pluck('customer_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        // Expand read aliases only for source-table filtering. Output remains the
+        // same Payments read identity as before.
+        $sourceCustomerIds = $pageCustomerIds;
+        if (in_array(1029, $sourceCustomerIds, true)) $sourceCustomerIds[] = 1433;
+        if (in_array(1433, $sourceCustomerIds, true)) $sourceCustomerIds[] = 1029;
+        $sourceCustomerIds = array_values(array_unique($sourceCustomerIds));
+
+        $agingStats = ['30' => 0, '60' => 0, '90' => 0, '120' => 0, '150' => 0];
+        foreach ($activeCandidatePayors as $candidate) {
+            $oldest = $candidate['oldest_date'] ?? null;
+            $ageDays = $oldest ? $oldest->copy()->startOfDay()->diffInDays($today) : 0;
+            $bucket = match (true) {
+                $ageDays <= 31 => '30',
+                $ageDays <= 61 => '60',
+                $ageDays <= 91 => '90',
+                $ageDays <= 121 => '120',
+                default => '150',
+            };
+            $agingStats[$bucket]++;
+        }
+
         $salesOrders = DB::connection('sales')->table('sales_orders as so')
             ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
             ->where('so.order_number', 'NOT LIKE', 'ONL-%')
@@ -23036,6 +23886,7 @@ Route::get('/admin/payments/data', function () {
                 $query->whereIn('so.status', ['Closed', 'Confirmed'])
                     ->orWhere('sn.status', 'Closed');
             })
+            ->whereIn('so.customer_id', $sourceCustomerIds)
             ->select(
                 DB::raw("'sales_order' as source_type"),
                 'so.id as source_id',
@@ -23056,6 +23907,7 @@ Route::get('/admin/payments/data', function () {
 
         $consignmentInvoices = DB::connection('sales')->table('consignment_invoices')
             ->whereNotIn('status', ['Cancelled', 'Void'])
+            ->whereIn('customer_id', $sourceCustomerIds)
             ->select(
                 DB::raw("'consignment_invoice' as source_type"),
                 'id as source_id',
@@ -23072,7 +23924,7 @@ Route::get('/admin/payments/data', function () {
             )
             ->get();
 
-        $onlineInvoices = hatdogBuildPaymentOnlineInvoices();
+        $onlineInvoices = collect(hatdogBuildPaymentOnlineInvoices($pageCustomerIds));
 
         $documents = $salesOrders->concat($consignmentInvoices)->concat($onlineInvoices)
             ->filter(fn ($doc) => $doc->customer_id && (float) $doc->amount > 0)
@@ -23140,33 +23992,6 @@ Route::get('/admin/payments/data', function () {
             ->pluck('terms', 'id');
 
         $unpaidDocuments = $documents->filter(fn ($doc) => $doc->due_amount > 0);
-        $agingStats = ['30' => 0, '60' => 0, '90' => 0, '120' => 0, '150' => 0];
-        $today = now()->startOfDay();
-
-        $unpaidDocuments
-            ->groupBy('customer_id')
-            ->each(function ($docs) use (&$agingStats, $today) {
-                $oldest = $docs
-                    ->filter(fn ($doc) => !empty($doc->effective_date))
-                    ->sortBy(fn ($doc) => $doc->effective_date?->timestamp)
-                    ->first();
-
-                $ageDays = $oldest && $oldest->effective_date
-                    ? $oldest->effective_date->copy()->startOfDay()->diffInDays($today)
-                    : 0;
-
-                // The business aging cards roll over the day after a full month:
-                // May 1 still counts in 30 on June 1, then moves to 60 on June 2.
-                $bucket = match (true) {
-                    $ageDays <= 31 => '30',
-                    $ageDays <= 61 => '60',
-                    $ageDays <= 91 => '90',
-                    $ageDays <= 121 => '120',
-                    default => '150',
-                };
-
-                $agingStats[$bucket]++;
-            });
 
         $payors = $documents
             ->groupBy('customer_id')
@@ -23234,10 +24059,9 @@ Route::get('/admin/payments/data', function () {
             ->sortBy('name')
             ->values();
 
-        $page = max((int) request()->query('page', 1), 1);
-        $perPage = 50;
-        $total = $payors->count();
-        $pagedPayors = $payors->slice(($page - 1) * $perPage, $perPage)->values();
+        // The expensive invoice/report work above was already restricted to
+        // this page's 15 active customer IDs. Do not paginate it a second time.
+        $pagedPayors = $payors->values();
 
         return response()->json([
             'success' => true,
@@ -23246,7 +24070,7 @@ Route::get('/admin/payments/data', function () {
             'page' => $page,
             'per_page' => $perPage,
             'total' => $total,
-            'last_page' => max((int) ceil($total / $perPage), 1),
+            'last_page' => $lastPage,
         ]);
     } catch (\Throwable $e) {
         Log::error('Payments data error: ' . $e->getMessage());
@@ -25797,6 +26621,7 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
     try {
         $validated = $request->validate([
             'product_code' => 'required|unique:masterlist.products,product_code',
+            'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'category' => 'required|string',
@@ -26783,6 +27608,16 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         $yearSales = DB::connection('ledger')->table('product_ledgers')
             ->whereIn('product_id', $allProductIds)
             ->whereYear('date', $year)
+            // W68_COST_REPORT_IGNORE_INVENTORY_ADJUSTMENTS_20260909
+            // Inventory Adjustment OUT rows change stock only. They are not
+            // customer sales and must never be included in Cost Report Sales.
+            ->where(function ($salesMovementQuery) {
+                $salesMovementQuery
+                    ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
+                    ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
+            })
             ->selectRaw('product_id, SUM(' . $outColumn . ') as total_out')
             ->groupBy('product_id')
             ->pluck('total_out', 'product_id');

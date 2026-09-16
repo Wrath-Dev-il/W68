@@ -387,6 +387,30 @@
                 <!-- Right Side Widgets: Notification, Profile Trigger -->
                 <div class="flex items-center space-x-3">
                     
+                    <!-- Online Order Envelope -->
+                    <div class="relative">
+                        <button id="online-order-btn" type="button" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 relative transition-all" title="Online Order Notifications" aria-label="Online Order Notifications">
+                            <span id="online-order-badge" class="hidden absolute top-0 right-0 z-20 bg-red-500 text-white font-bold rounded-full min-w-4 h-4 px-1 items-center justify-center text-[9px] shadow-sm ring-1 ring-white">0</span>
+                            <i data-lucide="mail" id="online-order-icon" class="w-5.5 h-5.5"></i>
+                        </button>
+
+                        <div id="online-order-dropdown" class="hidden absolute right-0 mt-3 w-96 max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-xl shadow-xl z-[70] overflow-hidden transform origin-top-right transition-all">
+                            <div class="p-3 bg-maroon-900 text-white font-bold flex justify-between items-center text-sm border-b-2 border-goldlining-500">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="mail" class="w-4 h-4 text-goldlining-400"></i>
+                                    <span>Online Orders</span>
+                                </div>
+                                <span id="online-order-count" class="bg-goldlining-500 text-maroon-900 text-xs px-2 py-0.5 rounded-full font-semibold">0 Active</span>
+                            </div>
+                            <div id="online-order-list" class="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                                <div class="p-8 text-center text-gray-400 text-sm">
+                                    <i data-lucide="loader-circle" class="w-7 h-7 mx-auto mb-2 animate-spin text-gray-300"></i>
+                                    <p>Loading online orders...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Notification Bell -->
                     <div class="relative">
                         <button id="notif-btn" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 relative transition-all" title="View Notifications">
@@ -1867,5 +1891,177 @@
             }
         });
     </script>
+
+    <!-- Online Portal Order Notification System -->
+    <script>
+        (function () {
+            const onlineOrderRoutes = {
+                list: @json(route('online-orders.notifications')),
+                noteBase: @json(url('/online-orders/sales-note'))
+            };
+
+            function escapeOnlineOrderHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function onlineOrderAmount(value) {
+                const amount = Number.parseFloat(value || 0);
+                return Number.isFinite(amount)
+                    ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : '0.00';
+            }
+
+            function onlineOrderDate(value) {
+                if (!value) return '';
+                const raw = String(value).replace(' ', 'T');
+                const date = new Date(raw);
+                if (Number.isNaN(date.getTime())) return String(value);
+                return date.toLocaleString(undefined, {
+                    year: 'numeric', month: 'short', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+
+            function renderOnlineOrders(orders) {
+                const badge = document.getElementById('online-order-badge');
+                const count = document.getElementById('online-order-count');
+                const list = document.getElementById('online-order-list');
+                const icon = document.getElementById('online-order-icon');
+                if (!badge || !count || !list) return;
+
+                const total = Array.isArray(orders) ? orders.length : 0;
+                count.textContent = total + (total === 1 ? ' Active' : ' Active');
+
+                if (total > 0) {
+                    badge.textContent = total > 99 ? '99+' : String(total);
+                    badge.classList.remove('hidden');
+                    badge.classList.add('flex');
+                    if (icon) icon.classList.add('online-order-mail-pulse');
+
+                    list.innerHTML = orders.map(function (order) {
+                        const salesNoteId = Number.parseInt(order.sales_note_id, 10) || 0;
+                        const orderCode = escapeOnlineOrderHtml(order.order_code || 'Online Order');
+                        const salesNumber = escapeOnlineOrderHtml(order.sales_number || '---');
+                        const customer = escapeOnlineOrderHtml(order.customer_name || '---');
+                        const status = escapeOnlineOrderHtml(order.sales_note_status || 'Open');
+                        const created = escapeOnlineOrderHtml(onlineOrderDate(order.portal_created_at));
+                        const amount = escapeOnlineOrderHtml(onlineOrderAmount(order.total_amount));
+                        const target = onlineOrderRoutes.noteBase + '/' + salesNoteId;
+
+                        return `
+                            <button type="button" data-online-order-url="${target}" class="online-order-item block w-full text-left p-3.5 hover:bg-amber-50/60 transition-colors cursor-pointer">
+                                <div class="flex gap-3">
+                                    <div class="bg-amber-100 text-amber-700 p-2 rounded-lg h-fit flex-shrink-0">
+                                        <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-extrabold text-gray-800 truncate">${orderCode}</p>
+                                                <p class="text-[11px] font-semibold text-maroon-800 mt-0.5">${salesNumber}</p>
+                                            </div>
+                                            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-full uppercase flex-shrink-0">${status}</span>
+                                        </div>
+                                        <p class="text-[11px] text-gray-600 mt-1 truncate">${customer}</p>
+                                        <div class="flex items-center justify-between gap-2 mt-1.5">
+                                            <span class="text-[10px] font-bold text-gray-700">PHP ${amount}</span>
+                                            <span class="text-[9px] text-gray-400">${created}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>`;
+                    }).join('');
+                } else {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                    if (icon) icon.classList.remove('online-order-mail-pulse');
+                    list.innerHTML = `
+                        <div class="p-8 text-center text-gray-400 text-sm">
+                            <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-gray-300"></i>
+                            <p class="font-semibold text-gray-500">No active online orders</p>
+                            <p class="text-[10px] mt-1">Open portal Sales Notes will appear here.</p>
+                        </div>`;
+                }
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            async function loadOnlineOrderNotifications() {
+                try {
+                    const response = await fetch(onlineOrderRoutes.list, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) throw new Error('Online order API error: ' + response.status);
+                    const data = await response.json();
+                    if (!data.success) throw new Error(data.message || 'Unable to load online orders.');
+                    renderOnlineOrders(data.orders || []);
+                } catch (error) {
+                    console.warn('Unable to load online order notifications:', error.message);
+                    const list = document.getElementById('online-order-list');
+                    const badge = document.getElementById('online-order-badge');
+                    const count = document.getElementById('online-order-count');
+                    if (badge) {
+                        badge.classList.add('hidden');
+                        badge.classList.remove('flex');
+                    }
+                    if (count) count.textContent = 'Unavailable';
+                    if (list) {
+                        list.innerHTML = `
+                            <div class="p-8 text-center text-red-400 text-sm">
+                                <i data-lucide="circle-alert" class="w-8 h-8 mx-auto mb-2 text-red-300"></i>
+                                <p>Unable to load online orders</p>
+                            </div>`;
+                    }
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+            }
+
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('#online-order-btn');
+                const dropdown = document.getElementById('online-order-dropdown');
+
+                if (button) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (dropdown) dropdown.classList.toggle('hidden');
+                    document.getElementById('notif-dropdown')?.classList.add('hidden');
+                    document.getElementById('profile-dropdown')?.classList.add('hidden');
+                    return;
+                }
+
+                const item = event.target.closest('.online-order-item');
+                if (item && item.dataset.onlineOrderUrl) {
+                    window.location.href = item.dataset.onlineOrderUrl;
+                    return;
+                }
+
+                if (dropdown && !event.target.closest('#online-order-dropdown')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', function () {
+                loadOnlineOrderNotifications();
+                window.setInterval(loadOnlineOrderNotifications, 60000);
+            });
+        })();
+    </script>
+    <style>
+        @keyframes onlineOrderMailPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.12); }
+        }
+        .online-order-mail-pulse {
+            animation: onlineOrderMailPulse 1.4s ease-in-out infinite;
+        }
+    </style>
+
 </body>
 </html>

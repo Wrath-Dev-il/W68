@@ -65,20 +65,18 @@
                 <thead>
                     <tr class="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                         <th class="py-5 px-6">Product Code</th>
-                        <th class="py-5 px-6">Name</th>
+                        <th class="py-5 px-6">Part Number</th>
                         <th class="py-5 px-6">Description</th>
                         <th class="py-5 px-6">Application</th>
-                        <th class="py-5 px-6 text-center">Actual Qty</th>
-                        <th class="py-5 px-6 text-center">Qty Diff</th>
+                        <th class="py-5 px-6 text-center">Computer Stock</th>
                         <th class="py-5 px-6 text-center">Action</th>
                     </tr>
                     <tr class="bg-white border-b border-slate-100">
                         <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Code..."></th>
-                        <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Name..."></th>
+                        <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Part No..."></th>
                         <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Desc..."></th>
                         <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="App..."></th>
-                        <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Qty..."></th>
-                        <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Diff..."></th>
+                        <th class="p-2 px-6"><input type="text" onkeyup="filterAdjTable()" class="col-search-input text-[10px]" placeholder="Stock..."></th>
                         <th class="p-2 px-6"></th>
                     </tr>
                 </thead>
@@ -120,7 +118,7 @@
                     
                     <div class="grid grid-cols-2 gap-6">
                         <div class="space-y-1.5">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Actual QTY</label>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Computer Stock</label>
                             <div id="adj-actual-qty" class="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-lg font-black text-slate-800 shadow-inner">0</div>
                         </div>
                         <div class="space-y-1.5 text-right">
@@ -287,7 +285,7 @@
 @endsection
 
 @push('scripts')
-    @vite(['resources/js/inventory_adjustment.js'])
+    <script src="{{ asset('js/inventory_adjustment.js') }}?v={{ filemtime(public_path('js/inventory_adjustment.js')) }}"></script>
 @endpush
 
 @include('partials.Warehouse_User.WareHouse-sidebar_navbar')

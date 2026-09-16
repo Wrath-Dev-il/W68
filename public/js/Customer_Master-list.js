@@ -15,6 +15,15 @@ let generalSearch = '';
 let currentCustomerHistoryId = null;
 let currentCustomerNotesOriginal = '';
 let customerNotesSaveRequest = 0;
+let currentPortalCustomerId = null;
+let currentPortalAuthorization = null;
+let currentPortalLoadId = null;
+let portalValidityMode = 'generate';
+let brandDiscounts = [];
+let availableBrandDiscountBrands = [];
+let currentBrandDiscountLoadId = null;
+let brandDiscountSaveTimers = {};
+let brandDiscountModalSearchTimer = null;
 
 let currentWizardStep = 1;
 let customerFormMode = 'create';
@@ -36,7 +45,16 @@ const CUSTOMER_ENDPOINTS = (() => {
         paymentHistoryDetail: (id, salesOrderId) => (r.paymentHistoryDetail || '/admin/masterlist/customer/payment-history/:id/invoice/:salesOrderId')
             .replace(':id', id)
             .replace(':salesOrderId', salesOrderId),
-        notes: (id) => (r.notes || '/admin/masterlist/customer/notes/:id').replace(':id', id)
+        notes: (id) => (r.notes || '/admin/masterlist/customer/notes/:id').replace(':id', id),
+        portalStatus: (id) => (r.portalStatus || '/admin/masterlist/customer/portal-access/:id').replace(':id', id),
+        portalGenerate: (id) => (r.portalGenerate || '/admin/masterlist/customer/portal-access/:id/generate').replace(':id', id),
+        portalValidity: (id) => (r.portalValidity || '/admin/masterlist/customer/portal-access/:id/validity').replace(':id', id),
+        portalDelete: (id) => (r.portalDelete || '/admin/masterlist/customer/portal-access/:id/delete').replace(':id', id),
+        brandDiscounts: (id) => (r.brandDiscounts || '/admin/masterlist/customer/brand-discounts/:id').replace(':id', id),
+        brandDiscountBrands: (id) => (r.brandDiscountBrands || '/admin/masterlist/customer/brand-discounts/:id/brands').replace(':id', id),
+        brandDiscountAdd: (id) => (r.brandDiscountAdd || '/admin/masterlist/customer/brand-discounts/:id/add').replace(':id', id),
+        brandDiscountSave: (id) => (r.brandDiscountSave || '/admin/masterlist/customer/brand-discounts/:id/save').replace(':id', id),
+        brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id)
     };
 })();
 
@@ -80,6 +98,121 @@ function paymentStatusBadge(status) {
 function setInputValue(id, value) {
     const input = document.getElementById(id);
     if (input) input.value = value ?? '';
+}
+
+const W68_QR_BRAND_BG = '#4b0000';
+const W68_QR_BRAND_TEXT = '#f6d34a';
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function stampW68OnQrCanvas(canvas) {
+    if (!canvas || canvas.dataset.w68Stamped === '1') return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = Math.min(canvas.width || 0, canvas.height || 0);
+    if (!size) return;
+
+    const badgeWidth = Math.max(Math.round(size * 0.3), 18);
+    const badgeHeight = Math.max(Math.round(size * 0.16), 10);
+    const x = Math.round((canvas.width - badgeWidth) / 2);
+    const y = Math.round((canvas.height - badgeHeight) / 2);
+    const padding = Math.max(Math.round(size * 0.018), 1);
+    const radius = Math.max(Math.round(badgeHeight * 0.22), 2);
+    const fontSize = Math.max(Math.round(badgeHeight * 0.56), 7);
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    drawRoundedRect(ctx, x - padding, y - padding, badgeWidth + padding * 2, badgeHeight + padding * 2, radius + padding);
+    ctx.fill();
+
+    ctx.fillStyle = W68_QR_BRAND_BG;
+    drawRoundedRect(ctx, x, y, badgeWidth, badgeHeight, radius);
+    ctx.fill();
+
+    ctx.fillStyle = W68_QR_BRAND_TEXT;
+    ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('W68', canvas.width / 2, canvas.height / 2);
+    ctx.restore();
+
+    canvas.dataset.w68Stamped = '1';
+}
+
+function stampW68OnQrImage(image) {
+    if (!image || image.dataset.w68Stamped === '1' || !image.src?.startsWith('data:image/')) return;
+
+    const source = new Image();
+    source.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = source.naturalWidth || image.naturalWidth || image.width;
+        canvas.height = source.naturalHeight || image.naturalHeight || image.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !canvas.width || !canvas.height) return;
+
+        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        stampW68OnQrCanvas(canvas);
+        image.src = canvas.toDataURL('image/png');
+        image.dataset.w68Stamped = '1';
+    };
+    source.src = image.src;
+}
+
+function stampW68OnQr(container) {
+    if (!container) return;
+
+    const canvas = container.querySelector('canvas');
+    if (canvas) {
+        stampW68OnQrCanvas(canvas);
+        return;
+    }
+
+    const image = container.querySelector('img');
+    if (image) {
+        stampW68OnQrImage(image);
+    }
+}
+
+function qrImageToStampedDataUrl(image) {
+    return new Promise((resolve) => {
+        if (!image?.src?.startsWith('data:image/')) {
+            resolve('');
+            return;
+        }
+
+        const source = new Image();
+        source.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = source.naturalWidth || image.naturalWidth || image.width;
+            canvas.height = source.naturalHeight || image.naturalHeight || image.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx || !canvas.width || !canvas.height) {
+                resolve('');
+                return;
+            }
+
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+            stampW68OnQrCanvas(canvas);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        source.onerror = () => resolve('');
+        source.src = image.src;
+    });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -448,6 +581,129 @@ function renderView() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function formatQrRemainingFromDate(value) {
+    if (!value) return 'N/A';
+    const expiresAt = new Date(value);
+    if (Number.isNaN(expiresAt.getTime())) return 'N/A';
+
+    const seconds = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+    if (seconds <= 0) return 'Expired';
+    if (seconds < 60) return '< 1 min';
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) return `${days} day${days === 1 ? '' : 's'}${hours > 0 ? ` ${hours} hr` : ''}`;
+    if (hours > 0) return `${hours} hr${minutes > 0 ? ` ${minutes} min` : ''}`;
+    return `${minutes} min`;
+}
+
+function portalSummaryFromAuthorization(authorization) {
+    if (!authorization) {
+        return {
+            active: false,
+            expired: false,
+            url: null,
+            validation_label: 'No QR',
+            remaining_label: 'N/A',
+            expires_at: null
+        };
+    }
+
+    const active = Boolean(authorization.active && authorization.url);
+    return {
+        active,
+        expired: Boolean(authorization.expired || (!active && authorization.expires_at)),
+        url: active ? authorization.url : null,
+        validation_label: active ? 'Active' : (authorization.expired ? 'Expired' : 'No QR'),
+        remaining_label: active ? formatQrRemainingFromDate(authorization.expires_at) : (authorization.expired ? 'Expired' : 'N/A'),
+        expires_at: authorization.expires_at || null
+    };
+}
+
+function syncCurrentCustomerPortalSummary(authorization) {
+    const id = Number(currentPortalCustomerId || 0);
+    if (!id) return;
+
+    const index = customers.findIndex(c => Number(c.id) === id);
+    if (index === -1) return;
+
+    customers[index] = {
+        ...customers[index],
+        portal: portalSummaryFromAuthorization(authorization)
+    };
+
+    renderView();
+}
+
+function renderQrValidationBadge(portal = {}) {
+    const label = safeString(portal.validation_label || (portal.active ? 'Active' : 'No QR'));
+    const key = label.toLowerCase();
+    const classes = key.includes('active')
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : (key.includes('expired') || key.includes('invalid')
+            ? 'bg-red-50 text-red-700 border-red-200'
+            : 'bg-slate-50 text-slate-500 border-slate-200');
+
+    return `<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${classes}">${escapeHtml(label)}</span>`;
+}
+
+function renderQrRemainingLabel(portal = {}) {
+    const label = safeString(portal.remaining_label || 'N/A');
+    const isActive = Boolean(portal.active);
+    return `<span class="text-xs font-bold ${isActive ? 'text-slate-700' : 'text-slate-400'}">${escapeHtml(label)}</span>`;
+}
+
+function renderCustomerQrPicture(portal = {}) {
+    if (portal.active && portal.url) {
+        return `
+            <div class="inline-flex h-[62px] w-[62px] items-center justify-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm"
+                 data-customer-qr
+                 data-qr-url="${escapeHtml(portal.url)}"
+                 title="Customer QR code"></div>
+        `;
+    }
+
+    const label = portal.expired ? 'Expired' : 'No QR';
+    return `
+        <div class="inline-flex h-[62px] w-[62px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-slate-300" title="${escapeHtml(label)}">
+            <i data-lucide="qr-code" class="h-5 w-5"></i>
+            <span class="mt-1 text-[8px] font-black uppercase tracking-tight">${escapeHtml(label)}</span>
+        </div>
+    `;
+}
+
+function renderCustomerTableQrCodes() {
+    document.querySelectorAll('[data-customer-qr]').forEach((target) => {
+        const url = target.getAttribute('data-qr-url') || '';
+        target.innerHTML = '';
+
+        if (!url || typeof QRCode === 'undefined') {
+            target.innerHTML = '<i data-lucide="qr-code" class="h-5 w-5 text-slate-300"></i>';
+            return;
+        }
+
+        try {
+            new QRCode(target, {
+                text: url,
+                width: 54,
+                height: 54,
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            target.querySelectorAll('canvas, img').forEach((node) => {
+                node.style.width = '54px';
+                node.style.height = '54px';
+                node.style.display = 'block';
+            });
+            stampW68OnQr(target);
+        } catch (error) {
+            console.error('Unable to render customer table QR:', error);
+            target.innerHTML = '<i data-lucide="qr-code" class="h-5 w-5 text-red-300"></i>';
+        }
+    });
+}
+
 function renderTable() {
     const tbody = document.getElementById('customer-tbody');
     const data = customers;
@@ -455,7 +711,7 @@ function renderTable() {
     if (!data.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="py-16 text-center text-slate-400 italic">
+                <td colspan="8" class="py-16 text-center text-slate-400 italic">
                     <div class="flex flex-col items-center">
                         <i data-lucide="search-x" class="w-10 h-10 mb-2 opacity-20"></i>
                         No customers found
@@ -468,17 +724,16 @@ function renderTable() {
     
     tbody.innerHTML = data.map(c => {
         const id = Number(c.id);
+        const portal = c.portal || {};
         return `
         <tr onclick="openViewModal(${id})" class="hover:bg-slate-50 transition-colors border-b border-slate-100 cursor-pointer">
+            <td class="py-3 px-6 align-middle">${renderCustomerQrPicture(portal)}</td>
             <td class="py-4 px-4 font-semibold text-slate-700">${displayValue(c.name)}</td>
+            <td class="py-4 px-4">${renderQrValidationBadge(portal)}</td>
+            <td class="py-4 px-4 whitespace-nowrap">${renderQrRemainingLabel(portal)}</td>
             <td class="py-4 px-4 text-slate-600">${displayValue(c.contactNo)}</td>
             <td class="py-4 px-4 text-slate-600">${displayValue(c.contactPerson)}</td>
             <td class="py-4 px-4 text-slate-600 max-w-[200px] truncate">${displayValue(c.address)}</td>
-            <td class="py-4 px-4">
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${getTypeClass(c.type)}">
-                    ${displayValue(c.type)}
-                </span>
-            </td>
             <td class="py-4 px-4 text-center" onclick="event.stopPropagation()">
                 <div class="flex items-center justify-center space-x-2">
                     <button type="button" onclick="event.stopPropagation(); openViewModal(${id})" class="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors" title="View"><i data-lucide="eye" class="w-4 h-4"></i></button>
@@ -489,6 +744,8 @@ function renderTable() {
         </tr>
     `;
     }).join('');
+
+    renderCustomerTableQrCodes();
 }
 
 function renderCards() {
@@ -563,6 +820,10 @@ window.openViewModal = async function(id) {
     if (!c) return;
     const bank = c.bank || {};
     currentCustomerHistoryId = Number(id);
+    currentPortalCustomerId = Number(id);
+    currentPortalAuthorization = null;
+    currentPortalLoadId = null;
+    resetPortalAccessUi();
 
     // Populate Side Info
     document.getElementById('view-cust-name').textContent = safeString(c.name) || 'N/A';
@@ -592,6 +853,12 @@ window.openViewModal = async function(id) {
         currentCustomerNotesOriginal = '';
         setCustomerNotesStatus('Open Notes tab to load', 'idle');
     }
+    brandDiscounts = [];
+    availableBrandDiscountBrands = [];
+    currentBrandDiscountLoadId = null;
+    brandDiscountSaveTimers = {};
+    setBrandDiscountStatus('Open Brand Discount tab to load', 'idle');
+    renderBrandDiscounts();
 
     window._purchaseHistoryData = [];
     ledgerData = [];
@@ -639,39 +906,401 @@ window.openViewModal = async function(id) {
 window.switchDetailTab = function(tab) {
     currentActiveDetailTab = tab;
     const infoTab = document.getElementById('detail-tab-info');
-    const bankTab = document.getElementById('detail-tab-bank');
+    const portalTab = document.getElementById('detail-tab-portal');
     const infoContent = document.getElementById('detail-content-info');
-    const bankContent = document.getElementById('detail-content-bank');
+    const portalContent = document.getElementById('detail-content-portal');
 
     if (tab === 'info') {
-        infoTab.classList.add('bg-maroon', 'text-white');
-        bankTab.classList.remove('bg-maroon', 'text-white');
-        infoContent.classList.remove('hidden');
-        bankContent.classList.add('hidden');
-    } else {
-        bankTab.classList.add('bg-maroon', 'text-white');
-        infoTab.classList.remove('bg-maroon', 'text-white');
-        bankContent.classList.remove('hidden');
-        infoContent.classList.add('hidden');
+        infoTab?.classList.add('bg-maroon', 'text-white');
+        portalTab?.classList.remove('bg-maroon', 'text-white');
+        infoContent?.classList.remove('hidden');
+        portalContent?.classList.add('hidden');
+        return;
     }
+
+    portalTab?.classList.add('bg-maroon', 'text-white');
+    infoTab?.classList.remove('bg-maroon', 'text-white');
+    portalContent?.classList.remove('hidden');
+    infoContent?.classList.add('hidden');
+
+    if (currentPortalCustomerId && currentPortalLoadId !== Number(currentPortalCustomerId)) {
+        loadPortalAccess(currentPortalCustomerId);
+    }
+}
+
+function resetPortalAccessUi() {
+    ['portal-access-loading', 'portal-access-empty', 'portal-access-active', 'portal-access-error']
+        .forEach(id => document.getElementById(id)?.classList.add('hidden'));
+
+    const error = document.getElementById('portal-access-error');
+    if (error) error.textContent = '';
+
+    const qr = document.getElementById('portal-qr-code');
+    if (qr) qr.innerHTML = '';
+
+    const url = document.getElementById('portal-access-url');
+    if (url) url.value = '';
+
+    document.getElementById('portal-linked-account')?.classList.add('hidden');
+    document.getElementById('portal-delete-expired-btn')?.classList.add('hidden');
+}
+
+function setPortalLoading() {
+    resetPortalAccessUi();
+    document.getElementById('portal-access-loading')?.classList.remove('hidden');
+}
+
+function showPortalError(message) {
+    resetPortalAccessUi();
+    const error = document.getElementById('portal-access-error');
+    if (error) {
+        error.textContent = message || 'Unable to load portal authorization.';
+        error.classList.remove('hidden');
+    }
+}
+
+function formatPortalDate(value) {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return safeString(value);
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function renderPortalLinkedAccount(account) {
+    const box = document.getElementById('portal-linked-account');
+    if (!box) return;
+
+    if (!account) {
+        box.classList.add('hidden');
+        return;
+    }
+
+    document.getElementById('portal-linked-username').textContent =
+        safeString(account.username) || `Login #${safeString(account.login_id)}`;
+    document.getElementById('portal-linked-email').textContent =
+        safeString(account.email) || 'No email';
+    box.classList.remove('hidden');
+}
+
+function renderPortalQr(url) {
+    const qr = document.getElementById('portal-qr-code');
+    if (!qr) return;
+    qr.innerHTML = '';
+
+    if (!url) return;
+
+    if (typeof QRCode === 'undefined') {
+        qr.innerHTML = '<p class="text-center text-[9px] font-semibold text-red-500">QR library could not load. The authorization link can still be copied.</p>';
+        return;
+    }
+
+    try {
+        new QRCode(qr, {
+            text: url,
+            width: 180,
+            height: 180,
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        stampW68OnQr(qr);
+    } catch (error) {
+        console.error('Unable to render portal QR:', error);
+        qr.innerHTML = '<p class="text-center text-[9px] font-semibold text-red-500">Unable to render QR code.</p>';
+    }
+}
+
+function renderPortalAccess(payload) {
+    resetPortalAccessUi();
+
+    const authorization = payload?.authorization || null;
+    currentPortalAuthorization = authorization;
+    syncCurrentCustomerPortalSummary(authorization);
+
+    if (!authorization || !authorization.active || !authorization.url) {
+        const empty = document.getElementById('portal-access-empty');
+        const title = document.getElementById('portal-access-empty-title');
+        const message = document.getElementById('portal-access-empty-message');
+        const deleteExpired = document.getElementById('portal-delete-expired-btn');
+
+        if (authorization?.expired) {
+            if (title) title.textContent = 'Authorization Expired';
+            if (message) {
+                message.textContent = `Expired ${formatPortalDate(authorization.expires_at)}. Generate a new authorization or delete this expired record.`;
+            }
+            deleteExpired?.classList.remove('hidden');
+        } else {
+            if (title) title.textContent = 'No Active Authorization';
+            if (message) message.textContent = 'Generate a customer-specific link and QR code.';
+        }
+
+        empty?.classList.remove('hidden');
+        return;
+    }
+
+    const active = document.getElementById('portal-access-active');
+    const url = document.getElementById('portal-access-url');
+    const validity = document.getElementById('portal-validity-label');
+    const expiry = document.getElementById('portal-expiry-label');
+
+    if (url) url.value = authorization.url;
+    if (validity) {
+        const amount = Number(authorization.validity_value || 0);
+        const unit = safeString(authorization.validity_unit);
+        validity.textContent = `${amount} ${unit}`;
+    }
+    if (expiry) expiry.textContent = `Expires: ${formatPortalDate(authorization.expires_at)}`;
+
+    renderPortalQr(authorization.url);
+    renderPortalLinkedAccount(payload?.linked_account || null);
+    active?.classList.remove('hidden');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function readPortalJson(response) {
+    let body = {};
+    try {
+        body = await response.json();
+    } catch (_) {
+        body = {};
+    }
+    if (!response.ok || body.success === false) {
+        throw new Error(body.message || `Request failed (${response.status})`);
+    }
+    return body;
+}
+
+async function loadPortalAccess(customerId) {
+    if (!customerId) return;
+    currentPortalLoadId = Number(customerId);
+    setPortalLoading();
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.portalStatus(customerId), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readPortalJson(response);
+
+        if (Number(currentPortalCustomerId) !== Number(customerId)) return;
+        renderPortalAccess(body);
+    } catch (error) {
+        console.error('Portal authorization load failed:', error);
+        if (Number(currentPortalCustomerId) === Number(customerId)) {
+            showPortalError(error.message || 'Unable to load portal authorization.');
+        }
+    }
+}
+
+window.openPortalValidityModal = function(mode = 'generate') {
+    if (!currentPortalCustomerId) return;
+
+    portalValidityMode = mode === 'update' ? 'update' : 'generate';
+    const title = document.getElementById('portal-validity-title');
+    const submit = document.getElementById('portal-validity-submit');
+    const value = document.getElementById('portal-validity-value');
+    const unit = document.getElementById('portal-validity-unit');
+    const error = document.getElementById('portal-validity-error');
+
+    if (error) {
+        error.textContent = '';
+        error.classList.add('hidden');
+    }
+
+    if (portalValidityMode === 'update' && currentPortalAuthorization) {
+        if (value) value.value = currentPortalAuthorization.validity_value || 30;
+        if (unit) unit.value = currentPortalAuthorization.validity_unit || 'days';
+        if (title) title.textContent = 'Change Authorization Validity';
+        if (submit) submit.textContent = 'Save Validity';
+    } else {
+        if (value) value.value = 30;
+        if (unit) unit.value = 'days';
+        if (title) title.textContent = 'Generate Portal Authorization';
+        if (submit) submit.textContent = 'Generate';
+    }
+
+    toggleModal('portal-validity-modal', true);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+window.closePortalValidityModal = function() {
+    toggleModal('portal-validity-modal', false);
+}
+
+window.submitPortalValidity = async function() {
+    const customerId = Number(currentPortalCustomerId || 0);
+    const valueEl = document.getElementById('portal-validity-value');
+    const unitEl = document.getElementById('portal-validity-unit');
+    const submit = document.getElementById('portal-validity-submit');
+    const error = document.getElementById('portal-validity-error');
+    const validityValue = Number(valueEl?.value || 0);
+    const validityUnit = safeString(unitEl?.value);
+
+    if (!customerId) return;
+
+    if (!Number.isInteger(validityValue) || validityValue < 1) {
+        if (error) {
+            error.textContent = 'Enter a validity value of at least 1.';
+            error.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (!['minutes', 'hours', 'days'].includes(validityUnit)) {
+        if (error) {
+            error.textContent = 'Select Minutes, Hours, or Days.';
+            error.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (submit) submit.disabled = true;
+    if (error) {
+        error.textContent = '';
+        error.classList.add('hidden');
+    }
+
+    try {
+        const endpoint = portalValidityMode === 'update'
+            ? CUSTOMER_ENDPOINTS.portalValidity(customerId)
+            : CUSTOMER_ENDPOINTS.portalGenerate(customerId);
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                validity_value: validityValue,
+                validity_unit: validityUnit
+            })
+        });
+        const body = await readPortalJson(response);
+
+        closePortalValidityModal();
+        currentPortalLoadId = customerId;
+        renderPortalAccess(body);
+        showSuccessModal(
+            portalValidityMode === 'update' ? 'Validity Updated' : 'Authorization Generated',
+            body.message || 'Portal authorization saved successfully.'
+        );
+    } catch (err) {
+        console.error('Portal authorization save failed:', err);
+        if (error) {
+            error.textContent = err.message || 'Unable to save portal authorization.';
+            error.classList.remove('hidden');
+        }
+    } finally {
+        if (submit) submit.disabled = false;
+    }
+}
+
+window.copyPortalLink = async function() {
+    const url = safeString(currentPortalAuthorization?.url);
+    if (!url) return;
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+        } else {
+            const textarea = document.getElementById('portal-access-url');
+            textarea?.focus();
+            textarea?.select();
+            document.execCommand('copy');
+        }
+        showSuccessModal('Link Copied', 'The customer authorization link was copied to the clipboard.');
+    } catch (error) {
+        console.error('Copy failed:', error);
+        alert('Unable to copy automatically. Please select and copy the authorization link manually.');
+    }
+}
+
+window.downloadPortalQr = async function() {
+    const qr = document.getElementById('portal-qr-code');
+    if (!qr || !currentPortalAuthorization?.url) return;
+
+    const canvas = qr.querySelector('canvas');
+    const image = qr.querySelector('img');
+    let dataUrl = '';
+
+    try {
+        if (canvas) {
+            stampW68OnQrCanvas(canvas);
+            dataUrl = canvas.toDataURL('image/png');
+        } else if (image?.src?.startsWith('data:image/')) {
+            dataUrl = await qrImageToStampedDataUrl(image);
+        }
+    } catch (error) {
+        console.error('QR export failed:', error);
+    }
+
+    if (!dataUrl) {
+        alert('The QR image is not ready yet. Please wait a moment and try again.');
+        return;
+    }
+
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `W68-customer-${currentPortalCustomerId}-portal-authorization.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+window.deletePortalAuthorization = function() {
+    const customerId = Number(currentPortalCustomerId || 0);
+    if (!customerId) return;
+
+    showConfirmModal(
+        'Delete Authorization?',
+        'Are you sure you want to delete this customer authorization link and QR code? The existing link and saved QR image will immediately stop working.',
+        async () => {
+            try {
+                const response = await fetch(CUSTOMER_ENDPOINTS.portalDelete(customerId), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken()
+                    }
+                });
+                const body = await readPortalJson(response);
+
+                currentPortalAuthorization = null;
+                currentPortalLoadId = null;
+                await loadPortalAccess(customerId);
+                showSuccessModal('Authorization Deleted', body.message || 'The authorization was deleted.');
+            } catch (error) {
+                console.error('Portal authorization delete failed:', error);
+                alert(error.message || 'Unable to delete portal authorization.');
+            }
+        }
+    );
 }
 
 window.switchViewTab = function(tab) {
     currentActiveViewTab = tab;
     const pBtn = document.getElementById('tab-btn-purchase');
     const lBtn = document.getElementById('tab-btn-ledger');
+    const bBtn = document.getElementById('tab-btn-brand-discount');
     const nBtn = document.getElementById('tab-btn-notes');
     const pCont = document.getElementById('view-container-purchase');
     const lCont = document.getElementById('view-container-ledger');
+    const bCont = document.getElementById('view-container-brand-discount');
     const nCont = document.getElementById('view-container-notes');
     const filters = document.getElementById('customer-history-filters');
 
-    [pBtn, lBtn, nBtn].forEach(btn => {
+    [pBtn, lBtn, bBtn, nBtn].forEach(btn => {
         if (!btn) return;
         btn.classList.remove('border-maroon', 'text-maroon');
         btn.classList.add('border-transparent', 'text-slate-400');
     });
-    [pCont, lCont, nCont].forEach(cont => cont?.classList.add('hidden'));
+    [pCont, lCont, bCont, nCont].forEach(cont => cont?.classList.add('hidden'));
 
     if (tab === 'notes' && nBtn && nCont) {
         nBtn.classList.add('border-maroon', 'text-maroon');
@@ -687,6 +1316,18 @@ window.switchViewTab = function(tab) {
         return;
     }
 
+    if (tab === 'brand-discount' && bBtn && bCont) {
+        bBtn.classList.add('border-maroon', 'text-maroon');
+        bBtn.classList.remove('border-transparent', 'text-slate-400');
+        bCont.classList.remove('hidden');
+        filters?.classList.add('hidden');
+
+        if (currentCustomerHistoryId && currentBrandDiscountLoadId !== Number(currentCustomerHistoryId)) {
+            loadBrandDiscounts(currentCustomerHistoryId);
+        }
+        return;
+    }
+
     filters?.classList.remove('hidden');
     if (tab === 'ledger') {
         lBtn?.classList.add('border-maroon', 'text-maroon');
@@ -697,6 +1338,338 @@ window.switchViewTab = function(tab) {
         pBtn?.classList.remove('border-transparent', 'text-slate-400');
         pCont?.classList.remove('hidden');
     }
+}
+
+function setBrandDiscountStatus(message, state = 'idle') {
+    const status = document.getElementById('brand-discount-status');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.remove('text-slate-400', 'text-amber-600', 'text-emerald-600', 'text-red-600');
+    const cls = state === 'saving' ? 'text-amber-600' : state === 'saved' ? 'text-emerald-600' : state === 'error' ? 'text-red-600' : 'text-slate-400';
+    status.classList.add(cls);
+}
+
+function setBrandDiscountModalStatus(message, state = 'idle') {
+    const status = document.getElementById('brand-discount-modal-status');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.remove('text-slate-400', 'text-amber-600', 'text-emerald-600', 'text-red-600');
+    const cls = state === 'saving' ? 'text-amber-600' : state === 'saved' ? 'text-emerald-600' : state === 'error' ? 'text-red-600' : 'text-slate-400';
+    status.classList.add(cls);
+}
+
+function brandDiscountKey(brand) {
+    return safeString(brand).trim().toLowerCase();
+}
+
+function normalizeBrandDiscount(row = {}) {
+    return {
+        id: Number(row.id || 0),
+        brand: safeString(row.brand).trim(),
+        discount_percentage: Number(row.discount_percentage || 0)
+    };
+}
+
+function normalizeDiscountValue(value) {
+    const raw = safeString(value).trim();
+    const number = raw === '' ? 0 : Number(raw);
+    if (!Number.isFinite(number) || number < 0 || number > 100) {
+        throw new Error('Discount must be from 0 to 100.');
+    }
+    return Math.round(number * 100) / 100;
+}
+
+function findBrandDiscountInput(brand) {
+    const key = brandDiscountKey(brand);
+    return Array.from(document.querySelectorAll('[data-brand-discount-input]'))
+        .find(input => brandDiscountKey(input.dataset.brand) === key) || null;
+}
+
+async function readCustomerActionJson(response, fallbackMessage) {
+    let body = {};
+    try {
+        body = await response.json();
+    } catch (error) {
+        body = {};
+    }
+
+    if (!response.ok || body.success === false) {
+        throw new Error(body.message || fallbackMessage);
+    }
+    return body;
+}
+
+function renderBrandDiscounts() {
+    const tbody = document.getElementById('brand-discount-tbody');
+    if (!tbody) return;
+
+    const rows = brandDiscounts.map(normalizeBrandDiscount).filter(row => row.brand);
+    brandDiscounts = rows;
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No brand discount added for this customer.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const brand = escapeHtml(row.brand);
+        const discount = Number(row.discount_percentage || 0).toFixed(2);
+        return `
+            <tr data-brand-discount-row data-brand="${brand}">
+                <td class="py-3 px-4 font-bold text-slate-700">${brand}</td>
+                <td class="py-3 px-4">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-brand-discount-input data-brand="${brand}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <button type="button" data-brand-discount-delete data-brand="${brand}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-brand-discount-input]').forEach(input => {
+        input.addEventListener('input', () => queueBrandDiscountSave(input.dataset.brand, input.value));
+        input.addEventListener('blur', () => saveBrandDiscountNow(input.dataset.brand, input.value, true));
+    });
+
+    tbody.querySelectorAll('[data-brand-discount-delete]').forEach(button => {
+        button.addEventListener('click', () => deleteBrandDiscount(button.dataset.brand));
+    });
+}
+
+async function loadBrandDiscounts(customerId) {
+    if (!customerId) return;
+    setBrandDiscountStatus('Loading...', 'saving');
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscounts(customerId), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load brand discounts.');
+        brandDiscounts = (body.discounts || []).map(normalizeBrandDiscount);
+        currentBrandDiscountLoadId = Number(customerId);
+        renderBrandDiscounts();
+        setBrandDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
+    } catch (error) {
+        console.error('Brand discount load failed:', error);
+        setBrandDiscountStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function queueBrandDiscountSave(brand, value) {
+    const key = brandDiscountKey(brand);
+    if (!key) return;
+
+    clearTimeout(brandDiscountSaveTimers[key]);
+    setBrandDiscountStatus('Saving...', 'saving');
+    brandDiscountSaveTimers[key] = setTimeout(() => saveBrandDiscountNow(brand, value), 650);
+}
+
+async function saveBrandDiscountNow(brand, value, fromBlur = false) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const key = brandDiscountKey(brand);
+    if (!customerId || !key) return;
+
+    clearTimeout(brandDiscountSaveTimers[key]);
+
+    let discount;
+    try {
+        discount = normalizeDiscountValue(value);
+    } catch (error) {
+        setBrandDiscountStatus(error.message, 'error');
+        return;
+    }
+
+    try {
+        setBrandDiscountStatus('Saving...', 'saving');
+        const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscountSave(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                brand,
+                discount_percentage: discount
+            })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to save brand discount.');
+        const savedBrand = safeString(body.brand || brand).trim();
+        const savedDiscount = Number(body.discount_percentage ?? discount);
+
+        brandDiscounts = brandDiscounts.map(row => (
+            brandDiscountKey(row.brand) === key
+                ? { ...row, brand: savedBrand, discount_percentage: savedDiscount }
+                : row
+        ));
+
+        const input = findBrandDiscountInput(brand);
+        if (input && (fromBlur || document.activeElement !== input)) {
+            input.value = savedDiscount.toFixed(2);
+        }
+        setBrandDiscountStatus('Saved automatically', 'saved');
+    } catch (error) {
+        console.error('Brand discount save failed:', error);
+        setBrandDiscountStatus(error.message || 'Save failed', 'error');
+    }
+}
+
+window.openBrandDiscountModal = async function() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId) return;
+
+    const searchInput = document.getElementById('brand-discount-brand-search');
+    if (searchInput) searchInput.value = '';
+
+    toggleModal('brand-discount-modal', true);
+    setBrandDiscountModalStatus('Loading brands...', 'saving');
+    await loadAvailableBrandDiscountBrands();
+}
+
+window.filterBrandDiscountModal = function() {
+    clearTimeout(brandDiscountModalSearchTimer);
+    brandDiscountModalSearchTimer = setTimeout(() => loadAvailableBrandDiscountBrands(), 250);
+}
+
+async function loadAvailableBrandDiscountBrands() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const tbody = document.getElementById('brand-discount-brand-tbody');
+    if (!customerId || !tbody) return;
+
+    const search = safeString(document.getElementById('brand-discount-brand-search')?.value).trim();
+    const url = new URL(CUSTOMER_ENDPOINTS.brandDiscountBrands(customerId), window.location.origin);
+    if (search) url.searchParams.set('search', search);
+
+    tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">Loading brands...</td></tr>';
+
+    try {
+        const response = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load Product Master brands.');
+        availableBrandDiscountBrands = Array.isArray(body.brands) ? body.brands : [];
+        renderAvailableBrandDiscountBrands();
+        setBrandDiscountModalStatus(availableBrandDiscountBrands.length ? 'Select brands to add' : 'No brands found', availableBrandDiscountBrands.length ? 'idle' : 'error');
+    } catch (error) {
+        console.error('Brand list load failed:', error);
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-red-400 italic">Unable to load brands.</td></tr>';
+        setBrandDiscountModalStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function renderAvailableBrandDiscountBrands() {
+    const tbody = document.getElementById('brand-discount-brand-tbody');
+    if (!tbody) return;
+
+    const rows = availableBrandDiscountBrands
+        .map(row => ({
+            brand: safeString(row.brand).trim(),
+            assigned: Boolean(row.assigned)
+        }))
+        .filter(row => row.brand);
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No Product Master brands found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const brand = escapeHtml(row.brand);
+        const disabled = row.assigned ? 'disabled' : '';
+        const checked = row.assigned ? 'checked' : '';
+        const label = row.assigned ? 'Added' : 'Add';
+        const buttonClass = row.assigned
+            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            : 'bg-maroon text-white hover:bg-maroon-700';
+
+        return `
+            <tr>
+                <td class="py-3 px-4 text-center">
+                    <input type="checkbox" data-brand-select value="${brand}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                </td>
+                <td class="py-3 px-4 font-bold text-slate-700">${brand}</td>
+                <td class="py-3 px-4 text-right">
+                    <button type="button" data-brand-add value="${brand}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-brand-add]').forEach(button => {
+        button.addEventListener('click', () => addBrandDiscounts([button.value]));
+    });
+}
+
+function selectedBrandDiscountBrands() {
+    return Array.from(document.querySelectorAll('[data-brand-select]:checked:not(:disabled)'))
+        .map(input => safeString(input.value).trim())
+        .filter(Boolean);
+}
+
+window.addSelectedBrandDiscounts = async function() {
+    const brands = selectedBrandDiscountBrands();
+    if (!brands.length) {
+        setBrandDiscountModalStatus('Select at least one brand', 'error');
+        return;
+    }
+    await addBrandDiscounts(brands);
+}
+
+async function addBrandDiscounts(brands) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !Array.isArray(brands) || !brands.length) return;
+
+    setBrandDiscountModalStatus('Adding brand...', 'saving');
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscountAdd(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({ brands })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to add brand discount.');
+        currentBrandDiscountLoadId = null;
+        await loadBrandDiscounts(customerId);
+        await loadAvailableBrandDiscountBrands();
+        toggleModal('brand-discount-modal', false);
+        showSuccessModal('Brand Added', body.message || 'Brand discount added successfully.');
+    } catch (error) {
+        console.error('Brand discount add failed:', error);
+        setBrandDiscountModalStatus(error.message || 'Add failed', 'error');
+    }
+}
+
+function deleteBrandDiscount(brand) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !safeString(brand).trim()) return;
+
+    showConfirmModal(
+        'Delete Brand Discount',
+        `Delete the brand discount for ${safeString(brand).trim()} on this customer only?`,
+        async () => {
+            try {
+                const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscountDelete(customerId), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken()
+                    },
+                    body: JSON.stringify({ brand })
+                });
+                const body = await readCustomerActionJson(response, 'Unable to delete brand discount.');
+                brandDiscounts = brandDiscounts.filter(row => brandDiscountKey(row.brand) !== brandDiscountKey(brand));
+                renderBrandDiscounts();
+                setBrandDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
+                showSuccessModal('Brand Deleted', body.message || 'Brand discount deleted.');
+            } catch (error) {
+                console.error('Brand discount delete failed:', error);
+                setBrandDiscountStatus(error.message || 'Delete failed', 'error');
+            }
+        }
+    );
 }
 
 function setCustomerNotesStatus(message, state = 'idle') {
@@ -1022,12 +1995,10 @@ const debouncedFilterColumnSearch = debounce(function() {
     const contact = document.getElementById('col-search-contact')?.value || '';
     const person = document.getElementById('col-search-person')?.value || '';
     const address = document.getElementById('col-search-address')?.value || '';
-    const type = document.getElementById('col-search-type')?.value || '';
     if (name) searchValues['name'] = name;
     if (contact) searchValues['contact_number'] = contact;
     if (person) searchValues['contact_person'] = person;
     if (address) searchValues['address'] = address;
-    if (type) searchValues['type'] = type;
     currentPage = 1;
     fetchCustomers(1);
 }, 300);

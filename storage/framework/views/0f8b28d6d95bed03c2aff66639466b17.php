@@ -1,1 +1,0 @@
-<?php /**PATH C:\xampp\htdocs\hatdog\resources\views\Admin\Reports\Purchase-Report.blade.php ENDPATH**/ ?>

@@ -833,6 +833,408 @@ class PurchaseViberController extends Controller
         }
     }
 
+
+    /* W68_VIBER_EXISTING_NOTE_FEATURE_START */
+
+    /**
+     * The Add-to-Existing-Note action is intentionally available only to
+     * Admin (1) and Regular (2) users. Special users remain read-only here.
+     */
+    private function canManageExistingViberPurchaseNote(): bool
+    {
+        $user = session('user');
+        if (!$user) {
+            return false;
+        }
+
+        if (is_array($user)) {
+            $user = (object) $user;
+        }
+
+        return in_array((int) ($user->account_type ?? 0), [1, 2], true);
+    }
+
+    /**
+     * A target note must already have at least one Viber-linked item for the
+     * same supplier. This prevents the modal from showing every Purchase Note.
+     */
+    private function noteHasViberOriginForSupplier(int $purchaseNoteId, ViberList $sourceList): bool
+    {
+        $supplierId = (int) ($sourceList->supplier_id ?? 0);
+        $supplierCode = strtoupper(trim((string) ($sourceList->supplier_code ?? '')));
+
+        return DB::connection('purchase')
+            ->table('viber_list_items as existing_viber_item')
+            ->join('viber_lists as existing_viber_list', 'existing_viber_list.id', '=', 'existing_viber_item.viber_list_id')
+            ->where('existing_viber_item.purchase_note_id', $purchaseNoteId)
+            ->where(function ($supplierQuery) use ($supplierId, $supplierCode) {
+                if ($supplierId > 0) {
+                    $supplierQuery->where('existing_viber_list.supplier_id', $supplierId);
+                    return;
+                }
+
+                $supplierQuery->whereRaw(
+                    'UPPER(TRIM(COALESCE(existing_viber_list.supplier_code, ?))) = ?',
+                    ['', $supplierCode]
+                );
+            })
+            ->exists();
+    }
+
+    /**
+     * Return only existing Viber-originated Purchase Notes for this supplier.
+     * Status must be Open or Partial. Currency must match the To-Shipped choice.
+     */
+    public function availableExistingNotes(Request $request)
+    {
+        if (!$this->canManageExistingViberPurchaseNote()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This action is available only to Admin and Regular users.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'viber_list_id' => 'required|integer|exists:purchase.viber_lists,id',
+            'currency' => 'nullable|string|in:PHP,TWD,USD',
+        ]);
+
+        try {
+            $viberList = ViberList::findOrFail((int) $validated['viber_list_id']);
+            $currency = strtoupper(trim((string) ($validated['currency'] ?? 'PHP'))) ?: 'PHP';
+
+            $supplierId = (int) ($viberList->supplier_id ?? 0);
+            if ($supplierId <= 0 && !empty($viberList->supplier_code)) {
+                $supplierId = (int) (Supplier::where('supplier_code', $viberList->supplier_code)->value('id') ?? 0);
+            }
+
+            $query = \App\Models\PurchaseNote::query()
+                ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) IN ('open', 'partial')");
+
+            if ($supplierId > 0) {
+                $query->where('supplier_id', $supplierId);
+            } else {
+                // No resolved supplier means there is no safe target note.
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                ]);
+            }
+
+            if (Schema::connection('purchase')->hasColumn('purchase_notes', 'currency')) {
+                $query->whereRaw(
+                    "UPPER(TRIM(COALESCE(NULLIF(currency, ''), 'PHP'))) = ?",
+                    [$currency]
+                );
+            }
+
+            $notes = $query
+                ->orderByRaw("CASE WHEN LOWER(TRIM(COALESCE(status, ''))) = 'partial' THEN 0 ELSE 1 END")
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->get()
+                ->filter(fn ($note) => $this->noteHasViberOriginForSupplier((int) $note->id, $viberList))
+                ->values()
+                ->map(function ($note) use ($viberList, $currency) {
+                    $remainingItems = \App\Models\PurchaseNoteItem::where('purchase_note_id', $note->id)
+                        ->withoutForceCancelled()
+                        ->get();
+
+                    $supplierId = (int) ($viberList->supplier_id ?? 0);
+                    $supplierCode = strtoupper(trim((string) ($viberList->supplier_code ?? '')));
+
+                    $viberCountQuery = DB::connection('purchase')
+                        ->table('viber_list_items as existing_viber_item')
+                        ->join('viber_lists as existing_viber_list', 'existing_viber_list.id', '=', 'existing_viber_item.viber_list_id')
+                        ->where('existing_viber_item.purchase_note_id', $note->id);
+
+                    if ($supplierId > 0) {
+                        $viberCountQuery->where('existing_viber_list.supplier_id', $supplierId);
+                    } else {
+                        $viberCountQuery->whereRaw(
+                            'UPPER(TRIM(COALESCE(existing_viber_list.supplier_code, ?))) = ?',
+                            ['', $supplierCode]
+                        );
+                    }
+
+                    return [
+                        'id' => (int) $note->id,
+                        'purchase_note_number' => $note->purchase_note_number,
+                        'date' => $note->date,
+                        'status' => $note->status,
+                        'currency' => !empty($note->currency) ? strtoupper((string) $note->currency) : $currency,
+                        'total_amount' => (float) ($note->total_amount ?? 0),
+                        'viber_item_count' => (int) $viberCountQuery->count(),
+                        'remaining_quantity' => (float) $remainingItems->sum('quantity'),
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $notes,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Viber availableExistingNotes Error: ' . $e->getMessage(), [
+                'viber_list_id' => $request->input('viber_list_id'),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load available existing Viber Purchase Notes.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Add selected Ready-to-Ship Viber rows directly to the remaining items of
+     * an existing Open/Partial Viber Purchase Note. No Purchase Order is edited
+     * here, so the newly-added quantity remains pending for later processing.
+     */
+    public function addToExistingNote(Request $request)
+    {
+        if (!$this->canManageExistingViberPurchaseNote()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This action is available only to Admin and Regular users.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'viber_list_id' => 'required|integer|exists:purchase.viber_lists,id',
+            'purchase_note_id' => 'required|integer|exists:purchase.purchase_notes,id',
+            'selected_item_ids' => 'required|array|min:1',
+            'selected_item_ids.*' => 'required|integer|exists:purchase.viber_list_items,id',
+            'currency' => 'nullable|string|in:PHP,TWD,USD',
+        ]);
+
+        try {
+            $result = DB::connection('purchase')->transaction(function () use ($validated) {
+                $viberList = ViberList::where('id', (int) $validated['viber_list_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $purchaseNote = \App\Models\PurchaseNote::where('id', (int) $validated['purchase_note_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $status = strtolower(trim((string) $purchaseNote->status));
+                if (!in_array($status, ['open', 'partial'], true)) {
+                    throw new \RuntimeException('The selected Purchase Note is no longer Open or Partial.');
+                }
+
+                $viberSupplierId = (int) ($viberList->supplier_id ?? 0);
+                if ($viberSupplierId <= 0 && !empty($viberList->supplier_code)) {
+                    $viberSupplierId = (int) (Supplier::where('supplier_code', $viberList->supplier_code)->value('id') ?? 0);
+                }
+
+                if ($viberSupplierId <= 0 || (int) $purchaseNote->supplier_id !== $viberSupplierId) {
+                    throw new \RuntimeException('The selected Purchase Note belongs to a different supplier.');
+                }
+
+                if (!$this->noteHasViberOriginForSupplier((int) $purchaseNote->id, $viberList)) {
+                    throw new \RuntimeException('Only Purchase Notes that already came from Viber items can be selected.');
+                }
+
+                $currency = strtoupper(trim((string) ($validated['currency'] ?? 'PHP'))) ?: 'PHP';
+                $noteCurrency = Schema::connection('purchase')->hasColumn('purchase_notes', 'currency')
+                    ? strtoupper(trim((string) ($purchaseNote->currency ?? 'PHP')))
+                    : 'PHP';
+                $noteCurrency = $noteCurrency !== '' ? $noteCurrency : 'PHP';
+
+                if ($noteCurrency !== $currency) {
+                    throw new \RuntimeException(
+                        "Currency mismatch. The selected Purchase Note uses {$noteCurrency}, while the Viber selection uses {$currency}."
+                    );
+                }
+
+                $itemIds = array_values(array_unique(array_map(
+                    'intval',
+                    (array) $validated['selected_item_ids']
+                )));
+                $itemIds = array_values(array_filter($itemIds, fn ($id) => $id > 0));
+
+                if (count($itemIds) === 0) {
+                    throw new \RuntimeException('No valid Viber items were selected.');
+                }
+
+                $selectionOrder = array_flip($itemIds);
+
+                $viberItems = ViberListItem::where('viber_list_id', $viberList->id)
+                    ->whereIn('id', $itemIds)
+                    ->lockForUpdate()
+                    ->get()
+                    ->sortBy(fn ($item) => $selectionOrder[(int) $item->id] ?? PHP_INT_MAX)
+                    ->values();
+
+                if ($viberItems->count() !== count($itemIds)) {
+                    throw new \RuntimeException('One or more selected items do not belong to this Viber supplier.');
+                }
+
+                $alreadyLinked = $viberItems->first(fn ($item) => $item->purchase_note_id !== null);
+                if ($alreadyLinked) {
+                    throw new \RuntimeException(
+                        'Item ' . ($alreadyLinked->item_code ?: ('#' . $alreadyLinked->id))
+                        . ' was already added to a Purchase Note. Refresh the page and try again.'
+                    );
+                }
+
+                $oumMap = $this->getLatestOumMap(
+                    $viberItems->pluck('product_id')
+                        ->filter()
+                        ->map(fn ($id) => (int) $id)
+                        ->unique()
+                        ->values()
+                        ->all()
+                );
+
+                $addedItemIds = [];
+                $addedQuantity = 0;
+
+                foreach ($viberItems as $viberItem) {
+                    $productId = (int) ($viberItem->product_id ?? 0);
+                    if ($productId <= 0) {
+                        throw new \RuntimeException(
+                            'Item ' . ($viberItem->item_code ?: ('#' . $viberItem->id))
+                            . ' does not have a valid master-list product ID.'
+                        );
+                    }
+
+                    $rawQty = (float) ($viberItem->order_qty ?? 0);
+                    if ($rawQty <= 0) {
+                        throw new \RuntimeException(
+                            'Item ' . ($viberItem->item_code ?: ('#' . $viberItem->id))
+                            . ' must have an Order QTY greater than zero.'
+                        );
+                    }
+
+                    // Purchase Note quantities are whole-number quantities in the
+                    // existing Add/Edit flow.
+                    if (abs($rawQty - round($rawQty)) > 0.000001) {
+                        throw new \RuntimeException(
+                            'Item ' . ($viberItem->item_code ?: ('#' . $viberItem->id))
+                            . ' has a decimal Order QTY. Purchase Note QTY must be a whole number.'
+                        );
+                    }
+
+                    $qty = (int) round($rawQty);
+                    $newCost = max(0, (float) ($viberItem->new_cost ?? 0));
+                    $unit = trim((string) ($oumMap[$productId] ?? $viberItem->unit ?? ''));
+
+                    $existingItem = \App\Models\PurchaseNoteItem::where('purchase_note_id', $purchaseNote->id)
+                        ->withoutForceCancelled()
+                        ->where('product_id', $productId)
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($existingItem) {
+                        $newQuantity = (int) $existingItem->quantity + $qty;
+
+                        $existingItem->update([
+                            'product_code' => $viberItem->item_code ?: $existingItem->product_code,
+                            'part_number' => $viberItem->part_no ?: $existingItem->part_number,
+                            'description' => $viberItem->description ?: $existingItem->description,
+                            'currency' => $currency,
+                            'quantity' => $newQuantity,
+                            'unit' => $unit !== '' ? $unit : $existingItem->unit,
+                            'unit_price' => $newCost,
+                            'total_price' => $newQuantity * $newCost,
+                        ]);
+
+                        $purchaseNoteItem = $existingItem;
+                    } else {
+                        $purchaseNoteItem = \App\Models\PurchaseNoteItem::create([
+                            'purchase_note_id' => $purchaseNote->id,
+                            'product_id' => $productId,
+                            'product_code' => $viberItem->item_code ?? '',
+                            'part_number' => $viberItem->part_no ?? '',
+                            'description' => $viberItem->description ?? '',
+                            'currency' => $currency,
+                            'conversion_rate' => null,
+                            'unit_price_converted' => null,
+                            'total_price_converted' => null,
+                            'quantity' => $qty,
+                            'unit' => $unit !== '' ? $unit : null,
+                            'unit_price' => $newCost,
+                            'total_price' => $qty * $newCost,
+                        ]);
+                    }
+
+                    $viberItem->purchase_note_id = $purchaseNote->id;
+                    $viberItem->shipped_at = now();
+                    $viberItem->currency_code = $currency;
+                    $viberItem->save();
+
+                    $addedItemIds[] = (int) $purchaseNoteItem->id;
+                    $addedQuantity += $qty;
+                }
+
+                // Recalculate from ALL current remaining Purchase Note items.
+                // Do not touch Purchase Orders: these new quantities must stay in
+                // remaining until the user processes them later.
+                $remainingItems = \App\Models\PurchaseNoteItem::where('purchase_note_id', $purchaseNote->id)
+                    ->withoutForceCancelled()
+                    ->get();
+
+                $newTotal = round((float) $remainingItems->sum('total_price'), 2);
+
+                $update = ['total_amount' => $newTotal];
+                if (
+                    Schema::connection('purchase')->hasColumn('purchase_notes', 'currency')
+                    && trim((string) ($purchaseNote->currency ?? '')) === ''
+                ) {
+                    $update['currency'] = $currency;
+                }
+
+                $purchaseNote->update($update);
+
+                return [
+                    'purchase_note_id' => (int) $purchaseNote->id,
+                    'purchase_note_number' => $purchaseNote->purchase_note_number,
+                    'status' => $purchaseNote->status,
+                    'added_items' => count($addedItemIds),
+                    'added_quantity' => $addedQuantity,
+                    'remaining_quantity' => (float) $remainingItems->sum('quantity'),
+                    'total_amount' => $newTotal,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => $result['added_items']
+                    . ' selected Viber item(s) added to existing Purchase Note '
+                    . $result['purchase_note_number']
+                    . ' remaining items.',
+                'purchase_note_id' => $result['purchase_note_id'],
+                'purchase_note_number' => $result['purchase_note_number'],
+                'status' => $result['status'],
+                'added_items' => $result['added_items'],
+                'added_quantity' => $result['added_quantity'],
+                'remaining_quantity' => $result['remaining_quantity'],
+                'total_amount' => $result['total_amount'],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Viber addToExistingNote Error: ' . $e->getMessage(), [
+                'viber_list_id' => $request->input('viber_list_id'),
+                'purchase_note_id' => $request->input('purchase_note_id'),
+                'selected_item_ids' => $request->input('selected_item_ids'),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to add the selected Viber items to the existing Purchase Note.',
+            ], 500);
+        }
+    }
+
+    /* W68_VIBER_EXISTING_NOTE_FEATURE_END */
     public function prepareNote(Request $request)
     {
         try {

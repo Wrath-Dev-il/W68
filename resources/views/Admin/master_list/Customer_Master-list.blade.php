@@ -104,19 +104,23 @@
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                        <th class="py-5 px-6">QR Code Picture</th>
                         <th class="py-5 px-6">Name</th>
+                        <th class="py-5 px-6">QR Validation</th>
+                        <th class="py-5 px-6">QR Remaining Time</th>
                         <th class="py-5 px-6">Contact No#</th>
                         <th class="py-5 px-6">Contact Person</th>
                         <th class="py-5 px-6">Address</th>
-                        <th class="py-5 px-6">Type</th>
                         <th class="py-5 px-6 text-center">Action</th>
                     </tr>
                     <tr class="bg-white border-b border-slate-100">
+                        <th class="p-2 px-6"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-name" name="name" onkeyup="filterColumnSearch()" placeholder="Search Name..." class="column-search-input text-[10px]"></th>
+                        <th class="p-2 px-6"></th>
+                        <th class="p-2 px-6"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-contact" name="contact_number" onkeyup="filterColumnSearch()" placeholder="Search Contact..." class="column-search-input text-[10px]"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-person" name="contact_person" onkeyup="filterColumnSearch()" placeholder="Search Person..." class="column-search-input text-[10px]"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-address" name="address" onkeyup="filterColumnSearch()" placeholder="Search Address..." class="column-search-input text-[10px]"></th>
-                        <th class="p-2 px-6"><input type="text" id="col-search-type" name="customer_type_id" onkeyup="filterColumnSearch()" placeholder="Search Type..." class="column-search-input text-[10px]"></th>
                         <th class="p-2 px-6"></th>
                     </tr>
                 </thead>
@@ -160,10 +164,10 @@
                         <!-- Detail Tabs -->
                         <div class="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm">
                             <button onclick="switchDetailTab('info')" id="detail-tab-info" class="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all bg-maroon text-white">Customer Info</button>
-                            <button onclick="switchDetailTab('bank')" id="detail-tab-bank" class="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all text-slate-400">Bank Info</button>
+                            <button onclick="switchDetailTab('portal')" id="detail-tab-portal" class="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all text-slate-400">Portal Access</button>
                         </div>
 
-                        <!-- Tab 1: Info -->
+                        <!-- Tab 1: Customer + Bank Info -->
                         <div id="detail-content-info" class="space-y-6">
                             <div class="text-center pb-6 border-b border-slate-200">
                                 <div class="w-24 h-24 rounded-3xl bg-white shadow-md mx-auto mb-3 flex items-center justify-center border border-slate-100">
@@ -172,6 +176,7 @@
                                 <h4 id="view-cust-name" class="text-lg font-extrabold text-slate-800">Name</h4>
                                 <span id="view-cust-type" class="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-slate-200">Type</span>
                             </div>
+
                             <div class="grid gap-4">
                                 <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact No#</p><p id="view-cust-contact" class="text-sm text-slate-700 font-semibold"></p></div>
                                 <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Person</p><p id="view-cust-person" class="text-sm text-slate-700 font-semibold"></p></div>
@@ -180,19 +185,86 @@
                                 <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pricing Remarks</p><p id="view-cust-remarks" class="text-sm text-maroon font-bold italic"></p></div>
                                 <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Terms</p><p id="view-cust-terms" class="text-sm text-slate-700 font-semibold"></p></div>
                             </div>
+
+                            <div class="pt-2">
+                                <h5 class="text-xs font-bold text-slate-800 uppercase tracking-widest border-b pb-2 mb-4">Bank Information</h5>
+                                <div class="grid gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Code</p><p id="view-bank-code" class="text-sm text-slate-700 font-bold"></p></div>
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account No</p><p id="view-bank-acc" class="text-sm text-slate-700 font-mono"></p></div>
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Name</p><p id="view-bank-name" class="text-sm text-slate-700 font-bold"></p></div>
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Phone</p><p id="view-bank-contact" class="text-sm text-slate-700"></p></div>
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Person</p><p id="view-bank-person" class="text-sm text-slate-700"></p></div>
+                                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Address</p><p id="view-bank-address" class="text-sm text-slate-700"></p></div>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Tab 2: Bank -->
-                        <div id="detail-content-bank" class="hidden space-y-6 animate-fade-in">
-                            <h5 class="text-xs font-bold text-slate-800 uppercase tracking-widest border-b pb-2">Financial Credentials</h5>
-                            <div class="grid gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Code</p><p id="view-bank-code" class="text-sm text-slate-700 font-bold"></p></div>
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account No</p><p id="view-bank-acc" class="text-sm text-slate-700 font-mono"></p></div>
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Name</p><p id="view-bank-name" class="text-sm text-slate-700 font-bold"></p></div>
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Phone</p><p id="view-bank-contact" class="text-sm text-slate-700"></p></div>
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Person</p><p id="view-bank-person" class="text-sm text-slate-700"></p></div>
-                                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Address</p><p id="view-bank-address" class="text-sm text-slate-700"></p></div>
+                        <!-- Tab 2: Pricelist Portal Access -->
+                        <div id="detail-content-portal" class="hidden space-y-5 animate-fade-in">
+                            <div>
+                                <h5 class="text-xs font-bold text-slate-800 uppercase tracking-widest">Pricelist Portal Access</h5>
+                                <p class="mt-1 text-[9px] font-semibold leading-relaxed text-slate-400">Generate one secure authorization for this customer. The link and QR stop working when expired or deleted.</p>
                             </div>
+
+                            <div id="portal-access-loading" class="hidden rounded-2xl border border-slate-100 bg-white p-6 text-center text-xs font-bold text-slate-400">
+                                Loading portal authorization...
+                            </div>
+
+                            <div id="portal-access-empty" class="hidden rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center">
+                                <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
+                                    <i data-lucide="qr-code" class="h-6 w-6 text-maroon"></i>
+                                </div>
+                                <p id="portal-access-empty-title" class="text-xs font-extrabold text-slate-700">No Active Authorization</p>
+                                <p id="portal-access-empty-message" class="mt-1 text-[9px] font-medium leading-relaxed text-slate-400">Generate a customer-specific link and QR code.</p>
+                                <button type="button" onclick="openPortalValidityModal('generate')" class="mt-4 w-full rounded-xl bg-maroon px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white shadow-lg">
+                                    Generate Authorization
+                                </button>
+                                <button id="portal-delete-expired-btn" type="button" onclick="deletePortalAuthorization()" class="mt-2 hidden w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest text-red-600">
+                                    Delete Expired Authorization
+                                </button>
+                            </div>
+
+                            <div id="portal-access-active" class="hidden space-y-4">
+                                <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-[9px] font-black uppercase tracking-widest text-emerald-700">Active Authorization</span>
+                                        <span id="portal-validity-label" class="rounded-full bg-white px-2 py-1 text-[8px] font-bold text-emerald-700"></span>
+                                    </div>
+                                    <p id="portal-expiry-label" class="mt-2 text-[9px] font-semibold text-slate-500"></p>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                                    <div id="portal-qr-code" class="mx-auto flex min-h-[180px] items-center justify-center"></div>
+                                    <button type="button" onclick="downloadPortalQr()" class="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                                        Download QR PNG
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                                    <p class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">Authorization Link</p>
+                                    <textarea id="portal-access-url" readonly rows="4" class="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-[9px] leading-relaxed text-slate-600 outline-none"></textarea>
+                                    <button type="button" onclick="copyPortalLink()" class="mt-2 w-full rounded-xl bg-slate-800 px-3 py-2.5 text-[9px] font-bold uppercase tracking-widest text-white">
+                                        Copy Link
+                                    </button>
+                                </div>
+
+                                <div id="portal-linked-account" class="hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                                    <p class="text-[9px] font-black uppercase tracking-widest text-blue-700">Linked Pricelist Account</p>
+                                    <p id="portal-linked-username" class="mt-2 text-xs font-extrabold text-slate-700"></p>
+                                    <p id="portal-linked-email" class="mt-1 break-all text-[9px] font-semibold text-slate-500"></p>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-2">
+                                    <button type="button" onclick="openPortalValidityModal('update')" class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[9px] font-bold uppercase tracking-widest text-amber-700">
+                                        Change Validity
+                                    </button>
+                                    <button type="button" onclick="deletePortalAuthorization()" class="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[9px] font-bold uppercase tracking-widest text-red-600">
+                                        Delete Authorization
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="portal-access-error" class="hidden rounded-2xl border border-red-100 bg-red-50 p-4 text-[9px] font-semibold leading-relaxed text-red-600"></div>
                         </div>
                     </div>
 
@@ -201,6 +273,7 @@
                         <div class="flex items-center px-6 border-b border-slate-100 bg-slate-50/30">
                             <button onclick="switchViewTab('purchase')" id="tab-btn-purchase" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-maroon text-maroon">Purchase History</button>
                             <button onclick="switchViewTab('ledger')" id="tab-btn-ledger" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Ledger / Payment History</button>
+                            <button onclick="switchViewTab('brand-discount')" id="tab-btn-brand-discount" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Brand Discount</button>
                             <button onclick="switchViewTab('notes')" id="tab-btn-notes" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Notes</button>
                         </div>
 
@@ -283,7 +356,32 @@
                                 </div>
                             </div>
 
-                            <!-- Tab 3 Content: Customer Notes -->
+                            <!-- Tab 3 Content: Brand Discount -->
+                            <div id="view-container-brand-discount" class="hidden flex-1 overflow-hidden border border-slate-100 rounded-2xl shadow-sm flex flex-col bg-slate-50/40">
+                                <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-white">
+                                    <div>
+                                        <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">Brand Discount Table</p>
+                                        <p class="mt-1 text-[9px] font-semibold text-slate-400">Discount values autosave while editing.</p>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <div id="brand-discount-status" class="text-[9px] font-black uppercase tracking-widest text-slate-400">Not loaded</div>
+                                        <button type="button" onclick="openBrandDiscountModal()" class="rounded-xl bg-maroon px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest text-white shadow-lg">Add Brand</button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto flex-1 custom-scrollbar bg-white">
+                                    <table class="w-full text-left border-collapse min-w-[720px]">
+                                        <thead class="sticky top-0 bg-slate-50 text-slate-400 text-[9px] font-bold uppercase tracking-widest z-10">
+                                            <tr class="border-b">
+                                                <th class="py-3 px-4">Brand</th>
+                                                <th class="py-3 px-4">Discount (Percentage)</th>
+                                                <th class="py-3 px-4 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="brand-discount-tbody" class="divide-y text-[11px] text-slate-600"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <!-- Tab 4 Content: Customer Notes -->
                             <div id="view-container-notes" class="hidden flex-1 overflow-hidden border border-slate-100 rounded-2xl shadow-sm flex flex-col bg-slate-50/40">
                                 <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-white">
                                     <div>
@@ -471,6 +569,47 @@
         </div>
     </div>
 
+
+    <!-- PORTAL AUTHORIZATION VALIDITY MODAL -->
+    <div id="portal-validity-modal" class="fixed inset-0 z-[940] hidden overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div onclick="closePortalValidityModal()" class="fixed inset-0 bg-maroon-900/40 backdrop-blur-[2px]"></div>
+            <div class="modal-animate-in relative w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+                <div class="mb-6 flex items-start justify-between gap-4">
+                    <div>
+                        <h3 id="portal-validity-title" class="text-lg font-extrabold tracking-tight text-slate-800">Generate Portal Authorization</h3>
+                        <p class="mt-1 text-xs font-medium leading-relaxed text-slate-400">Choose how long this customer's link and QR code will remain valid.</p>
+                    </div>
+                    <button type="button" onclick="closePortalValidityModal()" class="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+                        <i data-lucide="x" class="h-5 w-5"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-[1fr_150px] gap-3">
+                    <div>
+                        <label for="portal-validity-value" class="mb-1.5 ml-1 block text-[9px] font-bold uppercase tracking-widest text-slate-400">Validity</label>
+                        <input id="portal-validity-value" type="number" min="1" max="525600" value="30" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-maroon">
+                    </div>
+                    <div>
+                        <label for="portal-validity-unit" class="mb-1.5 ml-1 block text-[9px] font-bold uppercase tracking-widest text-slate-400">Unit</label>
+                        <select id="portal-validity-unit" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-maroon">
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days" selected>Days</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="portal-validity-error" class="mt-3 hidden rounded-xl bg-red-50 p-3 text-[10px] font-semibold text-red-600"></div>
+
+                <div class="mt-7 flex items-center gap-3">
+                    <button type="button" onclick="closePortalValidityModal()" class="flex-1 rounded-xl bg-slate-100 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">Cancel</button>
+                    <button type="button" id="portal-validity-submit" onclick="submitPortalValidity()" class="flex-1 rounded-xl bg-maroon py-3 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg">Generate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- CONFIRMATION MODAL -->
     <div id="confirm-modal" class="fixed inset-0 z-[950] overflow-y-auto hidden">
         <div class="flex items-center justify-center min-h-screen p-4">
@@ -487,6 +626,45 @@
                     <button onclick="closeConfirmModal()" class="flex-1 py-3 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-xl hover:bg-slate-200 transition-all uppercase tracking-widest">Cancel</button>
                     <button id="confirm-action-btn" class="flex-1 py-3 bg-maroon text-white text-[10px] font-bold rounded-xl shadow-lg hover:shadow-maroon/20 transition-all uppercase tracking-widest">Confirm</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD BRAND DISCOUNT MODAL -->
+    <div id="brand-discount-modal" class="fixed inset-0 z-[960] hidden overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div onclick="toggleModal('brand-discount-modal', false)" class="fixed inset-0 bg-maroon-900/50 backdrop-blur-sm"></div>
+            <div class="modal-animate-in relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div class="bg-maroon-gradient px-6 py-5 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-widest">Add Brand Discount</h3>
+                            <p class="mt-1 text-[10px] font-medium text-white/60">Select Product Master brands for this customer.</p>
+                        </div>
+                        <button type="button" onclick="toggleModal('brand-discount-modal', false)" class="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="border-b border-slate-100 bg-slate-50 p-4">
+                    <div class="flex gap-3">
+                        <input id="brand-discount-brand-search" type="text" onkeyup="filterBrandDiscountModal()" placeholder="Search brand..." class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold outline-none focus:border-maroon">
+                        <button type="button" onclick="addSelectedBrandDiscounts()" class="rounded-xl bg-maroon px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg">Add Selected</button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto custom-scrollbar">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 bg-white text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            <tr class="border-b border-slate-100">
+                                <th class="px-5 py-3 w-20 text-center">Checkbox</th>
+                                <th class="px-5 py-3">Brand</th>
+                                <th class="px-5 py-3 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="brand-discount-brand-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                    </table>
+                </div>
+                <div id="brand-discount-modal-status" class="border-t border-slate-100 px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Not loaded</div>
             </div>
         </div>
     </div>
@@ -512,6 +690,28 @@
 @endsection
 
 @push('scripts')
+    <script>
+        window.customerRoutes = {
+            data: '{{ route("admin.customer-master.data") }}',
+            create: '{{ route("admin.customer-master.create") }}',
+            update: '{{ route("admin.customer-master.update", ["id" => ":id"]) }}',
+            delete: '{{ route("admin.customer-master.delete", ["id" => ":id"]) }}',
+            purchaseHistory: '{{ route("admin.customer-master.purchase-history", ["id" => ":id"]) }}',
+            paymentHistory: '{{ route("admin.customer-master.payment-history", ["id" => ":id"]) }}',
+            paymentHistoryDetail: '{{ route("admin.customer-master.payment-history-detail", ["id" => ":id", "salesOrderId" => ":salesOrderId"]) }}',
+            notes: '{{ url("/admin/masterlist/customer/notes/:id") }}',
+            portalStatus: '{{ route("admin.customer-master.portal.status", ["id" => ":id"]) }}',
+            portalGenerate: '{{ route("admin.customer-master.portal.generate", ["id" => ":id"]) }}',
+            portalValidity: '{{ route("admin.customer-master.portal.validity", ["id" => ":id"]) }}',
+            portalDelete: '{{ route("admin.customer-master.portal.delete", ["id" => ":id"]) }}',
+            brandDiscounts: '{{ route("admin.customer-master.brand-discounts.index", ["id" => ":id"]) }}',
+            brandDiscountBrands: '{{ route("admin.customer-master.brand-discounts.brands", ["id" => ":id"]) }}',
+            brandDiscountAdd: '{{ route("admin.customer-master.brand-discounts.add", ["id" => ":id"]) }}',
+            brandDiscountSave: '{{ route("admin.customer-master.brand-discounts.save", ["id" => ":id"]) }}',
+            brandDiscountDelete: '{{ route("admin.customer-master.brand-discounts.delete", ["id" => ":id"]) }}'
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="{{ asset('js/Customer_Master-list.js') }}?v={{ time() }}"></script>
 @endpush
 
