@@ -677,14 +677,40 @@
         const popup = window.open('', '_blank', 'width=1000,height=800');
         if (!popup) return alert('Please allow pop-ups to print this voucher.');
 
+        // W68_ECV_PRINT_TOTAL_BEFORE_BANK_20260910
         const expenseItems = voucher.expenseItems || [];
         const bankDetails = voucher.bankDetails || [];
-        const itemRows = expenseItems.map((item) => `<tr><td class="num">${qtyFormat.format(Number(item.qty || 0))}</td><td>${escapeHtml(item.unit || '')}</td><td>${escapeHtml(item.particularItem || '')}</td><td class="num">${peso.format(Number(item.unitPrice || 0))}</td><td class="num">${peso.format(Number(item.amount || 0))}</td></tr>`).join('');
-        const blankItemRows = Array.from({ length: Math.max(0, 5 - expenseItems.length) }, () => '<tr class="blank-row"><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>').join('');
-        const bankRows = bankDetails.map((item) => `<tr><td></td><td>${escapeHtml(item.bankName || '')}</td><td>${escapeHtml(item.checkNo || '')}</td><td>${escapeHtml(item.checkDate || '')}</td><td class="num">${peso.format(Number(item.creditAmount || 0))}</td></tr>`).join('');
-        const blankBankRow = bankRows ? '' : '<tr class="blank-row"><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
-        const netCheckTotal = Math.round((bankDetails.reduce((sum, item) => sum + Number(item.creditAmount || 0), 0) + Number.EPSILON) * 100) / 100;
-        const printTotal = bankDetails.length ? netCheckTotal : Number(voucher.totalAmount || 0);
+
+        // Do not print rows that contain no actual expense data.
+        const printableExpenseItems = expenseItems.filter((item) => {
+            return String(item.particularItem || '').trim() !== ''
+                || String(item.unit || '').trim() !== ''
+                || Number(item.qty || 0) !== 0
+                || Number(item.unitPrice || 0) !== 0
+                || Number(item.amount || 0) !== 0;
+        });
+
+        const itemRows = printableExpenseItems.map((item) => `<tr><td class="num">${qtyFormat.format(Number(item.qty || 0))}</td><td>${escapeHtml(item.unit || '')}</td><td>${escapeHtml(item.particularItem || '')}</td><td class="num">${peso.format(Number(item.unitPrice || 0))}</td><td class="num">${peso.format(Number(item.amount || 0))}</td></tr>`).join('');
+
+        // Do not print Bank Detail rows that contain no actual data.
+        const printableBankDetails = bankDetails.filter((item) => {
+            return String(item.bankName || '').trim() !== ''
+                || String(item.checkNo || '').trim() !== ''
+                || String(item.checkDate || '').trim() !== ''
+                || Number(item.creditAmount || 0) !== 0;
+        });
+
+        const bankRows = printableBankDetails.map((item) => `<tr><td></td><td>${escapeHtml(item.bankName || '')}</td><td>${escapeHtml(item.checkNo || '')}</td><td>${escapeHtml(item.checkDate || '')}</td><td class="num">${peso.format(Number(item.creditAmount || 0))}</td></tr>`).join('');
+
+        // TOTAL is the summary of UNIT TOTAL values.
+        const printTotal = Math.round(
+            (
+                printableExpenseItems.reduce(
+                    (sum, item) => sum + Number(item.amount || 0),
+                    0
+                ) + Number.EPSILON
+            ) * 100
+        ) / 100;
 
         popup.document.write(`<!doctype html><html><head><title>${escapeHtml(voucher.voucherNo)} - Check Voucher</title><style>
             @page{size:auto;margin:10mm}
@@ -705,7 +731,7 @@
             .banks th:nth-child(1){width:20%}.banks th:nth-child(2){width:22%}.banks th:nth-child(3){width:19%}.banks th:nth-child(4){width:19%}.banks th:nth-child(5){width:20%}
             .num{text-align:right;white-space:nowrap}
             .blank-row td{height:31px}
-            .total-row{display:flex;justify-content:flex-end;align-items:center;gap:14px;font-size:14px;font-weight:800;margin:2px 0 42px}
+            .total-row{display:flex;justify-content:flex-end;align-items:center;gap:14px;font-size:14px;font-weight:800;margin:2px 0 14px}
             .total-value{min-width:180px;text-align:right;border-bottom:1px solid #000;padding:0 4px 3px}
             .received{font-weight:800;margin-top:10px}
             .received-line{display:inline-block;width:270px;border-bottom:1px solid #000;margin-left:8px;transform:translateY(-2px)}
@@ -721,9 +747,9 @@
                 <div class="meta-line"><span class="meta-label">PARTICULARS:</span><span class="meta-value">${escapeHtml(voucher.particular || '')}</span></div>
                 <div class="meta-line"><span class="meta-label">VOUCHER No.:</span><span class="meta-value">${escapeHtml(voucher.voucherNo || '')}</span></div>
             </div>
-            <table class="items"><thead><tr><th>QTY</th><th>UNIT</th><th>DESCRIPTION</th><th>UNIT PRICE</th><th>UNIT TOTAL</th></tr></thead><tbody>${itemRows}${blankItemRows}</tbody></table>
-            <table class="banks"><thead><tr><th>ACCOUNT NO</th><th>BANK NAME</th><th>CHECK NO.</th><th>CHECK DATE</th><th>CHECK AMOUNT</th></tr></thead><tbody>${bankRows}${blankBankRow}</tbody></table>
+            <table class="items"><thead><tr><th>QTY</th><th>UNIT</th><th>DESCRIPTION</th><th>UNIT PRICE</th><th>UNIT TOTAL</th></tr></thead><tbody>${itemRows}</tbody></table>
             <div class="total-row"><span>TOTAL:</span><span class="total-value">${peso.format(printTotal)}</span></div>
+            ${bankRows ? `<table class="banks"><thead><tr><th>ACCOUNT NO</th><th>BANK NAME</th><th>CHECK NO.</th><th>CHECK DATE</th><th>CHECK AMOUNT</th></tr></thead><tbody>${bankRows}</tbody></table>` : ''}
             <div class="received">RECEIVED BY:<span class="received-line"></span></div>
         </div></body></html>`);
         popup.document.close();

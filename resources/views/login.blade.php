@@ -17,13 +17,13 @@
       background-repeat: no-repeat !important;
       background-color: #000 !important;
     }
-    .bg-slide:nth-child(1) { background-image: url('{{ asset("build/assets/images/login_background.gif") }}'); }
+    .bg-slide:nth-child(1) { background-image: url('{{ asset("images/login/login_background.gif") }}'); }
     .bg-slide:nth-child(2) { 
-      background-image: url('{{ asset("build/assets/images/login_background1.gif") }}'); 
+      background-image: url('{{ asset("images/login/login_background1.gif") }}'); 
       background-size: 90% !important;
     }
     .bg-slide:nth-child(3) { 
-      background-image: url('{{ asset("build/assets/images/login_background3.gif") }}'); 
+      background-image: url('{{ asset("images/login/login_background3.gif") }}'); 
       background-size: 75% !important;
     }
   </style>
@@ -55,7 +55,7 @@
         <!-- Logo & Company Name -->
         <div class="logo-area">
           <img
-            src="{{ asset('build/assets/images/login_logo.png.png') }}"
+            src="{{ asset('images/login/login_logo.png.png') }}"
             alt="w68 Autoparts Logo"
             class="logo-img"
             id="logoImg"

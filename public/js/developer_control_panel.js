@@ -583,11 +583,30 @@ loadArchiveBtn?.addEventListener('click', loadArchives);
     });
 });
 
+// W68_DEVELOPER_ONLINE_REPORT_ROUTE_FIX_20260910
+// Never hard-code /hatdog/public here. Laravel supplies the correct URL for
+// localhost/subfolder installs and for HostForge/domain-root deployments.
+const developerOnlineReportRoutes = window.developerOnlineReportRoutes || {};
+
+function developerOnlineReportRoute(key, fallback) {
+    const value = developerOnlineReportRoutes[key];
+    return (typeof value === 'string' && value.trim() !== '') ? value : fallback;
+}
+
+function developerSyncReportUrl(reportId) {
+    const template = developerOnlineReportRoute(
+        'syncReportTemplate',
+        '/developer/sync-report/__REPORT_ID__'
+    );
+
+    return template.replace('__REPORT_ID__', encodeURIComponent(String(reportId)));
+}
+
 const orsSyncSuccessModal = document.getElementById('orsSyncSuccessModal');
 
 async function refreshOnlineReportSyncStats() {
     try {
-        const res = await fetch('/hatdog/public/developer/online-report-ledger-sync-stats');
+        const res = await fetch(developerOnlineReportRoute('stats', '/developer/online-report-ledger-sync-stats'), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
         const result = await res.json();
         if (result.success) {
             document.getElementById('ors-total-reports').textContent = (result.total_reports || 0).toLocaleString();
@@ -603,7 +622,7 @@ async function refreshOnlineReportSyncStats() {
 
 async function loadUnsyncedReports() {
     try {
-        const res = await fetch('/hatdog/public/developer/unsynced-reports-list');
+        const res = await fetch(developerOnlineReportRoute('unsynced', '/developer/unsynced-reports-list'), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
         const result = await res.json();
         if (!result.success) return;
         const reports = result.reports || [];
@@ -647,7 +666,7 @@ async function syncAllUnsyncedReports() {
     const currentStatus = document.getElementById('ors-current-status');
 
     try {
-        const listRes = await fetch('/hatdog/public/developer/unsynced-reports-list');
+        const listRes = await fetch(developerOnlineReportRoute('unsynced', '/developer/unsynced-reports-list'), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
         const listResult = await listRes.json();
         if (!listResult.success) { showToast('Failed to fetch unsynced reports'); btn.disabled = false; btn.innerHTML = 'Sync Unsynced'; return; }
 
@@ -682,7 +701,7 @@ async function syncAllUnsyncedReports() {
             }
 
             try {
-                const syncRes = await fetch(`/hatdog/public/developer/sync-report/${reportId}`, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken } });
+                const syncRes = await fetch(developerSyncReportUrl(reportId), { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
                 const syncResult = await syncRes.json();
                 if (syncResult.success) {
                     totalSynced += syncResult.items_synced || 0;

@@ -15878,32 +15878,24 @@ Route::delete('/admin/sales/sales-order/history-destroy/{id}', function ($id) {
             if ($pid > 0) $productIds[$pid] = true;
         }
 
-        // Find related ledger entries
-        $ledgerQuery = \App\Models\ProductLedger::where('transaction_type', 'OUT')
-            ->where('transaction_number', $orderNumber);
+        // Delete this Local invoice's Product Ledger OUT rows using the
+        // authoritative sales_order linkage, with a legacy sales-number fallback.
+        // The cleanup service also rebuilds every later balance_stock value.
+        $ledgerCleanup = app(\App\Services\SalesInvoiceLedgerDeleteService::class)
+            ->deleteForSalesOrder($so);
 
-        if (!empty($invoiceNumbers)) {
-            $ledgerQuery->where('reference_number', $invoiceNumbers);
+        foreach (($ledgerCleanup['affected_products'] ?? []) as $affectedProductId) {
+            $affectedProductId = (int) $affectedProductId;
+            if ($affectedProductId > 0) {
+                $productIds[$affectedProductId] = true;
+            }
         }
 
-        $ledgerRows = $ledgerQuery->get();
-
-        // Collect additional product IDs from ledger
-        foreach ($ledgerRows as $lr) {
-            $pid = (int) ($lr->product_id ?? 0);
-            if ($pid > 0) $productIds[$pid] = true;
-        }
-
-        \Illuminate\Support\Facades\Log::info("Sales Order #{$id} delete: {$ledgerRows->count()} ledger rows found.");
-
-        // Delete ledger rows
-        if ($ledgerRows->isNotEmpty()) {
-            \App\Models\ProductLedger::where('transaction_type', 'OUT')
-                ->where('transaction_number', $orderNumber)
-                ->when(!empty($invoiceNumbers), fn ($q) => $q->where('reference_number', $invoiceNumbers))
-                ->delete();
-        }
-
+        \Illuminate\Support\Facades\Log::info(
+            "Sales Order #{$id} delete: "
+            . (int) ($ledgerCleanup['deleted_entries'] ?? 0)
+            . " Product Ledger row(s) deleted and balances rebuilt."
+        );
         // Delete SO items
         \Illuminate\Support\Facades\DB::connection('sales')
             ->table('sales_order_items')
@@ -18295,38 +18287,25 @@ Route::delete('/admin/sales/sales-order/report/online-destroy/{id}', function ($
             }
         }
 
-        // --- Identify related ledger rows ---
-        $ledgerRows = collect();
-        if (!empty($salesNumbers)) {
-            $ledgerRows = \App\Models\ProductLedger::where('remarks', 'Online Report Generation')
-                ->whereIn('transaction_number', $salesNumbers)
-                ->get();
+        // Delete this Online invoice's Product Ledger OUT rows using
+        // source_type=online_report + source_id, durable link rows, and a
+        // conservative legacy Online Report fallback. Running balances are
+        // rebuilt before the Online Report itself is deleted.
+        $ledgerCleanup = app(\App\Services\SalesInvoiceLedgerDeleteService::class)
+            ->deleteForOnlineReport($report);
+
+        foreach (($ledgerCleanup['affected_products'] ?? []) as $affectedProductId) {
+            $affectedProductId = (int) $affectedProductId;
+            if ($affectedProductId > 0) {
+                $oldProductIds[$affectedProductId] = true;
+            }
         }
 
-        $totalExpectedItems = 0;
-        foreach ($notesData as $nd) {
-            $ndItems = $nd['items'] ?? [];
-            if (is_string($ndItems)) $ndItems = json_decode($ndItems, true) ?? [];
-            $totalExpectedItems += count($ndItems);
-        }
-
-        $totalLedgerRows = $ledgerRows->count();
-
-        \Illuminate\Support\Facades\Log::info("Online Invoice #{$id} delete: {$totalLedgerRows} ledger rows found, {$totalExpectedItems} expected items from notes_data.");
-
-        // Safety: if there ARE sales numbers but the ledger query returned 0 while notes_data has items, log a warning
-        if (!empty($salesNumbers) && $totalLedgerRows === 0 && $totalExpectedItems > 0) {
-            \Illuminate\Support\Facades\Log::warning("Online Invoice #{$id} delete: No ledger rows found for sales numbers: " . implode(',', $salesNumbers) . " but notes_data has {$totalExpectedItems} items.");
-        }
-
-        // --- Delete ledger rows ---
-        if ($ledgerRows->isNotEmpty()) {
-            \App\Models\ProductLedger::where('remarks', 'Online Report Generation')
-                ->whereIn('transaction_number', $salesNumbers)
-                ->delete();
-            \Illuminate\Support\Facades\Log::info("Online Invoice #{$id} delete: Deleted {$totalLedgerRows} ledger rows.");
-        }
-
+        \Illuminate\Support\Facades\Log::info(
+            "Online Invoice #{$id} delete: "
+            . (int) ($ledgerCleanup['deleted_entries'] ?? 0)
+            . " Product Ledger row(s) deleted and balances rebuilt."
+        );
         // --- Recalculate stock for affected products ---
         $affectedProductIds = array_keys($oldProductIds);
         if (!empty($affectedProductIds)) {
@@ -25057,7 +25036,8 @@ Route::get('/admin/payments/history/data', function (Request $request) {
 
     try {
         $page = max((int) $request->query('page', 1), 1);
-        $perPage = 20;
+        // W68_PAYMENTS_HISTORY_DATA_15_20260909
+        $perPage = 15;
         $search = trim((string) $request->query('search', ''));
         $paymentNo = trim((string) $request->query('payment_no', ''));
         $invoiceSearch = trim((string) $request->query('invoices', ''));
