@@ -7324,6 +7324,8 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
 
         $validated = $request->validate([
             'product_code' => 'required|string|unique:masterlist.products,product_code,' . $id,
+            // W68_ADMIN_PRODUCT_CODE2_UPDATE_FIX_20260917
+            'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'specification' => 'nullable|string',
