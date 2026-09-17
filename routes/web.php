@@ -24032,6 +24032,28 @@ Route::get('/admin/payments/data', function () {
             ->sortBy(fn ($row) => mb_strtolower((string) ($row['name'] ?? '')))
             ->values();
 
+        // W68_PAYMENTS_ACTIVE_PAYOR_GLOBAL_SEARCH_FIX_20260917
+        //
+        // Search the COMPLETE Active Payments Payor collection before
+        // pagination. This allows a Payor located on page 2, 5, 10, etc.
+        // to be returned even while the browser is currently on page 1.
+        $activePayorSearch = mb_strtolower(
+            trim((string) request()->query('search', ''))
+        );
+
+        if ($activePayorSearch !== '') {
+            $activeCandidatePayors = $activeCandidatePayors
+                ->filter(function ($row) use ($activePayorSearch) {
+                    $payorName = mb_strtolower(
+                        trim((string) ($row['name'] ?? ''))
+                    );
+
+                    return $payorName !== ''
+                        && mb_strpos($payorName, $activePayorSearch) !== false;
+                })
+                ->values();
+        }
+
         $total = $activeCandidatePayors->count();
         $lastPage = max((int) ceil($total / $perPage), 1);
         $page = min($page, $lastPage);
