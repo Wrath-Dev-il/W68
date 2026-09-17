@@ -7359,6 +7359,16 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
 
         $product->update($validated);
 
+        // W68_ADMIN_PRODUCT_CODE2_FORCE_PERSIST_20260917
+        // Admin-only safeguard: persist Product Code 2 even when duplicate
+        // Admin route definitions resolve to different update handlers.
+        if ($request->exists('product_code2')) {
+            $productCode2 = trim((string) $request->input('product_code2', ''));
+            $product->product_code2 = $productCode2 !== '' ? $productCode2 : null;
+            $product->save();
+            $product->refresh();
+        }
+
         return response()->json(['success' => true, 'message' => 'Product updated successfully', 'product' => $product->refresh()]);
     } catch (\Exception $e) {
         return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -26942,6 +26952,8 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
 
         $validated = $request->validate([
             'product_code' => 'required|unique:masterlist.products,product_code,' . $id,
+            // W68_ADMIN_PRODUCT_CODE2_VALIDATION_ALL_ROUTES_20260917
+            'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'category' => 'required|string',
@@ -27013,6 +27025,16 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
         }
 
         $product->update($validated);
+
+        // W68_ADMIN_PRODUCT_CODE2_FORCE_PERSIST_20260917
+        // Admin-only safeguard: persist Product Code 2 even when duplicate
+        // Admin route definitions resolve to different update handlers.
+        if ($request->exists('product_code2')) {
+            $productCode2 = trim((string) $request->input('product_code2', ''));
+            $product->product_code2 = $productCode2 !== '' ? $productCode2 : null;
+            $product->save();
+            $product->refresh();
+        }
         $product->refresh();
         $oldOnlinePrice = round((float) ($before['price_online'] ?? 0), 2);
         $newOnlinePrice = round((float) ($product->price_online ?? 0), 2);
