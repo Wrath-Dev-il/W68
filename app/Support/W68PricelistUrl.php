@@ -7,12 +7,19 @@ use Illuminate\Support\Facades\Config;
 
 class W68PricelistUrl
 {
+    // W68_HOSTFORGE_PRICELIST_DOMAIN_FIX_20260917
+    private const HOSTFORGE_PRICELIST_URL = 'https://pricelist-w68autoparts-lisxk.hostforgeplatforms.com';
+
     public static function baseUrl(?Request $request = null): string
     {
         $configured = trim((string) Config::get('services.w68_pricelist.url', ''));
 
+        // Keep an explicitly configured external Pricelist URL, except for the
+        // old HostForge W68 URL that still points to /w68_Pricelist/public.
         if ($configured !== '' && !self::isLocalUrl($configured)) {
-            return rtrim($configured, '/');
+            if (!self::isLegacyHostforgePricelistUrl($configured)) {
+                return rtrim($configured, '/');
+            }
         }
 
         $request ??= request();
@@ -22,6 +29,13 @@ class W68PricelistUrl
         $host = $request?->getHost()
             ?: (parse_url((string) Config::get('app.url', ''), PHP_URL_HOST) ?: 'localhost');
 
+        // Production W68 is now separate from the W68 Pricelist application.
+        // Admin, Regular and Special customer QR/link generation must point
+        // to the dedicated Pricelist HostForge deployment.
+        if (self::isW68HostforgeAppHost($host)) {
+            return self::HOSTFORGE_PRICELIST_URL;
+        }
+
         if (self::isLocalHost($host)) {
             $host = self::serverNetworkHost($request) ?: $host;
         }
@@ -30,6 +44,25 @@ class W68PricelistUrl
         $hostWithPort = self::hostWithPort($host, $port, $scheme);
 
         return rtrim($scheme . '://' . $hostWithPort . $path, '/');
+    }
+
+    private static function isLegacyHostforgePricelistUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+
+        return self::isW68HostforgeAppHost($host)
+            && str_starts_with(
+                '/' . ltrim($path, '/'),
+                '/w68_pricelist/public'
+            );
+    }
+
+    private static function isW68HostforgeAppHost(?string $host): bool
+    {
+        $host = strtolower(trim((string) $host));
+
+        return $host === 'w68autoparts.hostforgeplatforms.com';
     }
 
     private static function pathFromConfiguredUrl(string $configured): string
