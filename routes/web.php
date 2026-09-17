@@ -23721,7 +23721,22 @@ Route::get('/admin/payments/data', function () {
 
         // Modern ONLINE rows can be classified from finalized ONL Sales Orders
         // without decoding every Online Report snapshot.
-        $modernOnlineReportIds = [];
+        //
+        // W68_PAYMENTS_ONLINE_ACTIVE_CANDIDATE_COVERAGE_FIX_20260917
+        //
+        // IMPORTANT:
+        // A report can contain several Online invoices/customers. Do not consider
+        // an entire report resolved merely because one finalized ONL order exists.
+        // Track coverage per invoice instead. Reports with uncovered invoices are
+        // inspected through notes_data below.
+        //
+        // This changes candidate discovery only. The existing authoritative
+        // Payments resolver still calculates the actual balance/due afterwards.
+        $normalizeCandidateInvoice = static fn ($value) =>
+            strtoupper((string) preg_replace('/\s+/', '', trim((string) $value)));
+
+        $modernOnlineInvoiceCoverage = [];
+
         $candidateOnlineOrders = DB::connection('sales')->table('sales_orders')
             ->where('order_number', 'LIKE', 'ONL-%')
             ->whereIn('status', ['Confirmed', 'Closed'])
@@ -23737,76 +23752,266 @@ Route::get('/admin/payments/data', function () {
             ]);
 
         foreach ($candidateOnlineOrders as $order) {
-            if (!preg_match('/^ONL-(\d+)-(\d+)/', (string) $order->order_number, $m)) continue;
+            if (!preg_match('/^ONL-(\d+)-(\d+)/', (string) $order->order_number, $m)) {
+                continue;
+            }
+
             $reportId = (int) $m[1];
-            $modernOnlineReportIds[$reportId] = true;
-            $invoiceValues = $parsePaymentInvoiceValues($order->invoice_numbers ?? null);
-            $invoiceNo = trim((string) ($invoiceValues[0] ?? ''));
+
+            $invoiceValues = array_values(array_filter(
+                $parsePaymentInvoiceValues($order->invoice_numbers ?? null),
+                static fn ($value) => trim((string) $value) !== ''
+            ));
+
+            // Mark EVERY invoice represented by this authoritative ONL order.
+            // Previously only the first invoice was examined and the complete
+            // report was then excluded from Online Report fallback processing.
+            foreach ($invoiceValues as $invoiceValue) {
+                $normalizedInvoice = $normalizeCandidateInvoice($invoiceValue);
+
+                if ($normalizedInvoice !== '') {
+                    if (!isset($modernOnlineInvoiceCoverage[$reportId])) {
+                        $modernOnlineInvoiceCoverage[$reportId] = [];
+                    }
+
+                    $modernOnlineInvoiceCoverage[$reportId][$normalizedInvoice] = true;
+                }
+            }
+
             $amount = (float) ($order->total_amount ?? 0);
 
-            // Zero totals still get a candidate slot because the normal Online
-            // resolver may recover their amount from Sales Order items/report data.
-            $isActionable = $amount <= 0;
-            if (!$isActionable && $invoiceNo !== '') {
-                $paidRow = $onlinePaidRows->get('online_report:' . $reportId . ':' . $invoiceNo);
-                $paid = (float) ($paidRow->paid_total ?? 0);
-                $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
-                $isActionable = max($amount - $paid - $returned, 0) > 0;
+            // If invoice_numbers is missing/damaged, keep the customer eligible
+            // for the candidate pass. The normal Payments resolver will decide
+            // the real balance using Online Report/Ledger fallback afterward.
+            $isActionable = $amount <= 0 || empty($invoiceValues);
+
+            if (!$isActionable) {
+                $paid = 0.0;
+
+                foreach ($invoiceValues as $invoiceValue) {
+                    $invoiceNo = trim((string) $invoiceValue);
+
+                    if ($invoiceNo === '') {
+                        continue;
+                    }
+
+                    $paidRow = $onlinePaidRows->get(
+                        'online_report:' . $reportId . ':' . $invoiceNo
+                    );
+
+                    $paid += (float) ($paidRow->paid_total ?? 0);
+                }
+
+                $returned = $returnAmountFor(
+                    $invoiceValues,
+                    $onlineReturnMap
+                );
+
+                $isActionable = max(
+                    $amount - $paid - $returned,
+                    0
+                ) > 0;
             }
+
             if ($isActionable) {
-                $registerCandidate($order->customer_id, $order->customer_name, $order->created_at ?? $order->updated_at ?? null);
+                $registerCandidate(
+                    $order->customer_id,
+                    $order->customer_name,
+                    $order->created_at ?? $order->updated_at ?? null
+                );
             }
         }
+
         unset($candidateOnlineOrders);
 
-        // Legacy/migrated Online Reports with no finalized ONL Sales Order are
-        // the only reports that still need snapshot inspection at candidate time.
-        // This is much smaller than decoding the complete Online Report history.
-        $legacyReportsQ = DB::connection('sales')->table('online_reports')
-            ->whereIn('status', ['generated', 'migrated']);
-        if (!empty($modernOnlineReportIds)) {
-            foreach (array_chunk(array_keys($modernOnlineReportIds), 1000) as $reportIdChunk) {
-                $legacyReportsQ->whereNotIn('id', $reportIdChunk);
+        /*
+        |--------------------------------------------------------------------------
+        | Online Report fallback only for uncovered invoices
+        |--------------------------------------------------------------------------
+        |
+        | First read the small Online Report headers. If every invoice in that
+        | report is already represented by a finalized ONL Sales Order, there is
+        | no reason to decode notes_data.
+        |
+        | If even one invoice is NOT covered, decode that report so Shopee,
+        | Lazada, TikTok and all other Online customers remain discoverable.
+        |
+        */
+
+        $onlineReportHeaders = DB::connection('sales')->table('online_reports')
+            ->whereIn('status', ['generated', 'migrated'])
+            ->get([
+                'id',
+                'invoice_numbers',
+            ]);
+
+        $fallbackOnlineReportIds = [];
+
+        foreach ($onlineReportHeaders as $reportHeader) {
+            $reportId = (int) $reportHeader->id;
+
+            $reportInvoices = array_values(array_filter(
+                $parsePaymentInvoiceValues(
+                    $reportHeader->invoice_numbers ?? null
+                ),
+                static fn ($value) => trim((string) $value) !== ''
+            ));
+
+            // Empty/malformed report invoice lists must still get snapshot
+            // inspection; otherwise historical Online customers disappear.
+            $needsFallback = empty($reportInvoices);
+
+            if (!$needsFallback) {
+                $coverage = $modernOnlineInvoiceCoverage[$reportId] ?? [];
+
+                foreach ($reportInvoices as $invoiceValue) {
+                    $normalizedInvoice =
+                        $normalizeCandidateInvoice($invoiceValue);
+
+                    if (
+                        $normalizedInvoice === ''
+                        || !isset($coverage[$normalizedInvoice])
+                    ) {
+                        $needsFallback = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($needsFallback) {
+                $fallbackOnlineReportIds[] = $reportId;
             }
         }
-        $legacyReports = $legacyReportsQ->get([
-            'id', 'invoice_numbers', 'notes_data', 'created_at', 'updated_at'
-        ]);
+
+        unset($onlineReportHeaders);
+
+        $legacyReports = collect();
+
+        if (!empty($fallbackOnlineReportIds)) {
+            $legacyReports = DB::connection('sales')
+                ->table('online_reports')
+                ->whereIn('status', ['generated', 'migrated'])
+                ->whereIn('id', $fallbackOnlineReportIds)
+                ->get([
+                    'id',
+                    'invoice_numbers',
+                    'notes_data',
+                    'created_at',
+                    'updated_at',
+                ]);
+        }
 
         foreach ($legacyReports as $report) {
-            $invoiceValues = $parsePaymentInvoiceValues($report->invoice_numbers ?? null);
-            $notes = json_decode((string) ($report->notes_data ?? '[]'), true);
-            if (!is_array($notes)) $notes = [];
-            $count = max(count($invoiceValues), count($notes));
+            $invoiceValues = $parsePaymentInvoiceValues(
+                $report->invoice_numbers ?? null
+            );
 
-            for ($i = 0; $i < $count; $i++) {
-                $note = $notes[$i] ?? (count($notes) === 1 ? $notes[0] : null);
-                if (!is_array($note)) continue;
+            $notes = json_decode(
+                (string) ($report->notes_data ?? '[]'),
+                true
+            );
+
+            if (!is_array($notes)) {
+                $notes = [];
+            }
+
+            foreach ($notes as $index => $note) {
+                if (!is_array($note)) {
+                    continue;
+                }
+
                 $customerId = (int) ($note['customer_id'] ?? 0);
-                if ($customerId <= 0) continue;
-                $invoiceNo = trim((string) ($invoiceValues[$i] ?? ''));
-                $amount = (float) ($note['net_total'] ?? 0);
-                if ($amount <= 0 && isset($note['items']) && is_array($note['items'])) {
-                    $amount = (float) collect($note['items'])->sum(fn ($item) => is_array($item) ? (float) ($item['subtotal'] ?? 0) : 0);
+
+                if ($customerId <= 0) {
+                    continue;
                 }
 
-                $isActionable = $amount <= 0;
-                if (!$isActionable && $invoiceNo !== '') {
-                    $paidRow = $onlinePaidRows->get('online_report:' . (int) $report->id . ':' . $invoiceNo);
-                    $paid = (float) ($paidRow->paid_total ?? 0);
-                    $returned = $returnAmountFor([$invoiceNo], $onlineReturnMap);
-                    $isActionable = max($amount - $paid - $returned, 0) > 0;
+                $invoiceNo = trim((string) (
+                    $note['invoice_no']
+                    ?? $note['invoice_number']
+                    ?? ($invoiceValues[$index] ?? '')
+                ));
+
+                // If this exact invoice has already been authoritatively handled
+                // by its finalized ONL Sales Order, do not duplicate its candidate
+                // calculation. Other invoices in the SAME report still continue.
+                $normalizedInvoice =
+                    $normalizeCandidateInvoice($invoiceNo);
+
+                $coverage =
+                    $modernOnlineInvoiceCoverage[(int) $report->id] ?? [];
+
+                if (
+                    $normalizedInvoice !== ''
+                    && isset($coverage[$normalizedInvoice])
+                ) {
+                    continue;
                 }
+
+                $amount = (float) ($note['net_total'] ?? 0);
+
+                if (
+                    $amount <= 0
+                    && isset($note['items'])
+                    && is_array($note['items'])
+                ) {
+                    $amount = (float) collect($note['items'])
+                        ->sum(function ($item) {
+                            return is_array($item)
+                                ? (float) ($item['subtotal'] ?? 0)
+                                : 0;
+                        });
+                }
+
+                // Missing invoice no/amount must remain eligible for the
+                // authoritative full resolver. Candidate discovery must not
+                // incorrectly delete an Online customer from Active Accounts.
+                $isActionable =
+                    $amount <= 0 || $invoiceNo === '';
+
+                if (!$isActionable) {
+                    $paidRow = $onlinePaidRows->get(
+                        'online_report:'
+                        . (int) $report->id
+                        . ':'
+                        . $invoiceNo
+                    );
+
+                    $paid = (float) ($paidRow->paid_total ?? 0);
+
+                    $returned = $returnAmountFor(
+                        [$invoiceNo],
+                        $onlineReturnMap
+                    );
+
+                    $isActionable = max(
+                        $amount - $paid - $returned,
+                        0
+                    ) > 0;
+                }
+
                 if ($isActionable) {
+                    $customerName = trim((string) (
+                        ($note['customer_name'] ?? '')
+                        ?: ($note['customer'] ?? '')
+                    ));
+
                     $registerCandidate(
                         $customerId,
-                        (string) ($note['customer_name'] ?? ''),
-                        $report->created_at ?? $report->updated_at ?? null
+                        $customerName,
+                        $report->created_at
+                            ?? $report->updated_at
+                            ?? null
                     );
                 }
             }
         }
-        unset($legacyReports, $modernOnlineReportIds);
+
+        unset(
+            $legacyReports,
+            $fallbackOnlineReportIds,
+            $modernOnlineInvoiceCoverage
+        );
 
         // Fill missing names from Masterlist without requiring every Online-only
         // buyer to have a Masterlist row.
