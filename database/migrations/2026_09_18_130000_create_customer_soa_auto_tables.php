@@ -11,16 +11,14 @@ return new class extends Migration
         if (!Schema::connection('mysql')->hasTable('customer_soa_auto_configs')) {
             Schema::connection('mysql')->create('customer_soa_auto_configs', function (Blueprint $table) {
                 $table->id();
-                $table->unsignedBigInteger('customer_id')->unique();
+                $table->string('config_key', 32)->default('global')->unique();
                 $table->boolean('enabled')->default(false);
-                $table->unsignedInteger('lead_value')->default(14);
-                $table->string('lead_unit', 20)->default('days');
+                $table->unsignedInteger('lead_value')->nullable()->default(null);
+                $table->string('lead_unit', 20)->nullable()->default(null);
                 $table->timestamp('last_sent_at')->nullable();
                 $table->text('last_error')->nullable();
                 $table->string('updated_by', 191)->nullable();
                 $table->timestamps();
-
-                $table->index(['enabled', 'customer_id'], 'customer_soa_auto_enabled_customer_idx');
             });
         }
 
@@ -37,7 +35,7 @@ return new class extends Migration
                 $table->dateTime('send_at')->nullable();
                 $table->decimal('balance', 18, 2)->default(0);
                 $table->string('batch_key', 64)->nullable();
-                $table->string('status', 32)->default('sent');
+                $table->string('status', 32)->nullable()->default(null);
                 $table->text('error_message')->nullable();
                 $table->timestamp('sent_at')->nullable();
                 $table->timestamps();

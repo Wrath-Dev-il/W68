@@ -9,14 +9,14 @@ use Illuminate\Validation\Rule;
 
 class CustomerSoaAutoController extends Controller
 {
-    public function status(int $customerId, CustomerAutoSoaService $service): JsonResponse
+    public function status(CustomerAutoSoaService $service): JsonResponse
     {
         $this->authorizeEmployeeRoute();
 
         try {
             return response()->json([
                 'success' => true,
-                ...$service->configurationPayload($customerId),
+                ...$service->configurationPayload(),
             ]);
         } catch (\Throwable $exception) {
             report($exception);
@@ -28,30 +28,30 @@ class CustomerSoaAutoController extends Controller
         }
     }
 
-    public function save(Request $request, int $customerId, CustomerAutoSoaService $service): JsonResponse
+    public function save(Request $request, CustomerAutoSoaService $service): JsonResponse
     {
         $user = $this->authorizeEmployeeRoute();
+        $enabled = $request->boolean('enabled');
 
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
-            'lead_value' => ['required', 'integer', 'min:1', 'max:525600'],
-            'lead_unit' => ['required', Rule::in(['minutes', 'days', 'months'])],
+            'lead_value' => [Rule::requiredIf($enabled), 'nullable', 'integer', 'min:1', 'max:525600'],
+            'lead_unit' => [Rule::requiredIf($enabled), 'nullable', Rule::in(['minutes', 'days', 'months'])],
         ]);
 
         try {
             $payload = $service->saveConfiguration(
-                $customerId,
-                (bool) $validated['enabled'],
-                (int) $validated['lead_value'],
-                (string) $validated['lead_unit'],
+                $enabled,
+                $enabled ? (int) $validated['lead_value'] : null,
+                $enabled ? (string) $validated['lead_unit'] : null,
                 $this->actorIdentifier($user)
             );
 
             return response()->json([
                 'success' => true,
-                'message' => (bool) $validated['enabled']
-                    ? 'SOA(AUTO) configuration enabled for this customer.'
-                    : 'SOA(AUTO) configuration saved and disabled for this customer.',
+                'message' => $enabled
+                    ? 'Global SOA(AUTO) configuration enabled for all linked Pricelist customer accounts.'
+                    : 'Global SOA(AUTO) configuration disabled. No automatic SOA will be sent.',
                 ...$payload,
             ]);
         } catch (\Throwable $exception) {

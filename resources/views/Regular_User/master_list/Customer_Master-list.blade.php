@@ -1,3 +1,4 @@
+{{-- W68_GLOBAL_SOA_AUTO_FEATURE_20260918 --}}
 {{-- W68_CUSTOMER_SOA_AUTO_FEATURE_20260918 --}}
 @extends('partials.user_account.user_sidebar_navbar')
 
@@ -46,6 +47,10 @@
                 <span>Filter</span>
             </button>
             
+            <button onclick="openSoaAutoModal()" class="px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black rounded-xl shadow-sm flex items-center space-x-2" title="Global SOA(AUTO) Configuration">
+                <i data-lucide="mail-clock" class="w-4 h-4"></i>
+                <span>SOA(AUTO)</span>
+            </button>
             <button onclick="openAddCustomerModal()" class="px-4 py-2.5 bg-maroon-gradient text-white text-xs font-bold rounded-xl shadow-lg flex items-center space-x-2">
                 <i data-lucide="plus-circle" class="w-4 h-4 text-gold"></i>
                 <span>Add Customer</span>
@@ -713,8 +718,8 @@
             brandDiscountAdd: '{{ route("regular.customer-master.brand-discounts.add", ["id" => ":id"]) }}',
             brandDiscountSave: '{{ route("regular.customer-master.brand-discounts.save", ["id" => ":id"]) }}',
             brandDiscountDelete: '{{ route("regular.customer-master.brand-discounts.delete", ["id" => ":id"]) }}',
-            soaAutoStatus: '{{ route("regular.customer-master.soa-auto.status", ["customerId" => ":id"]) }}',
-            soaAutoSave: '{{ route("regular.customer-master.soa-auto.save", ["customerId" => ":id"]) }}'
+            soaAutoStatus: '{{ route("regular.customer-master.soa-auto.status") }}',
+            soaAutoSave: '{{ route("regular.customer-master.soa-auto.save") }}',
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

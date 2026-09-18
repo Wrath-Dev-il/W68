@@ -18,6 +18,7 @@ class CustomerAutoSoaService
     private const CONFIG_TABLE = 'customer_soa_auto_configs';
     private const LOG_TABLE = 'customer_soa_auto_send_logs';
     private const NOTIFICATION_TABLE = 'customer_portal_notifications';
+    private const CONFIG_KEY = 'global';
 
     public function parseTermsDays(?string $terms): ?int
     {
@@ -69,41 +70,32 @@ class CustomerAutoSoaService
         ];
     }
 
-    public function configurationPayload(int $customerId): array
+    public function configurationPayload(): array
     {
-        $customer = DB::connection('masterlist')
-            ->table('customers')
-            ->where('id', $customerId)
-            ->first(['id', 'name', 'terms']);
-
-        if (!$customer) {
-            throw new RuntimeException('Customer not found.');
-        }
-
         $config = $this->hasStorage()
             ? DB::connection(self::SYSTEM_CONNECTION)
                 ->table(self::CONFIG_TABLE)
-                ->where('customer_id', $customerId)
+                ->where('config_key', self::CONFIG_KEY)
                 ->first()
             : null;
 
-        $leadValue = (int) ($config->lead_value ?? 14);
-        $leadUnit = (string) ($config->lead_unit ?? 'days');
-        $termDays = $this->parseTermsDays((string) ($customer->terms ?? ''));
-        $account = $this->linkedPortalAccount($customerId);
+        $leadValue = $config && $config->lead_value !== null ? (int) $config->lead_value : null;
+        $leadUnit = $config && in_array((string) $config->lead_unit, ['minutes', 'days', 'months'], true)
+            ? (string) $config->lead_unit
+            : null;
+
+        $stats = $this->linkedCustomerStats();
 
         return [
-            'customer' => [
-                'id' => (int) $customer->id,
-                'name' => (string) $customer->name,
-                'terms' => (string) ($customer->terms ?? ''),
-                'term_days' => $termDays,
+            'scope' => [
+                'type' => 'global',
+                'label' => 'All linked Pricelist customer accounts',
+                ...$stats,
             ],
-            'linked_account' => $account,
             'configuration' => [
                 'enabled' => (bool) ($config->enabled ?? false),
-                'lead_value' => max(1, $leadValue),
-                'lead_unit' => in_array($leadUnit, ['minutes', 'days', 'months'], true) ? $leadUnit : 'days',
+                'lead_value' => $leadValue,
+                'lead_unit' => $leadUnit,
                 'last_sent_at' => $config->last_sent_at ?? null,
                 'last_error' => (string) ($config->last_error ?? ''),
                 'updated_at' => $config->updated_at ?? null,
@@ -112,72 +104,56 @@ class CustomerAutoSoaService
                 'mailer' => (string) config('mail.default', 'log'),
                 'ready' => $this->mailReady(),
             ],
-            'example' => $this->exampleText($termDays, max(1, $leadValue), $leadUnit),
+            'example' => $this->globalExampleText($leadValue, $leadUnit),
             'storage_ready' => $this->hasStorage(),
         ];
     }
 
     public function saveConfiguration(
-        int $customerId,
         bool $enabled,
-        int $leadValue,
-        string $leadUnit,
+        ?int $leadValue,
+        ?string $leadUnit,
         string $actor
     ): array {
         $this->assertStorage();
 
-        $customer = DB::connection('masterlist')
-            ->table('customers')
-            ->where('id', $customerId)
-            ->first(['id', 'name', 'terms']);
-
-        if (!$customer) {
-            throw new RuntimeException('Customer not found.');
+        if ($enabled) {
+            if (!$leadValue || $leadValue < 1) {
+                throw new RuntimeException('Enter the SOA lead time first.');
+            }
+            if (!in_array((string) $leadUnit, ['minutes', 'days', 'months'], true)) {
+                throw new RuntimeException('Select Minutes, Days, or Months.');
+            }
         }
 
-        $termDays = $this->parseTermsDays((string) ($customer->terms ?? ''));
-        if ($enabled && !$termDays) {
-            throw new RuntimeException('This customer needs a numeric Terms value first, for example "Net 130 Days" or "130 Days".');
-        }
-
-        $account = $this->linkedPortalAccount($customerId);
-        if ($enabled && (!$account || empty($account['email_valid']))) {
-            throw new RuntimeException('This customer is not linked to a valid Pricelist login email. Generate/link the customer portal account first.');
-        }
-
-        if (!in_array($leadUnit, ['minutes', 'days', 'months'], true)) {
-            throw new RuntimeException('Invalid SOA lead-time type.');
-        }
-
-        $leadValue = max(1, $leadValue);
         $now = now('Asia/Manila');
-
-        $connection = DB::connection(self::SYSTEM_CONNECTION);
-        $existing = $connection->table(self::CONFIG_TABLE)
-            ->where('customer_id', $customerId)
-            ->first(['id']);
-
         $payload = [
+            'config_key' => self::CONFIG_KEY,
             'enabled' => $enabled ? 1 : 0,
-            'lead_value' => $leadValue,
-            'lead_unit' => $leadUnit,
+            'lead_value' => $enabled ? max(1, (int) $leadValue) : null,
+            'lead_unit' => $enabled ? (string) $leadUnit : null,
+            'last_error' => null,
             'updated_by' => $actor,
             'updated_at' => $now,
         ];
 
+        $connection = DB::connection(self::SYSTEM_CONNECTION);
+        $existing = $connection->table(self::CONFIG_TABLE)
+            ->where('config_key', self::CONFIG_KEY)
+            ->first(['id']);
+
         if ($existing) {
             $connection->table(self::CONFIG_TABLE)
-                ->where('customer_id', $customerId)
+                ->where('config_key', self::CONFIG_KEY)
                 ->update($payload);
         } else {
             $connection->table(self::CONFIG_TABLE)->insert([
-                'customer_id' => $customerId,
                 ...$payload,
                 'created_at' => $now,
             ]);
         }
 
-        return $this->configurationPayload($customerId);
+        return $this->configurationPayload();
     }
 
     public function runDueReminders(): array
@@ -192,46 +168,81 @@ class CustomerAutoSoaService
             'errors' => [],
         ];
 
+        $config = DB::connection(self::SYSTEM_CONNECTION)
+            ->table(self::CONFIG_TABLE)
+            ->where('config_key', self::CONFIG_KEY)
+            ->where('enabled', 1)
+            ->first();
+
+        if (!$config) {
+            return $summary;
+        }
+
+        if ($config->lead_value === null || !in_array((string) $config->lead_unit, ['minutes', 'days', 'months'], true)) {
+            throw new RuntimeException('Global SOA(AUTO) is enabled but its lead time is not configured.');
+        }
+
         if (!$this->mailReady()) {
             throw new RuntimeException('Automatic SOA email is disabled because MAIL_MAILER is set to log/array or has no usable mail configuration.');
         }
 
-        $configs = DB::connection(self::SYSTEM_CONNECTION)
-            ->table(self::CONFIG_TABLE)
-            ->where('enabled', 1)
-            ->orderBy('customer_id')
-            ->get();
+        if (!Schema::connection(self::SYSTEM_CONNECTION)->hasTable('customer_portal_accounts')) {
+            throw new RuntimeException('customer_portal_accounts table is missing.');
+        }
 
-        foreach ($configs as $config) {
+        $customerIds = DB::connection(self::SYSTEM_CONNECTION)
+            ->table('customer_portal_accounts')
+            ->whereNotNull('customer_id')
+            ->whereNotNull('login_id')
+            ->orderBy('customer_id')
+            ->pluck('customer_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        $anySent = false;
+
+        foreach ($customerIds as $customerId) {
             $summary['checked']++;
 
             try {
-                $result = $this->processCustomerConfig($config);
+                $result = $this->processCustomerConfig((int) $customerId, $config);
 
                 if (!empty($result['sent'])) {
+                    $anySent = true;
                     $summary['sent_customers']++;
                     $summary['sent_invoices'] += (int) ($result['eligible_invoice_count'] ?? 0);
                 } else {
                     $summary['skipped']++;
                 }
             } catch (Throwable $exception) {
-                $summary['errors'][] = 'Customer #' . (int) $config->customer_id . ': ' . $exception->getMessage();
-                $this->recordConfigError((int) $config->customer_id, $exception->getMessage());
+                $summary['errors'][] = 'Customer #' . (int) $customerId . ': ' . $exception->getMessage();
                 Log::error('SOA AUTO customer failed', [
-                    'customer_id' => (int) $config->customer_id,
+                    'customer_id' => (int) $customerId,
                     'error' => $exception->getMessage(),
                 ]);
             }
         }
 
+        DB::connection(self::SYSTEM_CONNECTION)
+            ->table(self::CONFIG_TABLE)
+            ->where('config_key', self::CONFIG_KEY)
+            ->update([
+                'last_sent_at' => $anySent ? now('Asia/Manila') : ($config->last_sent_at ?? null),
+                'last_error' => empty($summary['errors'])
+                    ? null
+                    : Str::limit(implode(' | ', array_slice($summary['errors'], 0, 10)), 2000),
+                'updated_at' => now('Asia/Manila'),
+            ]);
+
         return $summary;
     }
 
-    private function processCustomerConfig(object $config): array
+    private function processCustomerConfig(int $customerId, object $config): array
     {
-        $customerId = (int) ($config->customer_id ?? 0);
         if ($customerId <= 0) {
-            return ['sent' => false];
+            return ['sent' => false, 'reason' => 'invalid_customer'];
         }
 
         $customer = DB::connection('masterlist')
@@ -240,30 +251,26 @@ class CustomerAutoSoaService
             ->first(['id', 'name', 'address', 'terms']);
 
         if (!$customer) {
-            throw new RuntimeException('Customer record no longer exists.');
+            return ['sent' => false, 'reason' => 'customer_missing'];
         }
 
         $termDays = $this->parseTermsDays((string) ($customer->terms ?? ''));
         if (!$termDays) {
-            throw new RuntimeException('Customer Terms has no positive day value.');
+            return ['sent' => false, 'reason' => 'missing_terms'];
         }
 
         $account = $this->linkedPortalAccount($customerId);
         if (!$account || empty($account['email_valid'])) {
-            throw new RuntimeException('No valid linked Pricelist login email.');
+            return ['sent' => false, 'reason' => 'invalid_linked_email'];
         }
 
-        $leadValue = max(1, (int) ($config->lead_value ?? 14));
-        $leadUnit = (string) ($config->lead_unit ?? 'days');
-        if (!in_array($leadUnit, ['minutes', 'days', 'months'], true)) {
-            $leadUnit = 'days';
-        }
+        $leadValue = max(1, (int) $config->lead_value);
+        $leadUnit = (string) $config->lead_unit;
 
         $now = Carbon::now('Asia/Manila');
         $statement = $this->buildStatement($customerId, $now);
 
         if (empty($statement['transactions'])) {
-            $this->clearConfigError($customerId);
             return ['sent' => false, 'reason' => 'no_unpaid_invoices'];
         }
 
@@ -286,8 +293,6 @@ class CustomerAutoSoaService
             $dueAt = $invoiceAt->copy()->addDays($termDays);
             $sendAt = $this->subtractLead($dueAt->copy(), $leadValue, $leadUnit);
 
-            // The reminder is intentionally pre-due only. If the scheduler was down
-            // past the due date, it will not send a late automatic reminder.
             if ($now->gte($sendAt) && $now->lte($dueAt)) {
                 $transaction['due_at'] = $dueAt->toDateTimeString();
                 $transaction['send_at'] = $sendAt->toDateTimeString();
@@ -296,7 +301,6 @@ class CustomerAutoSoaService
         }
 
         if ($eligible === []) {
-            $this->clearConfigError($customerId);
             return ['sent' => false, 'reason' => 'not_due'];
         }
 
@@ -343,12 +347,10 @@ class CustomerAutoSoaService
             $batchKey,
             $now,
             $totalBalance,
-            $customerName,
             $recipient
         ) {
             foreach ($eligible as $transaction) {
-                $system = DB::connection(self::SYSTEM_CONNECTION);
-                $system->table(self::LOG_TABLE)->insertOrIgnore([
+                DB::connection(self::SYSTEM_CONNECTION)->table(self::LOG_TABLE)->insertOrIgnore([
                     'customer_id' => $customerId,
                     'login_id' => (int) $account['login_id'],
                     'email' => $recipient,
@@ -367,15 +369,7 @@ class CustomerAutoSoaService
                 ]);
             }
 
-            $system->table(self::CONFIG_TABLE)
-                ->where('customer_id', $customerId)
-                ->update([
-                    'last_sent_at' => $now,
-                    'last_error' => null,
-                    'updated_at' => $now,
-                ]);
-
-            $system->table(self::NOTIFICATION_TABLE)->insertOrIgnore([
+            DB::connection(self::SYSTEM_CONNECTION)->table(self::NOTIFICATION_TABLE)->insertOrIgnore([
                 'login_id' => (int) $account['login_id'],
                 'customer_id' => $customerId,
                 'event_type' => 'SOA_AUTO_SENT',
@@ -757,20 +751,71 @@ class CustomerAutoSoaService
         };
     }
 
-    private function exampleText(?int $termDays, int $leadValue, string $leadUnit): string
+    private function globalExampleText(?int $leadValue, ?string $leadUnit): string
     {
-        if (!$termDays) {
-            return 'Set a numeric customer Terms value first (for example: 130 Days).';
+        if (!$leadValue || !in_array((string) $leadUnit, ['minutes', 'days', 'months'], true)) {
+            return 'Enable SOA(AUTO) and enter a lead time. Example: 14 Days applies to every linked customer using that customer\'s own Terms.';
         }
 
         if ($leadUnit === 'days') {
-            $sendDay = $termDays - $leadValue;
+            $sampleTerms = 130;
+            $sendDay = $sampleTerms - $leadValue;
             return $sendDay >= 0
-                ? "For {$termDays}-day terms and {$leadValue} days before due, SOA sends at invoice age {$sendDay} days."
-                : "The lead time is longer than the {$termDays}-day terms, so the first eligible finalized invoice would send as soon as the scheduler sees it.";
+                ? "Example: a customer with 130-day Terms and {$leadValue} day(s) before due receives the SOA at invoice age {$sendDay} day(s)."
+                : "Example: the lead time is longer than 130 days, so a 130-day customer becomes eligible as soon as the finalized unpaid invoice is seen.";
         }
 
-        return "Due date is invoice date + {$termDays} days; SOA sends {$leadValue} {$leadUnit} before that due date.";
+        return "The same {$leadValue} {$leadUnit} lead time applies to every linked customer, calculated backward from each customer's own due date.";
+    }
+
+    private function linkedCustomerStats(): array
+    {
+        $schema = Schema::connection(self::SYSTEM_CONNECTION);
+        if (!$schema->hasTable('customer_portal_accounts') || !$schema->hasTable('logins')) {
+            return [
+                'linked_customer_count' => 0,
+                'valid_email_count' => 0,
+                'numeric_terms_count' => 0,
+            ];
+        }
+
+        $links = DB::connection(self::SYSTEM_CONNECTION)
+            ->table('customer_portal_accounts as cpa')
+            ->leftJoin('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+            ->whereNotNull('cpa.customer_id')
+            ->get(['cpa.customer_id', 'l.Email']);
+
+        $byCustomer = [];
+        foreach ($links as $link) {
+            $customerId = (int) ($link->customer_id ?? 0);
+            if ($customerId <= 0) continue;
+            $email = trim((string) ($link->Email ?? ''));
+            $byCustomer[$customerId] = $email;
+        }
+
+        $customerIds = array_keys($byCustomer);
+        $termsByCustomer = empty($customerIds)
+            ? collect()
+            : DB::connection('masterlist')->table('customers')
+                ->whereIn('id', $customerIds)
+                ->pluck('terms', 'id');
+
+        $validEmail = 0;
+        $numericTerms = 0;
+        foreach ($byCustomer as $customerId => $email) {
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+                $validEmail++;
+            }
+            if ($this->parseTermsDays((string) ($termsByCustomer[$customerId] ?? ''))) {
+                $numericTerms++;
+            }
+        }
+
+        return [
+            'linked_customer_count' => count($byCustomer),
+            'valid_email_count' => $validEmail,
+            'numeric_terms_count' => $numericTerms,
+        ];
     }
 
     private function mailReady(): bool
@@ -793,6 +838,7 @@ class CustomerAutoSoaService
     {
         $schema = Schema::connection(self::SYSTEM_CONNECTION);
         return $schema->hasTable(self::CONFIG_TABLE)
+            && $schema->hasColumn(self::CONFIG_TABLE, 'config_key')
             && $schema->hasTable(self::LOG_TABLE)
             && $schema->hasTable(self::NOTIFICATION_TABLE);
     }
@@ -804,34 +850,5 @@ class CustomerAutoSoaService
         }
     }
 
-    private function recordConfigError(int $customerId, string $message): void
-    {
-        if (!Schema::connection(self::SYSTEM_CONNECTION)->hasTable(self::CONFIG_TABLE)) {
-            return;
-        }
 
-        DB::connection(self::SYSTEM_CONNECTION)
-            ->table(self::CONFIG_TABLE)
-            ->where('customer_id', $customerId)
-            ->update([
-                'last_error' => Str::limit($message, 2000),
-                'updated_at' => now('Asia/Manila'),
-            ]);
-    }
-
-    private function clearConfigError(int $customerId): void
-    {
-        if (!Schema::connection(self::SYSTEM_CONNECTION)->hasTable(self::CONFIG_TABLE)) {
-            return;
-        }
-
-        DB::connection(self::SYSTEM_CONNECTION)
-            ->table(self::CONFIG_TABLE)
-            ->where('customer_id', $customerId)
-            ->whereNotNull('last_error')
-            ->update([
-                'last_error' => null,
-                'updated_at' => now('Asia/Manila'),
-            ]);
-    }
 }

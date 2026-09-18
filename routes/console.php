@@ -456,7 +456,7 @@ Artisan::command('soa:auto-send', function () {
         $result = app(\App\Services\CustomerAutoSoaService::class)->runDueReminders();
 
         $this->info('SOA(AUTO) run complete.');
-        $this->line('Configs checked: ' . ($result['checked'] ?? 0));
+        $this->line('Linked customers checked: ' . ($result['checked'] ?? 0));
         $this->line('Customers emailed: ' . ($result['sent_customers'] ?? 0));
         $this->line('Invoice reminders marked sent: ' . ($result['sent_invoices'] ?? 0));
         $this->line('Skipped: ' . ($result['skipped'] ?? 0));
@@ -471,7 +471,7 @@ Artisan::command('soa:auto-send', function () {
         report($exception);
         return 1;
     }
-})->purpose('Send due automatic customer Statements of Account before customer terms expire.');
+})->purpose('Send automatic Statements of Account to all linked customers using one global lead-time configuration.');
 
 Schedule::command('soa:auto-send')
     ->everyMinute()

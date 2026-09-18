@@ -30385,39 +30385,17 @@ Route::get('/shopee/redirect', [App\Http\Controllers\ShopeeAuthController::class
 Route::get('/shopee/callback', [App\Http\Controllers\ShopeeAuthController::class, 'handleCallback']);
 
 
-/*
-|--------------------------------------------------------------------------
-| W68_UNSERVED_ADMIN_REGULAR_ROUTES_20260918
-|--------------------------------------------------------------------------
-| Existing Special route remains unchanged.
-*/
-foreach (['admin', 'regular'] as $w68UnservedPrefix) {
-    \Illuminate\Support\Facades\Route::prefix($w68UnservedPrefix)
-        ->name($w68UnservedPrefix . '.')
-        ->group(function () {
-            \Illuminate\Support\Facades\Route::get('/sales/unserved-report', [\App\Http\Controllers\Special\UnservedReportController::class, 'index'])->name('unserved-report');
-            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/customers', [\App\Http\Controllers\Special\UnservedReportController::class, 'customers'])->name('unserved-report.customers');
-            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/salesmen', [\App\Http\Controllers\Special\UnservedReportController::class, 'salesmen'])->name('unserved-report.salesmen');
-            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/data', [\App\Http\Controllers\Special\UnservedReportController::class, 'data'])->name('unserved-report.data');
-            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/print', [\App\Http\Controllers\Special\UnservedReportController::class, 'print'])->name('unserved-report.print');
-        });
-}
 
-/*
-|--------------------------------------------------------------------------
-| W68_CUSTOMER_SOA_AUTO_ROUTES_20260918
-|--------------------------------------------------------------------------
-| Customer Master SOA(AUTO) configuration for Admin / Regular / Special.
-|--------------------------------------------------------------------------
-*/
+
+/* W68_GLOBAL_SOA_AUTO_ROUTES_20260918 */
 foreach (['admin', 'regular', 'special'] as $w68SoaPrefix) {
     \Illuminate\Support\Facades\Route::get(
-        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto/{customerId}',
+        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto',
         [\App\Http\Controllers\CustomerSoaAutoController::class, 'status']
-    )->whereNumber('customerId')->name($w68SoaPrefix . '.customer-master.soa-auto.status');
+    )->name($w68SoaPrefix . '.customer-master.soa-auto.status');
 
     \Illuminate\Support\Facades\Route::post(
-        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto/{customerId}',
+        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto',
         [\App\Http\Controllers\CustomerSoaAutoController::class, 'save']
-    )->whereNumber('customerId')->name($w68SoaPrefix . '.customer-master.soa-auto.save');
+    )->name($w68SoaPrefix . '.customer-master.soa-auto.save');
 }
