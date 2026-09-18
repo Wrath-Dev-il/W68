@@ -602,6 +602,8 @@
                                 Top Products Sales
                             @elseif(Route::currentRouteName() === 'admin.inventory-reports')
                                 Inventory Reports
+                            @elseif(Route::currentRouteName() === 'admin.unserved-report')
+                                Unserved Details
                             @elseif(Route::currentRouteName() === 'admin.accounts-receivable')
                                 Accounts Receivable
                             @elseif(Route::currentRouteName() === 'admin.cost-report')
@@ -750,9 +752,13 @@
                     @yield('inventory_reports_content')
                 </div>
                 <!-- PAGE: REPORTS -> SALES REPORTS -->
-                <div id="page-rep-sales" class="page-view space-y-6 {{ in_array(Route::currentRouteName(), ['admin.sales-report', 'admin.top-products', 'admin.unserved-report']) ? '' : 'hidden' }}">
+                <div id="page-rep-sales" class="page-view space-y-6 {{ in_array(Route::currentRouteName(), ['admin.sales-report', 'admin.top-products']) ? '' : 'hidden' }}">
                     @yield('sales_report_content')
-            @yield('unserved_report_content')
+                </div>
+                <!-- W68_UNSERVED_DEDICATED_CONTAINER_FIX_20260918 -->
+                <!-- PAGE: REPORTS -> UNSERVED DETAILS -->
+                <div id="page-rep-unserved" class="page-view space-y-6 {{ Route::currentRouteName() === 'admin.unserved-report' ? '' : 'hidden' }}">
+                    @yield('unserved_report_content')
                 </div>
                 <!-- PAGE: REPORTS -> ACCOUNTS RECEIVABLE -->
                 <div id="page-rep-ar" class="page-view space-y-6 {{ Route::currentRouteName() === 'admin.accounts-receivable' ? '' : 'hidden' }}">
