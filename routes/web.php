@@ -30402,3 +30402,22 @@ foreach (['admin', 'regular'] as $w68UnservedPrefix) {
             \Illuminate\Support\Facades\Route::get('/sales/unserved-report/print', [\App\Http\Controllers\Special\UnservedReportController::class, 'print'])->name('unserved-report.print');
         });
 }
+
+/*
+|--------------------------------------------------------------------------
+| W68_CUSTOMER_SOA_AUTO_ROUTES_20260918
+|--------------------------------------------------------------------------
+| Customer Master SOA(AUTO) configuration for Admin / Regular / Special.
+|--------------------------------------------------------------------------
+*/
+foreach (['admin', 'regular', 'special'] as $w68SoaPrefix) {
+    \Illuminate\Support\Facades\Route::get(
+        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto/{customerId}',
+        [\App\Http\Controllers\CustomerSoaAutoController::class, 'status']
+    )->whereNumber('customerId')->name($w68SoaPrefix . '.customer-master.soa-auto.status');
+
+    \Illuminate\Support\Facades\Route::post(
+        '/' . $w68SoaPrefix . '/master-list/customer-master/soa-auto/{customerId}',
+        [\App\Http\Controllers\CustomerSoaAutoController::class, 'save']
+    )->whereNumber('customerId')->name($w68SoaPrefix . '.customer-master.soa-auto.save');
+}

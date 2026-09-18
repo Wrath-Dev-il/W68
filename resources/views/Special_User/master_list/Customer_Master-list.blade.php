@@ -1,3 +1,4 @@
+{{-- W68_CUSTOMER_SOA_AUTO_FEATURE_20260918 --}}
 @extends('partials.special_user.special_sidebar_navbar')
 
 @push('styles')
@@ -482,6 +483,9 @@
                             <div>
                                 <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Pricing Remarks</label>
                                 <input type="text" name="pricingRemarks" id="wizard-remarks" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-maroon focus:ring-4 focus:ring-maroon/5 transition-all" placeholder="e.g. VIP 10% Discount">
+                            </div>                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Terms</label>
+                                <input type="text" name="terms" id="wizard-terms" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-maroon focus:ring-4 focus:ring-maroon/5 transition-all" placeholder="e.g. Net 130 Days">
                             </div>
                         </div>
                     </div>
@@ -531,6 +535,7 @@
                                     <div><p class="text-slate-400 font-bold uppercase text-[8px]">Contact</p><p id="review-contact" class="text-slate-700"></p></div>
                                     <div><p class="text-slate-400 font-bold uppercase text-[8px]">Person</p><p id="review-person" class="text-slate-700"></p></div>
                                     <div class="col-span-2"><p class="text-slate-400 font-bold uppercase text-[8px]">Address</p><p id="review-address" class="text-slate-700 leading-relaxed"></p></div>
+                                    <div><p class="text-slate-400 font-bold uppercase text-[8px]">Terms</p><p id="review-terms" class="text-slate-700"></p></div>
                                 </div>
                             </div>
                             <div>
@@ -683,6 +688,8 @@
     </div>
 
 </div>
+    @include('partials.customer-soa-auto-modal')
+
 @endsection
 
 @push('scripts')
@@ -704,7 +711,9 @@
             brandDiscountBrands: '{{ route("special.customer-master.brand-discounts.brands", ["id" => ":id"]) }}',
             brandDiscountAdd: '{{ route("special.customer-master.brand-discounts.add", ["id" => ":id"]) }}',
             brandDiscountSave: '{{ route("special.customer-master.brand-discounts.save", ["id" => ":id"]) }}',
-            brandDiscountDelete: '{{ route("special.customer-master.brand-discounts.delete", ["id" => ":id"]) }}'
+            brandDiscountDelete: '{{ route("special.customer-master.brand-discounts.delete", ["id" => ":id"]) }}',
+            soaAutoStatus: '{{ route("special.customer-master.soa-auto.status", ["customerId" => ":id"]) }}',
+            soaAutoSave: '{{ route("special.customer-master.soa-auto.save", ["customerId" => ":id"]) }}'
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

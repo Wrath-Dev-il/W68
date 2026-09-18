@@ -1,3 +1,4 @@
+{{-- W68_CUSTOMER_SOA_AUTO_FEATURE_20260918 --}}
 @extends('partials.user_account.user_sidebar_navbar')
 
 @push('styles')
@@ -688,6 +689,8 @@
     </div>
 
 </div>
+    @include('partials.customer-soa-auto-modal')
+
 @endsection
 
 @push('scripts')
@@ -709,7 +712,9 @@
             brandDiscountBrands: '{{ route("regular.customer-master.brand-discounts.brands", ["id" => ":id"]) }}',
             brandDiscountAdd: '{{ route("regular.customer-master.brand-discounts.add", ["id" => ":id"]) }}',
             brandDiscountSave: '{{ route("regular.customer-master.brand-discounts.save", ["id" => ":id"]) }}',
-            brandDiscountDelete: '{{ route("regular.customer-master.brand-discounts.delete", ["id" => ":id"]) }}'
+            brandDiscountDelete: '{{ route("regular.customer-master.brand-discounts.delete", ["id" => ":id"]) }}',
+            soaAutoStatus: '{{ route("regular.customer-master.soa-auto.status", ["customerId" => ":id"]) }}',
+            soaAutoSave: '{{ route("regular.customer-master.soa-auto.save", ["customerId" => ":id"]) }}'
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

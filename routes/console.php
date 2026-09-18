@@ -448,3 +448,31 @@ Schedule::command('shopee:sync-inventory-reconciliation')
     ->cron('0 */6 * * *')
     ->timezone('Asia/Manila')
     ->withoutOverlapping();
+
+
+/* W68_CUSTOMER_SOA_AUTO_SCHEDULER_20260918 */
+Artisan::command('soa:auto-send', function () {
+    try {
+        $result = app(\App\Services\CustomerAutoSoaService::class)->runDueReminders();
+
+        $this->info('SOA(AUTO) run complete.');
+        $this->line('Configs checked: ' . ($result['checked'] ?? 0));
+        $this->line('Customers emailed: ' . ($result['sent_customers'] ?? 0));
+        $this->line('Invoice reminders marked sent: ' . ($result['sent_invoices'] ?? 0));
+        $this->line('Skipped: ' . ($result['skipped'] ?? 0));
+
+        foreach (($result['errors'] ?? []) as $error) {
+            $this->error($error);
+        }
+
+        return empty($result['errors']) ? 0 : 1;
+    } catch (\Throwable $exception) {
+        $this->error($exception->getMessage());
+        report($exception);
+        return 1;
+    }
+})->purpose('Send due automatic customer Statements of Account before customer terms expire.');
+
+Schedule::command('soa:auto-send')
+    ->everyMinute()
+    ->withoutOverlapping(10);

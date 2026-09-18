@@ -54,7 +54,9 @@ const CUSTOMER_ENDPOINTS = (() => {
         brandDiscountBrands: (id) => (r.brandDiscountBrands || '/admin/masterlist/customer/brand-discounts/:id/brands').replace(':id', id),
         brandDiscountAdd: (id) => (r.brandDiscountAdd || '/admin/masterlist/customer/brand-discounts/:id/add').replace(':id', id),
         brandDiscountSave: (id) => (r.brandDiscountSave || '/admin/masterlist/customer/brand-discounts/:id/save').replace(':id', id),
-        brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id)
+        brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id),
+        soaAutoStatus: (id) => (r.soaAutoStatus || '/admin/masterlist/customer/soa-auto/:id').replace(':id', id),
+        soaAutoSave: (id) => (r.soaAutoSave || '/admin/masterlist/customer/soa-auto/:id').replace(':id', id)
     };
 })();
 
@@ -738,7 +740,7 @@ function renderTable() {
                 <div class="flex items-center justify-center space-x-2">
                     <button type="button" onclick="event.stopPropagation(); openViewModal(${id})" class="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors" title="View"><i data-lucide="eye" class="w-4 h-4"></i></button>
                     <button type="button" onclick="event.stopPropagation(); openEditModal(${id})" class="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors" title="Edit"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
-                    <button type="button" onclick="event.stopPropagation(); openDeleteModal(${id})" class="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <button type="button" onclick="event.stopPropagation(); openSoaAutoModal(${id})" class="px-2 py-2 hover:bg-amber-50 text-amber-700 rounded-lg transition-colors text-[8px] font-black" title="SOA(AUTO)">SOA(AUTO)</button>\n                    <button type="button" onclick="event.stopPropagation(); openDeleteModal(${id})" class="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             </td>
         </tr>
@@ -785,7 +787,7 @@ function renderCards() {
             <div class="flex gap-2 pt-2">
                 <button type="button" onclick="event.stopPropagation(); openViewModal(${id})" class="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-bold transition-all">VIEW</button>
                 <button type="button" onclick="event.stopPropagation(); openEditModal(${id})" class="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl text-[10px] font-bold transition-all">EDIT</button>
-                <button type="button" onclick="event.stopPropagation(); openDeleteModal(${id})" class="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-bold transition-all">DELETE</button>
+                <button type="button" onclick="event.stopPropagation(); openSoaAutoModal(${id})" class="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-all">SOA(AUTO)</button>\n                <button type="button" onclick="event.stopPropagation(); openDeleteModal(${id})" class="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-bold transition-all">DELETE</button>
             </div>
         </div>
     `;
@@ -2016,3 +2018,155 @@ const debouncedFilterMainSearch = debounce(function() {
 window.filterMainSearch = function() {
     debouncedFilterMainSearch();
 };
+
+// W68_CUSTOMER_SOA_AUTO_JS_20260918
+let currentSoaAutoCustomerId = null;
+let currentSoaAutoTermDays = null;
+
+function setSoaAutoError(message = '') {
+    const box = document.getElementById('soa-auto-error');
+    if (!box) return;
+    box.textContent = message;
+    box.classList.toggle('hidden', !message);
+}
+
+function updateSoaAutoExample() {
+    const el = document.getElementById('soa-auto-example');
+    const value = Math.max(1, Number(document.getElementById('soa-auto-lead-value')?.value || 1));
+    const unit = document.getElementById('soa-auto-lead-unit')?.value || 'days';
+    const days = Number(currentSoaAutoTermDays || 0);
+    if (!el) return;
+
+    if (!days) {
+        el.textContent = 'Set a numeric Terms value first, for example 130 Days.';
+        return;
+    }
+
+    if (unit === 'days') {
+        const sendAge = days - value;
+        el.textContent = sendAge >= 0
+            ? `For ${days}-day terms and ${value} day(s) before due, the SOA sends at invoice age ${sendAge} day(s).`
+            : `The ${value}-day lead time is longer than the ${days}-day terms, so the first eligible finalized invoice sends as soon as the scheduler sees it.`;
+        return;
+    }
+
+    el.textContent = `Due date is invoice date + ${days} days; the SOA sends ${value} ${unit} before that due date.`;
+}
+
+window.openSoaAutoModal = async function(customerId) {
+    const id = Number(customerId || 0);
+    if (!id) return;
+
+    currentSoaAutoCustomerId = id;
+    currentSoaAutoTermDays = null;
+    setSoaAutoError('');
+
+    const modal = document.getElementById('customer-soa-auto-modal');
+    const saveButton = document.getElementById('soa-auto-save-btn');
+    if (!modal) return;
+
+    document.getElementById('soa-auto-customer-name').textContent = 'Loading...';
+    document.getElementById('soa-auto-terms').textContent = '—';
+    document.getElementById('soa-auto-email').textContent = 'Checking linked Pricelist account...';
+    document.getElementById('soa-auto-last-sent').textContent = '—';
+    document.getElementById('soa-auto-mail-status').textContent = 'Checking...';
+    if (saveButton) saveButton.disabled = true;
+
+    toggleModal('customer-soa-auto-modal', true);
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.soaAutoStatus(id), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.success) throw new Error(body.message || 'Unable to load SOA(AUTO) configuration.');
+
+        const customer = body.customer || {};
+        const account = body.linked_account || {};
+        const config = body.configuration || {};
+        const mail = body.mail || {};
+
+        currentSoaAutoTermDays = Number(customer.term_days || 0) || null;
+        document.getElementById('soa-auto-customer-name').textContent = customer.name || `Customer #${id}`;
+        document.getElementById('soa-auto-terms').textContent = customer.terms || 'Not set';
+        document.getElementById('soa-auto-email').textContent = account.email || 'No linked Pricelist login email';
+        document.getElementById('soa-auto-enabled').checked = Boolean(config.enabled);
+        document.getElementById('soa-auto-lead-value').value = Number(config.lead_value || 14);
+        document.getElementById('soa-auto-lead-unit').value = config.lead_unit || 'days';
+        document.getElementById('soa-auto-last-sent').textContent = config.last_sent_at || 'Never';
+        document.getElementById('soa-auto-mail-status').textContent = mail.ready
+            ? `Ready (${mail.mailer || 'mailer'})`
+            : `Not ready (${mail.mailer || 'log'}). Configure production SMTP.`;
+
+        if (!body.storage_ready) {
+            setSoaAutoError('SOA(AUTO) database tables are missing. Run php artisan migrate --force.');
+        } else if (config.last_error) {
+            setSoaAutoError(config.last_error);
+        }
+
+        if (saveButton) saveButton.disabled = !body.storage_ready;
+        updateSoaAutoExample();
+    } catch (error) {
+        setSoaAutoError(error.message || 'Unable to load SOA(AUTO) configuration.');
+        if (saveButton) saveButton.disabled = true;
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+window.closeSoaAutoModal = function() {
+    currentSoaAutoCustomerId = null;
+    currentSoaAutoTermDays = null;
+    toggleModal('customer-soa-auto-modal', false);
+};
+
+window.saveSoaAutoConfiguration = async function() {
+    const customerId = Number(currentSoaAutoCustomerId || 0);
+    if (!customerId) return;
+
+    const enabled = Boolean(document.getElementById('soa-auto-enabled')?.checked);
+    const leadValue = Math.max(1, Number(document.getElementById('soa-auto-lead-value')?.value || 1));
+    const leadUnit = document.getElementById('soa-auto-lead-unit')?.value || 'days';
+    const saveButton = document.getElementById('soa-auto-save-btn');
+
+    setSoaAutoError('');
+    if (saveButton) saveButton.disabled = true;
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.soaAutoSave(customerId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                enabled,
+                lead_value: leadValue,
+                lead_unit: leadUnit
+            })
+        });
+
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.success) {
+            const validation = body.errors ? Object.values(body.errors).flat().join(' ') : '';
+            throw new Error(validation || body.message || 'Unable to save SOA(AUTO) configuration.');
+        }
+
+        currentSoaAutoTermDays = Number(body.customer?.term_days || currentSoaAutoTermDays || 0) || null;
+        document.getElementById('soa-auto-last-sent').textContent = body.configuration?.last_sent_at || 'Never';
+        updateSoaAutoExample();
+        showSuccessModal('SOA(AUTO) Saved', body.message || 'Automatic Statement of Account configuration has been saved.');
+        closeSoaAutoModal();
+    } catch (error) {
+        setSoaAutoError(error.message || 'Unable to save SOA(AUTO) configuration.');
+    } finally {
+        if (saveButton) saveButton.disabled = false;
+    }
+};
+
+document.addEventListener('change', function(event) {
+    if (event.target?.id === 'soa-auto-lead-value' || event.target?.id === 'soa-auto-lead-unit') {
+        updateSoaAutoExample();
+    }
+});
