@@ -9,9 +9,12 @@ class UnservedReportServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        Route::middleware('web')
-            ->prefix('special')
-            ->name('special.')
-            ->group(base_path('routes/unserved-report.php'));
+        // W68_UNSERVED_ALL_USERS_ROUTE_PROVIDER_FIX_20260918
+        foreach (['special', 'admin', 'regular'] as $prefix) {
+            Route::middleware('web')
+                ->prefix($prefix)
+                ->name($prefix . '.')
+                ->group(base_path('routes/unserved-report.php'));
+        }
     }
 }

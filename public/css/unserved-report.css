@@ -55,3 +55,135 @@
 .unserved-table tbody tr.unserved-rush-row .unserved-value{color:#fde047!important}
 .unserved-print-table tr.rush-row td{background:#4a0612!important;color:#facc15!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .unserved-print-table{font-size:9px}.unserved-print-table th,.unserved-print-table td,.unserved-print-table tfoot td{font-size:9px}
+
+/* W68_UNSERVED_VISIBILITY_PRINT_FIX_20260918 */
+@media print {
+    @page {
+        size: Letter landscape;
+        margin: 6mm;
+    }
+
+    html,
+    body.unserved-print-body {
+        width: 100%;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    .unserved-print-sheet {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .unserved-print-main-header {
+        margin-bottom: 2.5mm;
+    }
+
+    .unserved-print-header h1 {
+        font-size: 13pt;
+        line-height: 1.05;
+    }
+
+    .unserved-print-header h2 {
+        font-size: 10pt;
+        margin: 1mm 0 .5mm;
+    }
+
+    .unserved-print-header p {
+        font-size: 6.5pt;
+        margin: .5mm 0;
+    }
+
+    .unserved-print-customer-section {
+        width: 100%;
+        margin-top: 3mm;
+        break-inside: auto;
+        page-break-inside: auto;
+    }
+
+    .unserved-print-customer-section + .unserved-print-customer-section {
+        margin-top: 4mm;
+        padding-top: 1.5mm;
+    }
+
+    .unserved-print-customer-details {
+        width: 100%;
+        max-width: none;
+        margin: 0 0 1.5mm;
+        padding: 1.2mm 1.5mm;
+        gap: .7mm 4mm;
+        font-size: 6.5pt;
+        box-sizing: border-box;
+    }
+
+    .unserved-print-table {
+        width: 100% !important;
+        table-layout: fixed;
+        border-collapse: collapse;
+        font-size: 6pt !important;
+    }
+
+    .unserved-print-table th,
+    .unserved-print-table td,
+    .unserved-print-table tfoot td {
+        font-size: 6pt !important;
+        line-height: 1.15;
+        padding: .9mm .7mm !important;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+
+    .unserved-print-table th {
+        text-align: center;
+    }
+
+    /* 11-column Letter landscape allocation */
+    .unserved-print-table th:nth-child(1) { width: 8%; }
+    .unserved-print-table th:nth-child(2) { width: 10%; }
+    .unserved-print-table th:nth-child(3) { width: 8%; }
+    .unserved-print-table th:nth-child(4) { width: 17%; }
+    .unserved-print-table th:nth-child(5) { width: 10%; }
+    .unserved-print-table th:nth-child(6) { width: 15%; }
+    .unserved-print-table th:nth-child(7) { width: 6%; }
+    .unserved-print-table th:nth-child(8) { width: 6%; }
+    .unserved-print-table th:nth-child(9) { width: 6%; }
+    .unserved-print-table th:nth-child(10) { width: 7%; }
+    .unserved-print-table th:nth-child(11) { width: 7%; }
+
+    .unserved-print-table thead {
+        display: table-header-group;
+    }
+
+    .unserved-print-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .unserved-print-table tfoot {
+        display: table-row-group;
+    }
+
+    .unserved-print-footer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 2mm 5mm;
+        margin-top: 2.5mm;
+        font-size: 6pt;
+    }
+
+    .unserved-print-footer span {
+        padding-top: .8mm;
+    }
+
+    .unserved-print-body,
+    .unserved-print-table tr.rush-row td {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}

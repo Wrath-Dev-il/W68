@@ -750,7 +750,7 @@
                     @yield('inventory_reports_content')
                 </div>
                 <!-- PAGE: REPORTS -> SALES REPORTS -->
-                <div id="page-rep-sales" class="page-view space-y-6 {{ in_array(Route::currentRouteName(), ['admin.sales-report', 'admin.top-products']) ? '' : 'hidden' }}">
+                <div id="page-rep-sales" class="page-view space-y-6 {{ in_array(Route::currentRouteName(), ['admin.sales-report', 'admin.top-products', 'admin.unserved-report']) ? '' : 'hidden' }}">
                     @yield('sales_report_content')
             @yield('unserved_report_content')
                 </div>

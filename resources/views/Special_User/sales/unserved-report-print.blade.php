@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Partial Unserved Details</title>
+    {{-- W68_UNSERVED_VISIBILITY_PRINT_FIX_20260918 --}}
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
 </head>
 <body class="unserved-print-body">
@@ -46,7 +47,7 @@
                     </thead>
                     <tbody>
                         @foreach($group['rows'] as $row)
-                            <tr class="{{ !empty($row['is_rush']) ? 'rush-row' : '' }}">\n                                <td>{{ $row['so_no'] }}</td>\n                                <td>{{ $row['customer'] }}</td>\n                                <td>{{ $row['order_date'] }}</td>
+                            <tr class="{{ !empty($row['is_rush']) ? 'rush-row' : '' }}">                                <td>{{ $row['so_no'] }}</td>                                <td>{{ $row['customer'] }}</td>                                <td>{{ $row['order_date'] }}</td>
                                 <td>{{ $row['product_code'] }}</td>
                                 <td>{{ $row['part_number'] }}</td>
                                 <td>{{ $row['description'] }}</td>
@@ -100,7 +101,7 @@
 
         <footer class="unserved-print-footer">
             <span>Partial Notes: {{ number_format($summary['partial_notes'] ?? $summary['open_partial_notes'] ?? 0) }}</span>
-            <span>Lines: {{ number_format($summary['line_items']) }}</span>\n            <span>Unserved With Stocks: {{ rtrim(rtrim(number_format((float) ($summary['unserved_with_stock_qty'] ?? 0), 2, '.', ','), '0'), '.') }}</span>
+            <span>Lines: {{ number_format($summary['line_items']) }}</span>            <span>Unserved With Stocks: {{ rtrim(rtrim(number_format((float) ($summary['unserved_with_stock_qty'] ?? 0), 2, '.', ','), '0'), '.') }}</span>
             <span>Total Unserved: {{ rtrim(rtrim(number_format((float) $summary['total_unserved'], 2, '.', ','), '0'), '.') }}</span>
             <span>Total Amount: {{ number_format((float) ($summary['total_amount'] ?? 0), 2) }}</span>
         </footer>
