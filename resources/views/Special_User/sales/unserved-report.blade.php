@@ -1,4 +1,5 @@
-@extends('partials.special_user.special_sidebar_navbar')
+@extends($unservedLayout)
+{{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
@@ -7,20 +8,20 @@
 @section('unserved_report_content')
 <div id="unserved-report-root"
      class="unserved-report-page"
-     data-customers-url="{{ route('special.unserved-report.customers') }}"
-     data-salesmen-url="{{ route('special.unserved-report.salesmen') }}"
-     data-data-url="{{ route('special.unserved-report.data') }}"
-     data-print-url="{{ route('special.unserved-report.print') }}">
+     data-customers-url="{{ route($unservedRoutePrefix . '.unserved-report.customers') }}"
+     data-salesmen-url="{{ route($unservedRoutePrefix . '.unserved-report.salesmen') }}"
+     data-data-url="{{ route($unservedRoutePrefix . '.unserved-report.data') }}"
+     data-print-url="{{ route($unservedRoutePrefix . '.unserved-report.print') }}">
 
     <section class="unserved-hero">
         <div>
             <p class="unserved-eyebrow">Sales Reports</p>
             <h2>Unserved Details</h2>
-            <p>Remaining quantities from <strong>Open</strong> and <strong>Partial</strong> Sales Notes. ON HAND is read from the latest Product Ledger balance.</p>
+            <p>Remaining quantities from <strong>Partial Sales Notes only</strong>. Additional quantity is not counted as ordered/actual quantity. ON HAND is read from the latest Product Ledger balance.</p>
         </div>
         <div class="unserved-hero-badge">
             <i data-lucide="package-search"></i>
-            <span>Open + Partial</span>
+            <span>Partial Only</span>
         </div>
     </section>
 
@@ -59,6 +60,30 @@
             </div>
 
             <div class="unserved-field">
+                <label for="unserved-stock-filter">Stock</label>
+                <div class="unserved-input-wrap">
+                    <i data-lucide="boxes"></i>
+                    <select id="unserved-stock-filter">
+                        <option value="all">All</option>
+                        <option value="without">Without Stock</option>
+                        <option value="with">With Stock</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="unserved-field">
+                <label for="unserved-rush-filter">Rush</label>
+                <div class="unserved-input-wrap">
+                    <i data-lucide="zap"></i>
+                    <select id="unserved-rush-filter">
+                        <option value="all">All</option>
+                        <option value="rush">Rush</option>
+                        <option value="not-rush">Not Rush</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="unserved-field">
                 <label for="unserved-date-type">Date</label>
                 <div class="unserved-input-wrap">
                     <i data-lucide="calendar-range"></i>
@@ -79,27 +104,27 @@
         <div class="unserved-actions">
             <div class="unserved-live-hint">
                 <i data-lucide="database"></i>
-                <span>Preview refreshes from the database using your selected filters.</span>
+                <span>Preview shows only the remaining quantity of Partial Sales Notes.</span>
             </div>
             <button id="unserved-print-btn" type="button" class="unserved-print-button">
                 <i data-lucide="printer"></i>
-                <span>Print</span>
+                <span>Print Partial Only</span>
             </button>
         </div>
     </section>
 
     <section class="unserved-summary-grid">
         <article>
-            <span>Open / Partial Notes</span>
+            <span>Partial Notes</span>
             <strong id="unserved-note-count">0</strong>
         </article>
         <article>
             <span>Unserved Lines</span>
             <strong id="unserved-line-count">0</strong>
         </article>
-        <article>
-            <span>Total Unserved Qty</span>
-            <strong id="unserved-qty-count">0</strong>
+        <article id="unserved-with-stock-card" class="unserved-summary-action" role="button" tabindex="0" title="Show only unserved items that currently have stock">
+            <span>Unserved With Stocks</span>
+            <strong id="unserved-with-stock-count">0</strong>
         </article>
         <article>
             <span>Selected Period</span>
@@ -118,20 +143,26 @@
         <div class="unserved-table-scroll">
             <table class="unserved-table">
                 <thead>
-                    <tr>
-                        <th>S.O. No.</th>
-                        <th>Product Code</th>
-                        <th>Part No.</th>
-                        <th>Description</th>
-                        <th class="num">On Hand</th>
-                        <th class="num">Served</th>
-                        <th class="num">Unserved</th>
-                        <th class="num">Unit Price</th>
-                        <th class="num">Total Amount</th>
+                    <tr class="unserved-main-head">
+                        <th>S.O. No.</th><th>Name</th><th>Date</th><th>Product Code</th><th>Part No.</th><th>Description</th>
+                        <th class="num">On Hand</th><th class="num">Served</th><th class="num">Unserved</th><th class="num">Unit Price</th><th class="num">Total Amount</th>
+                    </tr>
+                    <tr class="unserved-column-search-row">
+                        <th><input data-column-search="so_no" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="customer" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="order_date" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="product_code" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="part_number" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="description" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="on_hand" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="served" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="unserved" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="unit_price" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="total_amount" type="text" placeholder="Search"></th>
                     </tr>
                 </thead>
                 <tbody id="unserved-table-body">
-                    <tr><td colspan="9" class="unserved-empty">Loading unserved details…</td></tr>
+                    <tr><td colspan="11" class="unserved-empty">Loading unserved details…</td></tr>
                 </tbody>
             </table>
         </div>

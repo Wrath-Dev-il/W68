@@ -30383,3 +30383,22 @@ Route::get('/special/ai/slow-moving-products/export', function (Request $request
 // Shopee Authorization Routes
 Route::get('/shopee/redirect', [App\Http\Controllers\ShopeeAuthController::class, 'redirectToShopee']);
 Route::get('/shopee/callback', [App\Http\Controllers\ShopeeAuthController::class, 'handleCallback']);
+
+
+/*
+|--------------------------------------------------------------------------
+| W68_UNSERVED_ADMIN_REGULAR_ROUTES_20260918
+|--------------------------------------------------------------------------
+| Existing Special route remains unchanged.
+*/
+foreach (['admin', 'regular'] as $w68UnservedPrefix) {
+    \Illuminate\Support\Facades\Route::prefix($w68UnservedPrefix)
+        ->name($w68UnservedPrefix . '.')
+        ->group(function () {
+            \Illuminate\Support\Facades\Route::get('/sales/unserved-report', [\App\Http\Controllers\Special\UnservedReportController::class, 'index'])->name('unserved-report');
+            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/customers', [\App\Http\Controllers\Special\UnservedReportController::class, 'customers'])->name('unserved-report.customers');
+            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/salesmen', [\App\Http\Controllers\Special\UnservedReportController::class, 'salesmen'])->name('unserved-report.salesmen');
+            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/data', [\App\Http\Controllers\Special\UnservedReportController::class, 'data'])->name('unserved-report.data');
+            \Illuminate\Support\Facades\Route::get('/sales/unserved-report/print', [\App\Http\Controllers\Special\UnservedReportController::class, 'print'])->name('unserved-report.print');
+        });
+}

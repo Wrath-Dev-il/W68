@@ -11,6 +11,8 @@
 
     const customerInput = document.getElementById('unserved-customer');
     const salesmanInput = document.getElementById('unserved-salesman');
+    const stockFilter = document.getElementById('unserved-stock-filter');
+    const rushFilter = document.getElementById('unserved-rush-filter');
     const dateType = document.getElementById('unserved-date-type');
     const dateFields = document.getElementById('unserved-date-fields');
     const printBtn = document.getElementById('unserved-print-btn');
@@ -18,7 +20,8 @@
     const loadingLabel = document.getElementById('unserved-loading-label');
     const noteCount = document.getElementById('unserved-note-count');
     const lineCount = document.getElementById('unserved-line-count');
-    const qtyCount = document.getElementById('unserved-qty-count');
+    const withStockCount = document.getElementById('unserved-with-stock-count');
+    const withStockCard = document.getElementById('unserved-with-stock-card');
     const periodLabel = document.getElementById('unserved-period-label');
     const toast = document.getElementById('unserved-toast');
 
@@ -30,6 +33,8 @@
     const currentMonth = `${y}-${m}`;
     let previewTimer = null;
     let previewAbort = null;
+    let latestRows = [];
+    // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
     const fmtQty = value => Number(value || 0).toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -75,16 +80,57 @@
         const params = new URLSearchParams();
         params.set('customer', customerInput.value.trim());
         params.set('salesman', salesmanInput.value.trim());
+        params.set('stock_filter', stockFilter.value || 'all');
+        params.set('rush_filter', rushFilter.value || 'all');
         params.set('date_type', dateType.value);
         dateFields.querySelectorAll('[data-period-field]').forEach(field => params.set(field.dataset.periodField, field.value));
         return params;
+    }
+
+    function searchableValue(row, key) {
+        const raw = row?.[key] ?? '';
+        if (['on_hand', 'served', 'unserved'].includes(key)) return `${raw} ${fmtQty(raw)}`.toLowerCase();
+        if (['unit_price', 'total_amount'].includes(key)) return `${raw} ${fmtMoney(raw)}`.toLowerCase();
+        return String(raw).toLowerCase();
+    }
+
+    function visibleRows() {
+        const searches = Array.from(document.querySelectorAll('[data-column-search]'))
+            .map(input => ({key: input.dataset.columnSearch, value: input.value.trim().toLowerCase()}))
+            .filter(entry => entry.value !== '');
+        if (!searches.length) return latestRows;
+        return latestRows.filter(row => searches.every(entry => searchableValue(row, entry.key).includes(entry.value)));
+    }
+
+    function renderRows() {
+        const rows = visibleRows();
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">No unserved items found for the selected filters/searches.</td></tr>';
+        } else {
+            tbody.innerHTML = rows.map(row => `<tr class="${row.is_rush ? 'unserved-rush-row' : ''}">
+                <td>${escapeHtml(row.so_no)}</td>
+                <td>${escapeHtml(row.customer)}</td>
+                <td>${escapeHtml(row.order_date)}</td>
+                <td>${escapeHtml(row.product_code)}</td>
+                <td>${escapeHtml(row.part_number)}</td>
+                <td>${escapeHtml(row.description)}</td>
+                <td class="num">${fmtQty(row.on_hand)}</td>
+                <td class="num">${fmtQty(row.served)}</td>
+                <td class="num unserved-value">${fmtQty(row.unserved)}</td>
+                <td class="num">${fmtMoney(row.unit_price)}</td>
+                <td class="num">${fmtMoney(row.total_amount)}</td>
+            </tr>`).join('');
+        }
+        loadingLabel.textContent = rows.length === latestRows.length
+            ? `${rows.length.toLocaleString()} line${rows.length === 1 ? '' : 's'}`
+            : `${rows.length.toLocaleString()} of ${latestRows.length.toLocaleString()} lines`;
     }
 
     async function loadPreview() {
         if (previewAbort) previewAbort.abort();
         previewAbort = new AbortController();
         loadingLabel.textContent = 'Loading…';
-        tbody.innerHTML = '<tr><td colspan="9" class="unserved-empty">Loading unserved details…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">Loading Partial unserved details…</td></tr>';
 
         try {
             const response = await fetch(`${routes.data}?${collectParams().toString()}`, {
@@ -94,36 +140,20 @@
             const payload = await response.json().catch(() => null);
             if (!response.ok || !payload?.success) throw new Error(payload?.message || `Unable to load report (${response.status}).`);
 
-            noteCount.textContent = Number(payload.summary?.open_partial_notes || 0).toLocaleString();
+            noteCount.textContent = Number(payload.summary?.partial_notes ?? payload.summary?.open_partial_notes ?? 0).toLocaleString();
             lineCount.textContent = Number(payload.summary?.line_items || 0).toLocaleString();
-            qtyCount.textContent = fmtQty(payload.summary?.total_unserved || 0);
+            withStockCount.textContent = fmtQty(payload.summary?.unserved_with_stock_qty || 0);
             periodLabel.textContent = payload.period_label || '—';
-
-            const rows = Array.isArray(payload.rows) ? payload.rows : [];
-            if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="unserved-empty">No unserved items found for the selected filters.</td></tr>';
-            } else {
-                tbody.innerHTML = rows.map(row => `<tr>
-                    <td>${escapeHtml(row.so_no)}</td>
-                    <td>${escapeHtml(row.product_code)}</td>
-                    <td>${escapeHtml(row.part_number)}</td>
-                    <td>${escapeHtml(row.description)}</td>
-                    <td class="num">${fmtQty(row.on_hand)}</td>
-                    <td class="num">${fmtQty(row.served)}</td>
-                    <td class="num unserved-value">${fmtQty(row.unserved)}</td>
-                    <td class="num">${fmtMoney(row.unit_price)}</td>
-                    <td class="num">${fmtMoney(row.total_amount)}</td>
-                </tr>`).join('');
-            }
-            loadingLabel.textContent = `${rows.length.toLocaleString()} line${rows.length === 1 ? '' : 's'}`;
+            latestRows = Array.isArray(payload.rows) ? payload.rows : [];
+            renderRows();
         } catch (error) {
             if (error.name === 'AbortError') return;
+            latestRows = [];
             loadingLabel.textContent = 'Error';
-            tbody.innerHTML = `<tr><td colspan="9" class="unserved-empty">${escapeHtml(error.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="unserved-empty">${escapeHtml(error.message)}</td></tr>`;
             showToast(error.message);
         }
     }
-
     function schedulePreview() {
         clearTimeout(previewTimer);
         previewTimer = setTimeout(loadPreview, 350);
@@ -177,6 +207,12 @@
     setupCombobox(root.querySelector('[data-combobox="salesman"]'), salesmanInput, routes.salesmen);
 
     dateType.addEventListener('change', renderDateFields);
+    stockFilter.addEventListener('change', schedulePreview);
+    rushFilter.addEventListener('change', schedulePreview);
+    document.querySelectorAll('[data-column-search]').forEach(input => input.addEventListener('input', renderRows));
+    const showWithStock = () => { stockFilter.value = 'with'; schedulePreview(); };
+    withStockCard.addEventListener('click', showWithStock);
+    withStockCard.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showWithStock(); } });
     printBtn.addEventListener('click', () => {
         const url = `${routes.print}?${collectParams().toString()}`;
         window.open(url, '_blank', 'noopener');

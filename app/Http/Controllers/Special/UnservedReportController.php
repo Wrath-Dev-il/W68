@@ -15,34 +15,43 @@ class UnservedReportController extends Controller
 {
     public function index(): View
     {
-        $user = session('user');
-        if (!$user) {
-            abort(401);
-        }
-        if (is_array($user)) {
-            $user = (object) $user;
-        }
-        if ((int) ($user->account_type ?? 0) !== 3) {
-            abort(403);
-        }
+        // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
+        $user = $this->authorizeReportUser();
+        $accountType = (int) ($user->account_type ?? 0);
+
+        $unservedLayout = match ($accountType) {
+            1 => 'partials.admin.admin_sidebar_navbar',
+            2 => 'partials.user_account.user_sidebar_navbar',
+            3 => 'partials.special_user.special_sidebar_navbar',
+            default => abort(403),
+        };
+
+        $unservedRoutePrefix = match ($accountType) {
+            1 => 'admin',
+            2 => 'regular',
+            3 => 'special',
+            default => abort(403),
+        };
 
         return view('Special_User.sales.unserved-report', [
             'user' => $user,
-            'account_type' => 3,
+            'account_type' => $accountType,
             'page_title' => 'Unserved Details',
+            'unservedLayout' => $unservedLayout,
+            'unservedRoutePrefix' => $unservedRoutePrefix,
         ]);
     }
 
     public function customers(Request $request): JsonResponse
     {
-        $this->authorizeSpecialUser();
+        $this->authorizeReportUser();
 
         $search = trim((string) $request->query('q', ''));
 
         $query = DB::connection('sales')
             ->table('sales_notes')
             ->select('customer_name')
-            ->whereIn('status', ['Open', 'Partial'])
+            ->where('status', 'Partial')
             ->whereNotNull('customer_name')
             ->where('customer_name', '!=', '');
 
@@ -63,14 +72,14 @@ class UnservedReportController extends Controller
 
     public function salesmen(Request $request): JsonResponse
     {
-        $this->authorizeSpecialUser();
+        $this->authorizeReportUser();
 
         $search = trim((string) $request->query('q', ''));
 
         $query = DB::connection('sales')
             ->table('sales_notes')
             ->select('salesman')
-            ->whereIn('status', ['Open', 'Partial'])
+            ->where('status', 'Partial')
             ->whereNotNull('salesman')
             ->where('salesman', '!=', '');
 
@@ -91,7 +100,7 @@ class UnservedReportController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $this->authorizeSpecialUser();
+        $this->authorizeReportUser();
 
         try {
             $report = $this->buildReport($request);
@@ -114,7 +123,7 @@ class UnservedReportController extends Controller
 
     public function print(Request $request): View
     {
-        $this->authorizeSpecialUser();
+        $this->authorizeReportUser();
 
         $report = $this->buildReport($request);
 
@@ -138,7 +147,7 @@ class UnservedReportController extends Controller
 
         $notesQuery = DB::connection('sales')
             ->table('sales_notes')
-            ->whereIn('status', ['Open', 'Partial']);
+            ->where('status', 'Partial');
 
         // Unserved is a backlog/as-of report. A note created before the selected
         // period can still have remaining items during that period, so do not
@@ -165,6 +174,7 @@ class UnservedReportController extends Controller
                 'order_date',
                 'salesman',
                 'status',
+                'is_rush',
             ]);
 
         $customerDetails = $this->resolveCustomerDetails($notes, $customer);
@@ -264,7 +274,8 @@ class UnservedReportController extends Controller
                 continue;
             }
 
-            $qty = (float) ($item->quantity ?? 0) + (float) ($item->additional_qty ?? 0);
+            // additional_qty is separate; do not count it as ordered/actual qty.
+            $qty = max(0, (float) ($item->quantity ?? 0));
             $bucketKey = (string) $productId;
             $lineUnitPrice = (float) ($item->unit_price ?? 0);
             $lineSubtotal = (float) ($item->subtotal ?? 0);
@@ -333,6 +344,7 @@ class UnservedReportController extends Controller
                     'salesman' => (string) ($note->salesman ?? ''),
                     'order_date' => (string) ($note->order_date ?? ''),
                     'status' => (string) ($note->status ?? ''),
+                    'is_rush' => (bool) ($note->is_rush ?? false),
                 ];
             }
         }
@@ -351,6 +363,32 @@ class UnservedReportController extends Controller
             ];
         });
 
+        $rushFilter = strtolower(trim((string) $request->input('rush_filter', 'all')));
+        if (!in_array($rushFilter, ['all', 'rush', 'not-rush'], true)) {
+            $rushFilter = 'all';
+        }
+        if ($rushFilter === 'rush') {
+            $rows = array_values(array_filter($rows, fn (array $row) => !empty($row['is_rush'])));
+        } elseif ($rushFilter === 'not-rush') {
+            $rows = array_values(array_filter($rows, fn (array $row) => empty($row['is_rush'])));
+        }
+
+        $withStockRows = array_values(array_filter(
+            $rows,
+            fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0
+        ));
+        $unservedWithStockLines = count($withStockRows);
+        $unservedWithStockQty = array_sum(array_column($withStockRows, 'unserved'));
+
+        $stockFilter = strtolower(trim((string) $request->input('stock_filter', 'all')));
+        if (!in_array($stockFilter, ['all', 'with', 'without'], true)) {
+            $stockFilter = 'all';
+        }
+        if ($stockFilter === 'with') {
+            $rows = array_values(array_filter($rows, fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0));
+        } elseif ($stockFilter === 'without') {
+            $rows = array_values(array_filter($rows, fn (array $row) => (float) ($row['on_hand'] ?? 0) <= 0));
+        }
         $totalUnserved = array_sum(array_column($rows, 'unserved'));
         $totalAmount = array_sum(array_column($rows, 'total_amount'));
         $customerGroups = $this->buildCustomerGroups($rows, $notes);
@@ -362,8 +400,11 @@ class UnservedReportController extends Controller
             'customer_details' => $customerDetails,
             'customer_groups' => $customerGroups,
             'summary' => [
+                'partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
                 'open_partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
                 'line_items' => count($rows),
+                'unserved_with_stock_lines' => $unservedWithStockLines,
+                'unserved_with_stock_qty' => $unservedWithStockQty,
                 'total_unserved' => $totalUnserved,
                 'total_amount' => $totalAmount,
             ],
@@ -674,15 +715,18 @@ class UnservedReportController extends Controller
             ],
             'customer_groups' => [],
             'summary' => [
+                'partial_notes' => 0,
                 'open_partial_notes' => 0,
                 'line_items' => 0,
+                'unserved_with_stock_lines' => 0,
+                'unserved_with_stock_qty' => 0,
                 'total_unserved' => 0,
                 'total_amount' => 0,
             ],
         ];
     }
 
-    private function authorizeSpecialUser(): void
+    private function authorizeReportUser(): object
     {
         $user = session('user');
         if (!$user) {
@@ -691,8 +735,24 @@ class UnservedReportController extends Controller
         if (is_array($user)) {
             $user = (object) $user;
         }
-        if ((int) ($user->account_type ?? 0) !== 3) {
+
+        $accountType = (int) ($user->account_type ?? 0);
+        if (!in_array($accountType, [1, 2, 3], true)) {
             abort(403);
         }
+
+        $expectedRoutePrefix = match ($accountType) {
+            1 => 'admin.unserved-report',
+            2 => 'regular.unserved-report',
+            3 => 'special.unserved-report',
+            default => '',
+        };
+
+        $routeName = (string) (request()->route()?->getName() ?? '');
+        if ($routeName !== '' && !str_starts_with($routeName, $expectedRoutePrefix)) {
+            abort(403);
+        }
+
+        return $user;
     }
 }

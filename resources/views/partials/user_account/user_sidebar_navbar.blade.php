@@ -317,14 +317,14 @@
 
                 <!-- REPORTS (DROPDOWN) -->
                 <div class="menu-dropdown">
-                    <button onclick="toggleDropdown('dropdown-reports', this)" class="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-maroon-800 {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'bg-maroon-800 text-white shadow-inner' : 'text-gray-100' }} hover:text-white transition-all group" title="Reports">
+                    <button onclick="toggleDropdown('dropdown-reports', this)" class="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-maroon-800 {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.unserved-report', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'bg-maroon-800 text-white shadow-inner' : 'text-gray-100' }} hover:text-white transition-all group" title="Reports">
                         <div class="flex items-center space-x-3">
                             <i data-lucide="trending-up" class="w-5 h-5 text-goldlining-400 group-hover:scale-110 transition-transform flex-shrink-0"></i>
-                            <span class="sidebar-text text-sm whitespace-nowrap {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'font-bold text-goldlining-400' : '' }}">Reports</span>
+                            <span class="sidebar-text text-sm whitespace-nowrap {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.unserved-report', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'font-bold text-goldlining-400' : '' }}">Reports</span>
                         </div>
-                        <i data-lucide="chevron-down" class="dropdown-chevron w-4 h-4 text-goldlining-500 rotate-transition sidebar-text {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'rotate-180' : '' }}"></i>
+                        <i data-lucide="chevron-down" class="dropdown-chevron w-4 h-4 text-goldlining-500 rotate-transition sidebar-text {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.unserved-report', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'rotate-180' : '' }}"></i>
                     </button>
-                    <div id="dropdown-reports" class="submenu-transition overflow-hidden bg-maroon-950 bg-opacity-40 rounded-md mt-1 pl-4 space-y-1" style="{{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'max-height: 500px;' : 'max-height: 0px;' }}">
+                    <div id="dropdown-reports" class="submenu-transition overflow-hidden bg-maroon-950 bg-opacity-40 rounded-md mt-1 pl-4 space-y-1" style="{{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.inventory-reports', 'regular.unserved-report', 'regular.accounts-receivable', 'regular.cost-report', 'regular.top-products']) ? 'max-height: 500px;' : 'max-height: 0px;' }}">
                         <a href="{{ route('regular.sales-report') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'regular.sales-report' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-sales">
                             <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'regular.sales-report' ? 'text-maroon-950' : '' }}"></i>
                             <span>Account Receivable</span>
@@ -332,6 +332,11 @@
                         <a href="{{ route('regular.inventory-reports') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'regular.inventory-reports' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-inv">
                             <i data-lucide="package-search" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'regular.inventory-reports' ? 'text-maroon-950' : '' }}"></i>
                             <span>Inventory Reports</span>
+                        </a>
+                        <!-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 -->
+                        <a href="{{ route('regular.unserved-report') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'regular.unserved-report' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-unserved">
+                            <i data-lucide="arrow-down-left" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'regular.unserved-report' ? 'text-maroon-950' : '' }}"></i>
+                            <span>Unserved Details</span>
                         </a>
                         
                         <a href="{{ route('regular.accounts-receivable') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'regular.accounts-receivable' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-ar">
@@ -747,6 +752,7 @@
                 <!-- PAGE: REPORTS -> SALES REPORTS -->
                 <div id="page-rep-sales" class="page-view space-y-6 {{ in_array(Route::currentRouteName(), ['regular.sales-report', 'regular.top-products']) ? '' : 'hidden' }}">
                     @yield('sales_report_content')
+            @yield('unserved_report_content')
                 </div>
                 <!-- PAGE: REPORTS -> ACCOUNTS RECEIVABLE -->
                 <div id="page-rep-ar" class="page-view space-y-6 {{ Route::currentRouteName() === 'regular.accounts-receivable' ? '' : 'hidden' }}">
