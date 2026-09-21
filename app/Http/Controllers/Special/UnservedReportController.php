@@ -160,7 +160,7 @@ class UnservedReportController extends Controller
             ->orderByDesc('sl.date')
             ->orderByDesc('sl.id')
             ->orderByDesc('sli.id')
-            ->limit(20)
+            ->limit(1)
             ->get([
                 'sli.id',
                 'sli.quantity',
@@ -245,7 +245,7 @@ class UnservedReportController extends Controller
             ->orderByDesc('date')
             ->orderByRaw("COALESCE(created_at, '1970-01-01 00:00:00') DESC")
             ->orderByDesc('id')
-            ->limit(20)
+            ->limit(1)
             ->get([
                 'date',
                 'transaction_number',

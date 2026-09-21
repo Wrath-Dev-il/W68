@@ -214,11 +214,7 @@
             <div id="unserved-history-content" class="unserved-history-content">
                 <section class="unserved-history-section">
                     <div class="unserved-history-section-title">
-                        <div>
-                            <span class="unserved-card-kicker">Core4 Ledger</span>
-                            <h4>Latest Purchase</h4>
-                        </div>
-                        <span>Latest 20</span>
+                        <h4>LATEST PURCHASE TABLE</h4>
                     </div>
                     <div class="unserved-history-scroll">
                         <table class="unserved-history-table">
@@ -241,11 +237,7 @@
 
                 <section class="unserved-history-section">
                     <div class="unserved-history-section-title">
-                        <div>
-                            <span class="unserved-card-kicker">Product Ledger OUT</span>
-                            <h4>Latest Sales</h4>
-                        </div>
-                        <span>Latest 20</span>
+                        <h4>LATEST SALES TABLE</h4>
                     </div>
                     <div class="unserved-history-scroll">
                         <table class="unserved-history-table">
