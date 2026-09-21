@@ -6,6 +6,7 @@
         customers: root.dataset.customersUrl,
         salesmen: root.dataset.salesmenUrl,
         data: root.dataset.dataUrl,
+        productHistory: root.dataset.productHistoryUrl,
         print: root.dataset.printUrl,
     };
 
@@ -27,6 +28,14 @@
     const withStockCard = document.getElementById('unserved-with-stock-card');
     const periodLabel = document.getElementById('unserved-period-label');
     const toast = document.getElementById('unserved-toast');
+    const historyModal = document.getElementById('unserved-history-modal');
+    const historyClose = document.getElementById('unserved-history-close');
+    const historyTitle = document.getElementById('unserved-history-title');
+    const historyProductLabel = document.getElementById('unserved-history-product-label');
+    const historyLoading = document.getElementById('unserved-history-loading');
+    const historyContent = document.getElementById('unserved-history-content');
+    const historyPurchaseBody = document.getElementById('unserved-history-purchase-body');
+    const historySalesBody = document.getElementById('unserved-history-sales-body');
 
     const now = new Date();
     const y = now.getFullYear();
@@ -122,7 +131,7 @@
                     ? `<span class="unserved-status-tag ${statusClass}">${escapeHtml(status)}</span>`
                     : '';
 
-                return `<tr class="${row.is_rush ? 'unserved-rush-row' : ''}">
+                return `<tr class="${row.is_rush ? 'unserved-rush-row' : ''} unserved-history-row" data-product-id="${Number(row.product_id || 0)}" tabindex="0" title="Click to view latest product history">
                     <td>
                         <div class="unserved-so-cell">
                             <span class="unserved-so-number">${escapeHtml(row.so_no)}</span>
@@ -177,6 +186,90 @@
             showToast(error.message);
         }
     }
+
+    function closeProductHistory() {
+        if (!historyModal) return;
+        historyModal.classList.add('hidden');
+        historyModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('unserved-modal-open');
+    }
+
+    function historyEmpty(colspan, message) {
+        return `<tr><td colspan="${colspan}" class="unserved-history-empty">${escapeHtml(message)}</td></tr>`;
+    }
+
+    function renderPurchaseHistory(rows) {
+        if (!historyPurchaseBody) return;
+        if (!Array.isArray(rows) || !rows.length) {
+            historyPurchaseBody.innerHTML = historyEmpty(6, 'No purchase history found for this product.');
+            return;
+        }
+
+        historyPurchaseBody.innerHTML = rows.map(row => `<tr>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.po_no || '-')}</td>
+            <td>${escapeHtml(row.supplier_invoice || '-')}</td>
+            <td>${escapeHtml(row.supplier_name || '-')}</td>
+            <td class="num">${fmtQty(row.qty)}</td>
+            <td class="num">${fmtMoney(row.unit_cost)}</td>
+        </tr>`).join('');
+    }
+
+    function renderSalesHistory(rows) {
+        if (!historySalesBody) return;
+        if (!Array.isArray(rows) || !rows.length) {
+            historySalesBody.innerHTML = historyEmpty(5, 'No qualifying OUT history found for this product.');
+            return;
+        }
+
+        historySalesBody.innerHTML = rows.map(row => `<tr>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.sales_invoice || '-')}</td>
+            <td>${escapeHtml(row.customer_name || '-')}</td>
+            <td class="num">${fmtQty(row.qty)}</td>
+            <td class="num">${fmtMoney(row.unit_price)}</td>
+        </tr>`).join('');
+    }
+
+    async function openProductHistory(productId) {
+        const id = Number(productId || 0);
+        if (!id || !routes.productHistory || !historyModal) return;
+
+        historyModal.classList.remove('hidden');
+        historyModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('unserved-modal-open');
+        historyTitle.textContent = 'Product History';
+        historyProductLabel.textContent = 'Loading product...';
+        historyLoading.classList.remove('hidden');
+        historyContent.classList.add('is-loading');
+        historyPurchaseBody.innerHTML = historyEmpty(6, 'Loading latest purchase history...');
+        historySalesBody.innerHTML = historyEmpty(5, 'Loading latest sales history...');
+
+        try {
+            const response = await fetch(`${routes.productHistory}?product_id=${encodeURIComponent(id)}`, {
+                headers: {'Accept':'application/json'},
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload?.success) {
+                throw new Error(payload?.message || `Unable to load product history (${response.status}).`);
+            }
+
+            const product = payload.product || {};
+            historyTitle.textContent = product.product_code || 'Product History';
+            historyProductLabel.textContent = [product.part_number, product.description].filter(Boolean).join(' / ') || '-';
+            renderPurchaseHistory(payload.purchase_history);
+            renderSalesHistory(payload.sales_history);
+        } catch (error) {
+            historyPurchaseBody.innerHTML = historyEmpty(6, error.message);
+            historySalesBody.innerHTML = historyEmpty(5, error.message);
+            showToast(error.message);
+        } finally {
+            historyLoading.classList.add('hidden');
+            historyContent.classList.remove('is-loading');
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+
     function schedulePreview() {
         clearTimeout(previewTimer);
         previewTimer = setTimeout(loadPreview, 350);
@@ -242,6 +335,26 @@
         window.open(url, '_blank', 'noopener');
     });
 
+
+    tbody.addEventListener('click', event => {
+        const row = event.target.closest('tr[data-product-id]');
+        if (!row) return;
+        openProductHistory(row.dataset.productId);
+    });
+    tbody.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('tr[data-product-id]');
+        if (!row) return;
+        event.preventDefault();
+        openProductHistory(row.dataset.productId);
+    });
+    historyClose?.addEventListener('click', closeProductHistory);
+    historyModal?.querySelector('[data-history-close]')?.addEventListener('click', closeProductHistory);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && historyModal && !historyModal.classList.contains('hidden')) {
+            closeProductHistory();
+        }
+    });
     renderDateFields();
     if (window.lucide) window.lucide.createIcons();
 })();

@@ -12,6 +12,7 @@
      data-customers-url="{{ route($unservedRoutePrefix . '.unserved-report.customers') }}"
      data-salesmen-url="{{ route($unservedRoutePrefix . '.unserved-report.salesmen') }}"
      data-data-url="{{ route($unservedRoutePrefix . '.unserved-report.data') }}"
+     data-product-history-url="{{ route($unservedRoutePrefix . '.unserved-report.product-history') }}"
      data-print-url="{{ route($unservedRoutePrefix . '.unserved-report.print') }}">
 
     <section class="unserved-hero">
@@ -190,6 +191,82 @@
             </table>
         </div>
     </section>
+
+
+    <div id="unserved-history-modal" class="unserved-history-modal hidden" aria-hidden="true">
+        <div class="unserved-history-backdrop" data-history-close></div>
+        <section class="unserved-history-dialog" role="dialog" aria-modal="true" aria-labelledby="unserved-history-title">
+            <header class="unserved-history-header">
+                <div>
+                    <span class="unserved-card-kicker">Latest Product History</span>
+                    <h3 id="unserved-history-title">Product History</h3>
+                    <p id="unserved-history-product-label">-</p>
+                </div>
+                <button id="unserved-history-close" type="button" class="unserved-history-close" aria-label="Close product history">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+
+            <div id="unserved-history-loading" class="unserved-history-loading hidden">
+                Loading latest purchase and sales history...
+            </div>
+
+            <div id="unserved-history-content" class="unserved-history-content">
+                <section class="unserved-history-section">
+                    <div class="unserved-history-section-title">
+                        <div>
+                            <span class="unserved-card-kicker">Core4 Ledger</span>
+                            <h4>Latest Purchase</h4>
+                        </div>
+                        <span>Latest 20</span>
+                    </div>
+                    <div class="unserved-history-scroll">
+                        <table class="unserved-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>P.O No.</th>
+                                    <th>Supplier Invoice</th>
+                                    <th>Supplier Name</th>
+                                    <th class="num">Qty</th>
+                                    <th class="num">Unit Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unserved-history-purchase-body">
+                                <tr><td colspan="6" class="unserved-history-empty">Click an item to load purchase history.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="unserved-history-section">
+                    <div class="unserved-history-section-title">
+                        <div>
+                            <span class="unserved-card-kicker">Product Ledger OUT</span>
+                            <h4>Latest Sales</h4>
+                        </div>
+                        <span>Latest 20</span>
+                    </div>
+                    <div class="unserved-history-scroll">
+                        <table class="unserved-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Sales Invoice</th>
+                                    <th>Customer Name</th>
+                                    <th class="num">Qty</th>
+                                    <th class="num">Unit Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unserved-history-sales-body">
+                                <tr><td colspan="5" class="unserved-history-empty">Click an item to load sales history.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </div>
 
     <div id="unserved-toast" class="unserved-toast hidden" role="status">
         <i data-lucide="circle-alert"></i>

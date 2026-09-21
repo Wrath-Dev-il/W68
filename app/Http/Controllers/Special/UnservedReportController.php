@@ -124,6 +124,165 @@ class UnservedReportController extends Controller
         }
     }
 
+    public function productHistory(Request $request): JsonResponse
+    {
+        $this->authorizeReportUser();
+
+        $productId = (int) $request->query('product_id', 0);
+        if ($productId <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A valid product is required.',
+            ], 422);
+        }
+
+        $product = DB::connection('masterlist')
+            ->table('products')
+            ->where('id', $productId)
+            ->first(['id', 'product_code', 'part_number', 'description']);
+
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found.',
+            ], 404);
+        }
+
+        $purchaseLedgerRows = DB::connection('ledger')
+            ->table('supplier_ledger_items as sli')
+            ->join('supplier_ledgers as sl', 'sl.id', '=', 'sli.supplier_ledger_id')
+            ->where('sli.product_id', $productId)
+            ->where('sl.module_type', 'Purchase Order')
+            ->where(function ($query) {
+                $query->where('sli.actual_quantity', '>', 0)
+                    ->orWhere('sli.quantity', '>', 0);
+            })
+            ->orderByDesc('sl.date')
+            ->orderByDesc('sl.id')
+            ->orderByDesc('sli.id')
+            ->limit(20)
+            ->get([
+                'sli.id',
+                'sli.quantity',
+                'sli.actual_quantity',
+                'sli.unit_price',
+                'sl.supplier_id',
+                'sl.source_purchase_order_id',
+                'sl.date',
+                'sl.transaction_code',
+                'sl.reference_no',
+            ]);
+
+        $supplierIds = $purchaseLedgerRows
+            ->pluck('supplier_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $supplierNames = empty($supplierIds)
+            ? collect()
+            : DB::connection('masterlist')
+                ->table('suppliers')
+                ->whereIn('id', $supplierIds)
+                ->pluck('name', 'id');
+
+        $purchaseOrderIds = $purchaseLedgerRows
+            ->pluck('source_purchase_order_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $supplierInvoices = empty($purchaseOrderIds)
+            ? collect()
+            : DB::connection('purchase')
+                ->table('purchase_orders')
+                ->whereIn('id', $purchaseOrderIds)
+                ->get(['id', 'supplier_invoice_number'])
+                ->mapWithKeys(fn ($row) => [
+                    (int) $row->id => trim((string) ($row->supplier_invoice_number ?? '')),
+                ]);
+
+        $purchaseHistory = $purchaseLedgerRows
+            ->map(function ($row) use ($supplierNames, $supplierInvoices) {
+                $actualQty = (float) ($row->actual_quantity ?? 0);
+                $orderedQty = (float) ($row->quantity ?? 0);
+                $purchaseOrderId = (int) ($row->source_purchase_order_id ?? 0);
+                $supplierId = (int) ($row->supplier_id ?? 0);
+
+                $supplierInvoice = trim((string) ($supplierInvoices->get($purchaseOrderId) ?? ''));
+                if ($supplierInvoice === '') {
+                    $supplierInvoice = trim((string) ($row->reference_no ?? ''));
+                }
+
+                return [
+                    'date' => (string) ($row->date ?? ''),
+                    'po_no' => trim((string) ($row->transaction_code ?? '')),
+                    'supplier_invoice' => $supplierInvoice,
+                    'supplier_name' => trim((string) ($supplierNames->get($supplierId) ?? '')),
+                    'qty' => $actualQty > 0 ? $actualQty : $orderedQty,
+                    'unit_cost' => (float) ($row->unit_price ?? 0),
+                ];
+            })
+            ->values();
+
+        $salesHistory = DB::connection('ledger')
+            ->table('product_ledgers')
+            ->where('product_id', $productId)
+            ->where('quantity_out', '>', 0)
+            ->whereRaw("UPPER(COALESCE(remarks, '')) NOT LIKE ?", ['%ADJUST%'])
+            ->whereRaw("UPPER(COALESCE(remarks, '')) NOT LIKE ?", ['%ADJUT%'])
+            ->whereRaw("UPPER(COALESCE(remarks, '')) NOT LIKE ?", ['%PURRTN%'])
+            ->whereRaw("UPPER(COALESCE(remarks, '')) NOT LIKE ?", ['%PURCHRTN%'])
+            ->whereRaw("UPPER(COALESCE(remarks, '')) NOT LIKE ?", ['%PURCHASE RETURN%'])
+            ->whereRaw(
+                "UPPER(TRIM(COALESCE(remarks, ''))) NOT IN (?, ?, ?, ?, ?, ?)",
+                ['D', 'SO', 'XPNSEDIS', 'XPENSEDIS', 'CNSMTRTN', 'INTERCHANGE']
+            )
+            ->orderByDesc('date')
+            ->orderByRaw("COALESCE(created_at, '1970-01-01 00:00:00') DESC")
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get([
+                'date',
+                'transaction_number',
+                'reference_number',
+                'entity_name',
+                'quantity_out',
+                'price',
+            ])
+            ->map(function ($row) {
+                $invoice = trim((string) ($row->reference_number ?? ''));
+                if ($invoice === '') {
+                    $invoice = trim((string) ($row->transaction_number ?? ''));
+                }
+
+                return [
+                    'date' => (string) ($row->date ?? ''),
+                    'sales_invoice' => $invoice,
+                    'customer_name' => trim((string) ($row->entity_name ?? '')),
+                    'qty' => (float) ($row->quantity_out ?? 0),
+                    'unit_price' => (float) ($row->price ?? 0),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'product' => [
+                'id' => (int) $product->id,
+                'product_code' => (string) ($product->product_code ?? ''),
+                'part_number' => (string) ($product->part_number ?? ''),
+                'description' => (string) ($product->description ?? ''),
+            ],
+            'purchase_history' => $purchaseHistory,
+            'sales_history' => $salesHistory,
+        ]);
+    }
+
     public function print(Request $request): View
     {
         $this->authorizeReportUser();
