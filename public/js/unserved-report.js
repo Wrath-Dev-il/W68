@@ -35,6 +35,7 @@
     let previewAbort = null;
     let latestRows = [];
     // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
+    // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
     const fmtQty = value => Number(value || 0).toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -89,6 +90,7 @@
 
     function searchableValue(row, key) {
         const raw = row?.[key] ?? '';
+        if (key === 'so_no') return `${raw} ${row?.status ?? ''}`.toLowerCase();
         if (['on_hand', 'served', 'unserved'].includes(key)) return `${raw} ${fmtQty(raw)}`.toLowerCase();
         if (['unit_price', 'total_amount'].includes(key)) return `${raw} ${fmtMoney(raw)}`.toLowerCase();
         return String(raw).toLowerCase();
@@ -107,19 +109,33 @@
         if (!rows.length) {
             tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">No unserved items found for the selected filters/searches.</td></tr>';
         } else {
-            tbody.innerHTML = rows.map(row => `<tr class="${row.is_rush ? 'unserved-rush-row' : ''}">
-                <td>${escapeHtml(row.so_no)}</td>
-                <td>${escapeHtml(row.customer)}</td>
-                <td>${escapeHtml(row.order_date)}</td>
-                <td>${escapeHtml(row.product_code)}</td>
-                <td>${escapeHtml(row.part_number)}</td>
-                <td>${escapeHtml(row.description)}</td>
-                <td class="num">${fmtQty(row.on_hand)}</td>
-                <td class="num">${fmtQty(row.served)}</td>
-                <td class="num unserved-value">${fmtQty(row.unserved)}</td>
-                <td class="num">${fmtMoney(row.unit_price)}</td>
-                <td class="num">${fmtMoney(row.total_amount)}</td>
-            </tr>`).join('');
+            tbody.innerHTML = rows.map(row => {
+                const status = String(row.status || '').trim();
+                const normalizedStatus = status.toLowerCase();
+                const statusClass = normalizedStatus === 'open' ? 'is-open' : 'is-partial';
+                const statusTag = status
+                    ? `<span class="unserved-status-tag ${statusClass}">${escapeHtml(status)}</span>`
+                    : '';
+
+                return `<tr class="${row.is_rush ? 'unserved-rush-row' : ''}">
+                    <td>
+                        <div class="unserved-so-cell">
+                            <span class="unserved-so-number">${escapeHtml(row.so_no)}</span>
+                            ${statusTag}
+                        </div>
+                    </td>
+                    <td>${escapeHtml(row.customer)}</td>
+                    <td>${escapeHtml(row.order_date)}</td>
+                    <td>${escapeHtml(row.product_code)}</td>
+                    <td>${escapeHtml(row.part_number)}</td>
+                    <td>${escapeHtml(row.description)}</td>
+                    <td class="num">${fmtQty(row.on_hand)}</td>
+                    <td class="num">${fmtQty(row.served)}</td>
+                    <td class="num unserved-value">${fmtQty(row.unserved)}</td>
+                    <td class="num">${fmtMoney(row.unit_price)}</td>
+                    <td class="num">${fmtMoney(row.total_amount)}</td>
+                </tr>`;
+            }).join('');
         }
         loadingLabel.textContent = rows.length === latestRows.length
             ? `${rows.length.toLocaleString()} line${rows.length === 1 ? '' : 's'}`
@@ -130,7 +146,7 @@
         if (previewAbort) previewAbort.abort();
         previewAbort = new AbortController();
         loadingLabel.textContent = 'Loading…';
-        tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">Loading Partial unserved details…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">Loading Open / Partial unserved details…</td></tr>';
 
         try {
             const response = await fetch(`${routes.data}?${collectParams().toString()}`, {
@@ -140,7 +156,7 @@
             const payload = await response.json().catch(() => null);
             if (!response.ok || !payload?.success) throw new Error(payload?.message || `Unable to load report (${response.status}).`);
 
-            noteCount.textContent = Number(payload.summary?.partial_notes ?? payload.summary?.open_partial_notes ?? 0).toLocaleString();
+            noteCount.textContent = Number(payload.summary?.open_partial_notes ?? payload.summary?.partial_notes ?? 0).toLocaleString();
             lineCount.textContent = Number(payload.summary?.line_items || 0).toLocaleString();
             withStockCount.textContent = fmtQty(payload.summary?.unserved_with_stock_qty || 0);
             periodLabel.textContent = payload.period_label || '—';

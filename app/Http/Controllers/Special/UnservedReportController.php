@@ -13,6 +13,7 @@ use Illuminate\View\View;
 
 class UnservedReportController extends Controller
 {
+    // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921: shared Open + Partial remaining-items report.
     public function index(): View
     {
         // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
@@ -51,7 +52,7 @@ class UnservedReportController extends Controller
         $query = DB::connection('sales')
             ->table('sales_notes')
             ->select('customer_name')
-            ->where('status', 'Partial')
+            ->whereIn('status', ['Open', 'Partial'])
             ->whereNotNull('customer_name')
             ->where('customer_name', '!=', '');
 
@@ -79,7 +80,7 @@ class UnservedReportController extends Controller
         $query = DB::connection('sales')
             ->table('sales_notes')
             ->select('salesman')
-            ->where('status', 'Partial')
+            ->whereIn('status', ['Open', 'Partial'])
             ->whereNotNull('salesman')
             ->where('salesman', '!=', '');
 
@@ -147,7 +148,7 @@ class UnservedReportController extends Controller
 
         $notesQuery = DB::connection('sales')
             ->table('sales_notes')
-            ->where('status', 'Partial');
+            ->whereIn('status', ['Open', 'Partial']);
 
         // Unserved is a backlog/as-of report. A note created before the selected
         // period can still have remaining items during that period, so do not
@@ -400,7 +401,11 @@ class UnservedReportController extends Controller
             'customer_details' => $customerDetails,
             'customer_groups' => $customerGroups,
             'summary' => [
-                'partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
+                'partial_notes' => collect($rows)
+                    ->filter(fn (array $row) => strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0)
+                    ->pluck('sales_note_id')
+                    ->unique()
+                    ->count(),
                 'open_partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
                 'line_items' => count($rows),
                 'unserved_with_stock_lines' => $unservedWithStockLines,

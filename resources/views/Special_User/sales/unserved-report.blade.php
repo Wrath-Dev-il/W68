@@ -1,5 +1,6 @@
 @extends($unservedLayout)
 {{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
+{-- W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921 --}
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
@@ -17,11 +18,11 @@
         <div>
             <p class="unserved-eyebrow">Sales Reports</p>
             <h2>Unserved Details</h2>
-            <p>Remaining quantities from <strong>Partial Sales Notes only</strong>. Additional quantity is not counted as ordered/actual quantity. ON HAND is read from the latest Product Ledger balance.</p>
+            <p>Remaining quantities from <strong>Open and Partial Sales Notes</strong>. Additional quantity is not counted as ordered/actual quantity. ON HAND is read from the latest Product Ledger balance.</p>
         </div>
         <div class="unserved-hero-badge">
             <i data-lucide="package-search"></i>
-            <span>Partial Only</span>
+            <span>Open + Partial</span>
         </div>
     </section>
 
@@ -104,18 +105,18 @@
         <div class="unserved-actions">
             <div class="unserved-live-hint">
                 <i data-lucide="database"></i>
-                <span>Preview shows only the remaining quantity of Partial Sales Notes.</span>
+                <span>Preview shows remaining quantities from Open and Partial Sales Notes.</span>
             </div>
             <button id="unserved-print-btn" type="button" class="unserved-print-button">
                 <i data-lucide="printer"></i>
-                <span>Print Partial Only</span>
+                <span>Print Open + Partial</span>
             </button>
         </div>
     </section>
 
     <section class="unserved-summary-grid">
         <article>
-            <span>Partial Notes</span>
+            <span>Open / Partial Notes</span>
             <strong id="unserved-note-count">0</strong>
         </article>
         <article>

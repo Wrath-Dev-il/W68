@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Partial Unserved Details</title>
+    <title>Open / Partial Unserved Details</title>
     {{-- W68_UNSERVED_VISIBILITY_PRINT_FIX_20260918 --}}
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
 
     {{--
         W68_UNSERVED_PORTRAIT_12PX_FIX_20260921
+        W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
 
         Shared print view for Admin, Regular and Special users.
 
@@ -224,6 +225,18 @@
             }
         }
     </style>
+
+    <!-- W68_UNSERVED_RUSH_PRINT_RED_ONLY_V2_20260921 -->
+    <style>
+        @media print {
+            .unserved-print-table tr.rush-row td {
+                background: #fff !important;
+                color: #dc2626 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
 </head>
 <body class="unserved-print-body">
     @include('partials.global.w68-loader')
@@ -231,7 +244,7 @@
     <main class="unserved-print-sheet">
         <header class="unserved-print-header unserved-print-main-header">
             <h1>W68 AUTOPARTS AND SERVICE CENTER</h1>
-            <h2>PARTIAL UNSERVED</h2>
+            <h2>OPEN / PARTIAL UNSERVED</h2>
             {{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
             <p>GENERATED: {{ strtoupper($generatedAt) }} &nbsp; | &nbsp; DATE: {{ strtoupper($periodLabel) }}</p>
             @if($salesman)
@@ -323,7 +336,7 @@
         @endforelse
 
         <footer class="unserved-print-footer">
-            <span>Partial Notes: {{ number_format($summary['partial_notes'] ?? $summary['open_partial_notes'] ?? 0) }}</span>
+            <span>Open / Partial Notes: {{ number_format($summary['open_partial_notes'] ?? $summary['partial_notes'] ?? 0) }}</span>
             <span>Lines: {{ number_format($summary['line_items']) }}</span>
             <span>Unserved With Stocks: {{ rtrim(rtrim(number_format((float) ($summary['unserved_with_stock_qty'] ?? 0), 2, '.', ','), '0'), '.') }}</span>
             <span>Total Unserved: {{ rtrim(rtrim(number_format((float) $summary['total_unserved'], 2, '.', ','), '0'), '.') }}</span>
