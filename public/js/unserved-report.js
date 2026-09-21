@@ -28,10 +28,15 @@
     const partialNotesCount = document.getElementById('unserved-partial-notes-count');
 
     const withoutStockCount = document.getElementById('unserved-without-stock-count');
+    const withoutStockOpenCount = document.getElementById('unserved-without-stock-open-count');
+    const withoutStockPartialCount = document.getElementById('unserved-without-stock-partial-count');
+
     const withStockCount = document.getElementById('unserved-with-stock-count');
     const withStockOpenCount = document.getElementById('unserved-with-stock-open-count');
     const withStockPartialCount = document.getElementById('unserved-with-stock-partial-count');
     const servableCount = document.getElementById('unserved-servable-count');
+    const servableOpenCount = document.getElementById('unserved-servable-open-count');
+    const servablePartialCount = document.getElementById('unserved-servable-partial-count');
 
     const allUnservedCard = document.getElementById('unserved-all-card');
     const withoutStockCard = document.getElementById('unserved-without-stock-card');
@@ -235,6 +240,12 @@
             withoutStockCount.textContent =
                 Number(payload.summary?.unserved_without_stock_lines || 0).toLocaleString();
 
+            withoutStockOpenCount.textContent =
+                Number(payload.summary?.unserved_without_stock_open_lines || 0).toLocaleString();
+
+            withoutStockPartialCount.textContent =
+                Number(payload.summary?.unserved_without_stock_partial_lines || 0).toLocaleString();
+
             withStockCount.textContent =
                 Number(payload.summary?.unserved_with_stock_lines || 0).toLocaleString();
 
@@ -246,6 +257,12 @@
 
             servableCount.textContent =
                 Number(payload.summary?.servable_item_lines || 0).toLocaleString();
+
+            servableOpenCount.textContent =
+                Number(payload.summary?.servable_item_open_lines || 0).toLocaleString();
+
+            servablePartialCount.textContent =
+                Number(payload.summary?.servable_item_partial_lines || 0).toLocaleString();
 
             latestRows = Array.isArray(payload.rows) ? payload.rows : [];
             renderRows();

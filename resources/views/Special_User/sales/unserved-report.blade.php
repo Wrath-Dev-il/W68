@@ -173,6 +173,18 @@
             <span>Unserved Items Without Stocks</span>
             <strong id="unserved-without-stock-count">0</strong>
 
+            <div class="unserved-stock-status-breakdown">
+                <span class="unserved-stock-status-item is-open">
+                    <small>OPEN</small>
+                    <b id="unserved-without-stock-open-count">0</b>
+                </span>
+
+                <span class="unserved-stock-status-item is-partial">
+                    <small>PARTIAL</small>
+                    <b id="unserved-without-stock-partial-count">0</b>
+                </span>
+            </div>
+
             <small class="unserved-summary-rule">
                 ON HAND = 0
             </small>
@@ -210,6 +222,18 @@
 
             <span>Servable Item</span>
             <strong id="unserved-servable-count">0</strong>
+
+            <div class="unserved-stock-status-breakdown">
+                <span class="unserved-stock-status-item is-open">
+                    <small>OPEN</small>
+                    <b id="unserved-servable-open-count">0</b>
+                </span>
+
+                <span class="unserved-stock-status-item is-partial">
+                    <small>PARTIAL</small>
+                    <b id="unserved-servable-partial-count">0</b>
+                </span>
+            </div>
 
             <small class="unserved-summary-rule">
                 ON HAND >= UNSERVED

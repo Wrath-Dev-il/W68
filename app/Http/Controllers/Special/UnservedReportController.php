@@ -607,19 +607,48 @@ class UnservedReportController extends Controller
             ->unique()
             ->count();
 
-        $unservedWithoutStockLines = count(array_filter(
+        // W68_UNSERVED_CATEGORY_STATUS_COUNTS_20260921
+        $withoutStockRows = array_values(array_filter(
             $dashboardRows,
             fn (array $row) =>
                 abs((float) ($row['on_hand'] ?? 0)) < 0.000001
         ));
 
+        $unservedWithoutStockLines = count($withoutStockRows);
+
+        $unservedWithoutStockOpenLines = count(array_filter(
+            $withoutStockRows,
+            fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Open') === 0
+        ));
+
+        $unservedWithoutStockPartialLines = count(array_filter(
+            $withoutStockRows,
+            fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0
+        ));
+
         // W68_SERVABLE_GTE_UNSERVED_20260921
         // Servable when ON HAND is equal to or greater than UNSERVED.
-        $servableItemLines = count(array_filter(
+        $servableRows = array_values(array_filter(
             $dashboardRows,
             fn (array $row) =>
                 (float) ($row['on_hand'] ?? 0) + 0.000001
                 >= (float) ($row['unserved'] ?? 0)
+        ));
+
+        $servableItemLines = count($servableRows);
+
+        $servableItemOpenLines = count(array_filter(
+            $servableRows,
+            fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Open') === 0
+        ));
+
+        $servableItemPartialLines = count(array_filter(
+            $servableRows,
+            fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0
         ));
         $withStockRows = array_values(array_filter(
             $rows,
@@ -667,7 +696,11 @@ class UnservedReportController extends Controller
                 'all_unserved_open_notes' => $allUnservedOpenNotes,
                 'all_unserved_partial_notes' => $allUnservedPartialNotes,
                 'unserved_without_stock_lines' => $unservedWithoutStockLines,
+                'unserved_without_stock_open_lines' => $unservedWithoutStockOpenLines,
+                'unserved_without_stock_partial_lines' => $unservedWithoutStockPartialLines,
                 'servable_item_lines' => $servableItemLines,
+                'servable_item_open_lines' => $servableItemOpenLines,
+                'servable_item_partial_lines' => $servableItemPartialLines,
                 'partial_notes' => collect($rows)
                     ->filter(fn (array $row) => strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0)
                     ->pluck('sales_note_id')
@@ -995,7 +1028,11 @@ class UnservedReportController extends Controller
                 'all_unserved_open_notes' => 0,
                 'all_unserved_partial_notes' => 0,
                 'unserved_without_stock_lines' => 0,
+                'unserved_without_stock_open_lines' => 0,
+                'unserved_without_stock_partial_lines' => 0,
                 'servable_item_lines' => 0,
+                'servable_item_open_lines' => 0,
+                'servable_item_partial_lines' => 0,
                 'partial_notes' => 0,
                 'open_partial_notes' => 0,
                 'line_items' => 0,
