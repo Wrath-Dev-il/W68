@@ -519,7 +519,7 @@ if (!function_exists('hatdogSchemaHasColumnCached')) {
 if (!function_exists('calculateTotalPaid')) {
     /**
      * Calculate the total paid amount by summing all amountPaid values from invoices array.
-     * 
+     *
      * @param array $invoices Array of invoices where each invoice has an 'amountPaid' key
      * @return float Total paid amount as decimal
      */
@@ -534,9 +534,9 @@ if (!function_exists('calculateTotalPaid')) {
 if (!function_exists('determinePaymentStatus')) {
     /**
      * Determine payment status based on amount paid and net amount due.
-     * 
+     *
      * Validates: Requirements 4.16, 9.8
-     * 
+     *
      * @param array $invoice Invoice data with amountDue, amountPaid, discount1, discount2
      * @return string 'Full' if paid >= net due (with tolerance), otherwise 'Partial'
      */
@@ -546,18 +546,18 @@ if (!function_exists('determinePaymentStatus')) {
         $amountPaid = (float) ($invoice['amountPaid'] ?? 0);
         $discount1 = (float) ($invoice['discount1'] ?? 0);
         $discount2 = (float) ($invoice['discount2'] ?? 0);
-        
+
         // Calculate net amount due after applying discount_1
         $netDue = $amountDue;
         if ($discount1 > 0) {
             $netDue = $netDue - ($netDue * $discount1 / 100);
         }
-        
+
         // Apply discount_2 to the already discounted amount
         if ($discount2 > 0) {
             $netDue = $netDue - ($netDue * $discount2 / 100);
         }
-        
+
         // Compare with tolerance of 0.005
         return ($amountPaid >= ($netDue - 0.005)) ? 'Full' : 'Partial';
     }
@@ -5223,7 +5223,7 @@ Route::get('/admin/usm', function () {
     if ($user->account_type != 1) {
         return redirect()->route('login');
     }
-    
+
     // Fetch all login records ordered by newest first
     $dbUsers = Login::select(hatdogLoginSessionColumns())->orderBy('created_at', 'desc')->get()->each->makeVisible('Password');
 
@@ -5266,7 +5266,7 @@ Route::get('/admin/usm', function () {
             ->unique()
             ->values();
     }
-    
+
     return view('Admin.System Security.USM', [
         'user' => $user,
         'account_type' => 1,
@@ -7508,7 +7508,7 @@ Route::get('/admin/masterlist/product/selected-filters', function (Request $requ
 
     try {
         $products = \App\Models\Product::where('is_selected_for_report', true)->get(['description', 'category', 'application', 'created_at']);
-        
+
         $filters = [
             'descriptions' => $products->pluck('description')->filter()->unique()->sort()->values(),
             'brands' => $products->pluck('category')->filter()->unique()->sort()->values(),
@@ -7585,13 +7585,13 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
     }
 
     $query->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
-    
+
     // If it's an AJAX request for a specific page, return just that chunk
     if ($request->ajax() && $request->has('page_num')) {
         $pageNum = (int) $request->input('page_num');
         $perPage = 12;
         $products = $query->offset(($pageNum - 1) * $perPage)->limit($perPage)->get();
-        
+
         return view('Admin.master_list.partials.catalog_chunk', [
             'products' => $products,
             'pageIndex' => $pageNum - 1,
@@ -7602,7 +7602,7 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
     // Otherwise return the shell (or the full dataset)
     $totalCount = $query->count();
     $products = $query->get();
-    
+
     return view('Admin.master_list.Product_Catalog', [
         'user' => $user,
         'products' => $products,
@@ -7667,7 +7667,7 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
 
     $totalCount = $query->count();
     $products = $query->get(); // Full dataset — view limits preview to 180 via take(180)
-    
+
     return view('Admin.master_list.Product_PriceList', [
         'user' => $user,
         'products' => $products,
@@ -7938,7 +7938,7 @@ Route::post('/admin/masterlist/supplier/update/{id}', function (Request $request
         $supplier = \App\Models\Supplier::findOrFail($id);
         $before = $supplier->toArray();
         unset($before['lifecycle']);
-        
+
         $validated = $request->validate([
             'supplier_code' => 'required|unique:masterlist.suppliers,supplier_code,' . $id,
             'name' => 'required|string',
@@ -9311,6 +9311,7 @@ $formatForwarder = function (\App\Models\Forwarder $forwarder) {
         'id' => $forwarder->id,
         'code' => $forwarder->code,
         'name' => $forwarder->name,
+        'forwarder_type' => $forwarder->forwarder_type,
         'address' => $forwarder->address?->address,
         'contactNo' => $forwarder->contact?->contact_number,
         'contactPerson' => $forwarder->contact?->contact_person,
@@ -9339,6 +9340,7 @@ $forwarderPayload = function (array $validated) {
         'forwarder' => [
             'code' => $validated['code'],
             'name' => $validated['name'],
+            'forwarder_type' => $nullable('forwarder_type'),
         ],
         'contact' => [
             'contact_number' => $nullable('contactNo'),
@@ -9422,6 +9424,7 @@ Route::post('/admin/masterlist/forwarder/create', function (Request $request) us
         $validated = $request->validate([
             'code' => 'required|string|max:255|unique:masterlist.forwarders,code',
             'name' => 'required|string|max:255',
+            'forwarder_type' => 'nullable|string|in:OFFICE,REGULAR,RUSH',
             'contactNo' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
             'address' => 'nullable|string',
@@ -9481,6 +9484,7 @@ Route::post('/admin/masterlist/forwarder/update/{id}', function (Request $reques
         $validated = $request->validate([
             'code' => 'required|string|max:255|unique:masterlist.forwarders,code,' . $id,
             'name' => 'required|string|max:255',
+            'forwarder_type' => 'nullable|string|in:OFFICE,REGULAR,RUSH',
             'contactNo' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
             'address' => 'nullable|string',
@@ -11762,10 +11766,10 @@ Route::post('/admin/purchase/purchase-order/process', function (Request $request
                     $latestLedger = \App\Models\ProductLedger::where('product_id', $product->id)
                         ->orderBy('id', 'desc')
                         ->first();
-                    
+
                     $previousBalance = $latestLedger ? $latestLedger->balance_stock : 0;
                     $newBalance = $previousBalance + $itemData['actual_quantity'];
-                    
+
                     \App\Models\ProductLedger::create([
                     'product_id' => $product->id,
                     'supplier_id' => $supplier->id,
@@ -12970,7 +12974,7 @@ Route::get('/admin/sales/sales-note/rush-notifications', function (\Illuminate\H
     try {
         // Get rush orders that are Open or Partial status and older than 1 day
         $oneDayAgo = \Carbon\Carbon::now()->subDay();
-        
+
         $overdueRushNotes = \App\Models\SalesNote::where('is_rush', 1)
             ->whereIn('status', ['Open', 'Partial'])
             ->where('created_at', '<=', $oneDayAgo)
@@ -13323,9 +13327,9 @@ Route::post('/admin/sales/sales-note/check-stock', function (Request $request) {
             'items.*.quantity' => 'required|integer|min:0',
             'items.*.additional_qty' => 'nullable|integer|min:0',
         ]);
-        
+
         $items = $data['items'];
-        
+
         $normalized = [];
         foreach ($items as $item) {
             $pid = (int) ($item['product_id'] ?? 0);
@@ -14864,7 +14868,7 @@ Route::get('/admin/sales/sales-note/{noteId}/invoices', function ($noteId) {
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
     try {
         $note = \App\Models\SalesNote::on('sales')->findOrFail($noteId);
-        
+
         // Get all sales_orders where order_number matches sales_number
         $invoices = \Illuminate\Support\Facades\DB::connection('sales')
             ->table('sales_orders')
@@ -14877,7 +14881,7 @@ Route::get('/admin/sales/sales-note/{noteId}/invoices', function ($noteId) {
                     ->table('sales_order_items')
                     ->where('sales_order_id', $so->id)
                     ->count();
-                
+
                 return [
                     'id' => $so->id,
                     'invoice_numbers' => $so->invoice_numbers,
@@ -14889,7 +14893,7 @@ Route::get('/admin/sales/sales-note/{noteId}/invoices', function ($noteId) {
                     'waybill_date' => $so->waybill_date,
                 ];
             });
-        
+
         // Get remaining items from the original Sales Note quantity minus the
         // served quantity across every invoice. Never use Sales Order quantity
         // as the source of truth for the original order quantity.
@@ -15029,7 +15033,7 @@ Route::get('/admin/sales/sales-note/invoice/{invoiceId}/items', function ($invoi
                 ];
             }
         }
-        
+
         $items = $salesOrder->items->map(function ($item) use ($salesOrder, $noteItemsByProduct, $servedByProduct, $priceCodeMap) {
             $product = \App\Models\Product::on('masterlist')->find($item->product_id);
             $salesNoteItem = $noteItemsByProduct->get($item->product_id);
@@ -15065,7 +15069,7 @@ Route::get('/admin/sales/sales-note/invoice/{invoiceId}/items', function ($invoi
                 'price_codes' => $priceCodeMap[(int) $item->product_id] ?? [],
             ];
         })->values();
-        
+
         return response()->json([
             'success' => true,
             'invoice' => [
@@ -15301,18 +15305,18 @@ Route::post('/admin/sales/sales-note/report/online-prices/save', function (Reque
     try {
         $prices = $request->input('prices', []);
         $updatedIds = [];
-        
+
         foreach ($prices as $productId => $price) {
             $affected = \Illuminate\Support\Facades\DB::connection('masterlist')
                 ->table('products')
                 ->where('id', $productId)
                 ->update(['price_online' => $price]);
-            
+
             if ($affected) {
                 $updatedIds[] = $productId;
             }
         }
-        
+
         \Illuminate\Support\Facades\Log::info('Online prices save request:', [
             'input_count' => count($prices),
             'updated_count' => count($updatedIds),
@@ -15320,7 +15324,7 @@ Route::post('/admin/sales/sales-note/report/online-prices/save', function (Reque
         ]);
 
         return response()->json([
-            'success' => true, 
+            'success' => true,
             'updated_count' => count($updatedIds),
             'message' => 'Successfully updated ' . count($updatedIds) . ' products.'
         ]);
@@ -15359,13 +15363,13 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
 
     $ids = explode(',', $request->query('ids', ''));
     $type = $request->query('type', 'note');
-    
+
     // Get 3 selectable date ranges for OUT columns
     $outDate1 = $request->query('outDate1', '2025');
     $outDate2 = $request->query('outDate2', '2026');
     $outDate3 = $request->query('outDate3', '');
     $paymentType = $request->query('payment_type', 'none');
-    
+
     $yearRange = [];
     if ($outDate1) $yearRange[] = $outDate1;
     if ($outDate2) $yearRange[] = $outDate2;
@@ -16066,7 +16070,7 @@ Route::get('/admin/sales/sales-order/detail/{id}', function (Request $request, $
     try {
         // Check if this is a sales_order_id or sales_note_id based on for_proceed parameter
         $forProceed = $request->boolean('for_proceed');
-        
+
         if ($forProceed) {
             // For proceed modal: load sales NOTE and show remaining items
             $note = \App\Models\SalesNote::on('sales')->with('items')->findOrFail($id);
@@ -16168,7 +16172,7 @@ Route::get('/admin/sales/sales-order/detail/{id}', function (Request $request, $
 
             // Build invoice movement: original A/R debit, Sales Return credits, and Payment credits.
             // This intentionally uses existing tables only; no database revision is required.
-           
+
             $rawInvoiceNumbers = trim((string) ($salesOrder->invoice_numbers ?? ''));
             $decodedInvoiceNumbers = json_decode($rawInvoiceNumbers, true);
             if (is_array($decodedInvoiceNumbers)) {
@@ -16567,7 +16571,7 @@ Route::post('/admin/sales/sales-order/check-stock', function (Request $request) 
             'trace' => $e->getTraceAsString()
         ]);
         return response()->json([
-            'success' => false, 
+            'success' => false,
             'message' => 'Stock check failed: ' . $e->getMessage()
         ], 422);
     }
@@ -16605,7 +16609,7 @@ Route::post('/admin/sales/sales-order/edit-check-stock', function (Request $requ
                 $p = DB::connection('masterlist')->table('products')->where('product_code', $item['product_code'])->first(['id']);
                 $pid = $p ? (int) $p->id : 0;
             }
-            
+
             if ($pid <= 0) {
                 $issues[] = [
                     'product_id' => 0,
@@ -16620,13 +16624,13 @@ Route::post('/admin/sales/sales-order/edit-check-stock', function (Request $requ
 
             $newQty = (float) ($item['actual_qty'] ?? 0);
             $oldQty = (float) ($item['old_qty'] ?? 0);
-            
+
             // Check if this item has a ledger entry with this transaction_number
             $hasLedgerEntry = DB::connection('ledger')->table('product_ledgers')
                 ->where('product_id', $pid)
                 ->where('transaction_number', $orderNumber)
                 ->exists();
-            
+
             // If item has NO ledger entry with this order number, it's NEW (added via Sales Note)
             // We need to check FULL quantity for new items
             if (!$hasLedgerEntry) {
@@ -16706,7 +16710,7 @@ Route::post('/admin/sales/sales-order/edit-check-stock', function (Request $requ
                 if ($meta['is_new']) {
                     $reason .= ' (New item)';
                 }
-                
+
                 $issues[] = [
                     'product_id' => (int) $pid,
                     'product_code' => $meta['product_code'],
@@ -16922,7 +16926,7 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
             if ($existingInvoice) {
                 throw new \Exception("Invoice number {$invoiceNumber} was already processed for this Sales Note.");
             }
-            
+
             $noteBefore = $note->toArray();
             $customer = null;
             if (!empty($note->customer_id)) {
@@ -16970,11 +16974,11 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
             $requestTotalAmount = 0;
             $requestServedAdds = [];
             $productsToSync = [];
-            
+
             foreach ($items as $itemData) {
                 $productId = (int)($itemData['product_id'] ?? 0);
                 $actualQty = (float) ($itemData['actual_qty'] ?? 0);
-                
+
                 if ($actualQty <= 0) continue;
 
                 $submittedQty = (float) ($itemData['quantity'] ?? 0);
@@ -17061,9 +17065,9 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
                 $alreadyServed = (float) ($servedMap[(int) $pId] ?? 0);
                 $addedThisRequest = (float) ($requestServedAdds[(int) $pId] ?? 0);
                 $remaining = $orderedQty - $alreadyServed - $addedThisRequest;
-                if ($remaining > 0) { 
-                    $hasRemaining = true; 
-                    break; 
+                if ($remaining > 0) {
+                    $hasRemaining = true;
+                    break;
                 }
             }
 
@@ -17122,7 +17126,7 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
             ]);
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'note_status' => $note->status,
                 'sales_order_id' => $salesOrderId,
                 'invoice_number' => $invoiceNumber,
@@ -17178,17 +17182,17 @@ Route::get('/admin/sales/sales-order/edit-detail/{salesOrderId}', function ($sal
                 'order_date' => $so->created_at ? date('Y-m-d', strtotime($so->created_at)) : '',
                 'items' => $so->items->map(function ($item) use ($so) {
                     $product = \App\Models\Product::on('masterlist')->find($item->product_id);
-                    
+
                     // Check if this item has a ledger entry with this invoice's reference
                     $hasLedgerEntry = DB::connection('ledger')->table('product_ledgers')
                         ->where('product_id', $item->product_id)
                         ->where('transaction_number', $so->order_number)
                         ->where('reference_number', $so->invoice_numbers)
                         ->exists();
-                    
+
                     // If item has ledger entry, old_qty = actual_qty; otherwise old_qty = 0 (NEW item)
                     $oldQtyLedger = $hasLedgerEntry ? $item->actual_qty : 0;
-                    
+
                     // Fallback: if sales_order_items.price_code is empty, check sales_note_items
                     $priceCode = $item->price_code;
                     if (empty($priceCode) && $so->sales_note_id && $item->product_id) {
@@ -17198,7 +17202,7 @@ Route::get('/admin/sales/sales-order/edit-detail/{salesOrderId}', function ($sal
                             ->first();
                         $priceCode = $sni ? $sni->price_code : '';
                     }
-                    
+
                     return [
                         'id' => $item->id,
                         'product_id' => $item->product_id,
@@ -18589,7 +18593,7 @@ Route::get('/admin/sales/sales-order/report/online-print/{id}', function ($id) {
                     $_resolvedPrice = (float) $product->selling_price;
                 }
 
-                $_resolvedPrice = (float) ($_resolvedPrice ?? 0);        
+                $_resolvedPrice = (float) ($_resolvedPrice ?? 0);
                 $_itemQty = $item['quantity'] ?? 0;
                 $_itemProductCode = $item['product_code'] ?? ($product ? $product->product_code : '');
                 $_cpProductCode = $counterPart['product_code'] ?? '';
@@ -18661,11 +18665,11 @@ Route::get('/admin/sales/sales-order/report/online-print/{id}', function ($id) {
                // Explicit Online Report price is authoritative, INCLUDING 0.00.
                 $_resolvedPrice = null;
 
-                  
+
             if (
                 $item->product_id &&
                 array_key_exists((string) $item->product_id, $prices)
-                ) 
+                )
                 {
                 $_resolvedPrice = (float) $prices[(string) $item->product_id];
         } elseif (
@@ -19259,11 +19263,11 @@ Route::get('/admin/sales/waybill/stats', function () {
             ->where(function($q) {
                 $q->whereNull('waybill_no')->orWhere('waybill_no', '')->orWhere('waybill_no', 'NULL');
             })->count();
-            
+
         $newWaybill = DB::connection('sales')->table('waybills')
             ->whereDate('created_at', now()->toDateString())
             ->count();
-            
+
         // Overdue: Confirmed orders without waybill more than 3 days old
         $overdue = DB::connection('sales')->table('sales_orders')
             ->where('status', 'Confirmed')
@@ -19272,7 +19276,7 @@ Route::get('/admin/sales/waybill/stats', function () {
             })
             ->where('created_at', '<', now()->subDays(3))
             ->count();
-            
+
         return response()->json([
             'success' => true,
             'total_no_waybill' => $totalNoWaybill,
@@ -19543,7 +19547,7 @@ Route::get('/admin/sales/waybill/history', function (Request $request) {
                     ->pluck('invoice_numbers')
                     ->filter()
                     ->toArray();
-                
+
                 // Get customer name from the first linked SO
                 $firstSO = DB::connection('sales')->table('sales_orders')
                     ->where('waybill_id', $wb->id)
@@ -19563,9 +19567,9 @@ Route::get('/admin/sales/waybill/history', function (Request $request) {
                     'declared_value' => $wb->declared_value
                 ];
             });
-            
+
         return response()->json([
-            'success' => true, 
+            'success' => true,
             'history' => $waybills,
             'total' => $totalCount,
             'page' => $page,
@@ -19587,7 +19591,7 @@ Route::get('/admin/sales/waybill/history/{id}', function ($id) {
         $salesOrders = DB::connection('sales')->table('sales_orders')
             ->where('waybill_id', $id)
             ->get();
-        
+
         $firstSO = $salesOrders->first();
         $customer = null;
         if ($firstSO) {
@@ -20574,7 +20578,7 @@ Route::get('/admin/payments', function () {
 if (!function_exists('captureOldVoucherState')) {
     /**
      * Capture the complete state of a voucher for audit trail purposes.
-     * 
+     *
      * @param int $voucherId The ID of the voucher to capture
      * @return array Combined data structure containing voucher, invoices, sudden_returns, and payment
      */
@@ -20609,7 +20613,7 @@ if (!function_exists('captureOldVoucherState')) {
 if (!function_exists('captureNewVoucherState')) {
     /**
      * Capture the complete state of a voucher for audit trail purposes.
-     * 
+     *
      * @param int $voucherId The ID of the voucher to capture
      * @return array Combined data structure containing voucher, invoices, sudden_returns, and payment
      */
@@ -21799,13 +21803,13 @@ Route::get('/admin/accounting/payable-cheque-voucher/sudden-returns/{supplierId}
         \Log::info('Request URL: ' . $request->fullUrl());
         \Log::info('Supplier ID: ' . $supplierId);
         \Log::info('PO IDs from request: ' . json_encode($request->input('po_ids', [])));
-        
+
         $supplier = DB::connection('masterlist')->table('suppliers')->where('id', $supplierId)->first();
         if (!$supplier) throw new \Exception('Supplier not found.');
 
         // Get current voucher's PO IDs from request (if creating new voucher)
         $currentPoIds = $request->input('po_ids', []);
-        
+
         $currentPoIds = collect($currentPoIds)
             ->map(fn ($id) => (int) $id)
             ->filter()
@@ -22458,18 +22462,18 @@ foreach ($payments as $payment) {
         // Store sudden returns in dedicated table
         \Log::info('=== SUDDEN RETURNS DEBUG START ===');
         \Log::info('Sudden returns from request:', ['data' => $data['sudden_returns'] ?? []]);
-        
+
         $allVoucherInvoiceIds = DB::connection('accounting')->table('payable_cheque_voucher_invoices')
             ->where('payable_cheque_voucher_id', $voucherId)
             ->pluck('purchase_order_id', 'id');
-        
+
         \Log::info('All voucher invoice IDs:', ['map' => $allVoucherInvoiceIds->toArray()]);
-        
+
         foreach ($data['sudden_returns'] ?? [] as $sr) {
             \Log::info('Processing sudden return:', ['sr' => $sr]);
             $targetInvoiceId = null;
             $targetPoId = null;
-            
+
             // Try to match SR's PO to a selected invoice
             foreach ($allVoucherInvoiceIds as $invId => $invPoId) {
                 if ((int) $invPoId === (int) $sr['po_id']) {
@@ -22478,7 +22482,7 @@ foreach ($payments as $payment) {
                     break;
                 }
             }
-            
+
             if ($targetInvoiceId) {
                 // SR matches a specific selected PO - attribute all to that invoice
                 \Log::info('Matched SR PO to invoice', ['invoice_id' => $targetInvoiceId, 'po_id' => $targetPoId]);
@@ -22519,7 +22523,7 @@ foreach ($payments as $payment) {
                 }
             }
         }
-        
+
         \Log::info('=== SUDDEN RETURNS DEBUG END ===');
 
         $voucher = DB::connection('accounting')->table('payable_cheque_vouchers')->where('id', $voucherId)->first();
@@ -22600,10 +22604,10 @@ Route::put('/admin/accounting/payable-cheque-voucher/update/{voucherId}', functi
 
     try {
         DB::connection('accounting')->beginTransaction();
-        
+
         $voucher = DB::connection('accounting')->table('payable_cheque_vouchers')
             ->where('id', $voucherId)->lockForUpdate()->first();
-        
+
         if (!$voucher) {
             DB::connection('accounting')->rollBack();
             return response()->json(['success' => false, 'message' => 'Voucher not found'], 404);
@@ -22633,11 +22637,11 @@ Route::put('/admin/accounting/payable-cheque-voucher/update/{voucherId}', functi
             $paid = (float) $invoice['amountPaid'];
             $discount1 = (float) ($invoice['discount1'] ?? 0);
             $discount2 = (float) ($invoice['discount2'] ?? 0);
-            
+
             $netDue = $due;
             if ($discount1 > 0) $netDue = $netDue - ($netDue * $discount1 / 100);
             if ($discount2 > 0) $netDue = $netDue - ($netDue * $discount2 / 100);
-            
+
             $paymentStatus = ($paid >= ($netDue - 0.005)) ? 'Full' : 'Partial';
 
             DB::connection('accounting')->table('payable_cheque_voucher_invoices')->where('id', $invoice['id'])->update([
@@ -22656,7 +22660,7 @@ Route::put('/admin/accounting/payable-cheque-voucher/update/{voucherId}', functi
 
         DB::connection('accounting')->table('payable_cheque_voucher_sudden_returns')
             ->where('payable_cheque_voucher_id', $voucherId)->delete();
-        
+
         foreach ($data['sudden_returns'] ?? [] as $sr) {
             $targetInvoiceId = $sr['invoice_id'];
             // Look up the invoice's actual PO to correctly attribute SR in paidRows
@@ -22677,7 +22681,7 @@ Route::put('/admin/accounting/payable-cheque-voucher/update/{voucherId}', functi
 
         DB::connection('accounting')->table('payable_cheque_voucher_payments')
             ->where('payable_cheque_voucher_id', $voucherId)->delete();
-        
+
         $payment = $data['payment'] ?? [];
         DB::connection('accounting')->table('payable_cheque_voucher_payments')->insert([
             'payable_cheque_voucher_id' => $voucherId,
@@ -25989,7 +25993,7 @@ Route::get('/admin/sales/sales-return/history', function (Request $request) {
             ->get();
 
         return response()->json([
-            'success' => true, 
+            'success' => true,
             'returns' => $returns,
             'total' => $totalCount,
             'page' => $page,
@@ -27392,7 +27396,7 @@ Route::post('/admin/usm/create', function (Request $request) {
             'account_type' => 'required|in:admin,employee,employee_with_pricelist,worker',
             'Gender' => 'required|string|in:Male,Female,Other',
         ]);
-        
+
         $acctTypeMap = [
             'admin' => 1,
             'employee_with_pricelist' => 2,
@@ -27438,7 +27442,7 @@ Route::post('/admin/usm/reset-password', function (Request $request) {
             $dbUser->Password = $validated['Password'];
             $dbUser->save();
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'updated_at' => $dbUser->updated_at ? $dbUser->updated_at->format('Y-m-d H:i') : now()->format('Y-m-d H:i')
             ]);
         }
@@ -27498,14 +27502,14 @@ Route::middleware(['web'])->group(function () {
     Route::get('/admin/purchase/test-route', function() {
         return response()->json(['success' => true, 'message' => 'Test route works!']);
     });
-    
+
     // This must come FIRST before any parameterized routes
     Route::match(['GET', 'POST'], '/admin/purchase/purchase-note/verify-password', [PurchaseNoteController::class, 'verifyPassword'])->name('admin.purchase.note.verify-password');
-    
+
     Route::match(['GET', 'POST'], '/admin/purchase/purchase-note', [PurchaseNoteController::class, 'index'])->name('admin.purchase-note');
     Route::get('/admin/purchase/search-suppliers', [PurchaseNoteController::class, 'searchSuppliers'])->name('admin.purchase.search-suppliers');
     Route::get('/admin/purchase/search-products', [PurchaseNoteController::class, 'searchProducts'])->name('admin.purchase.search-products');
-    
+
     // Viber List API
     Route::get('/admin/purchase/viber/suppliers', [PurchaseViberController::class, 'searchSuppliers'])->name('admin.purchase-viber.suppliers');
     Route::get('/admin/purchase/viber/products', [PurchaseViberController::class, 'searchProducts'])->name('admin.purchase-viber.products');
@@ -27523,7 +27527,7 @@ Route::middleware(['web'])->group(function () {
     Route::get('/admin/purchase/viber/not-arrived-items', [PurchaseViberController::class, 'notArrivedItems'])->name('admin.purchase-viber.not-arrived-items');
     Route::post('/admin/purchase/viber-list/not-arrived/rollback', [PurchaseViberController::class, 'rollbackNotArrived'])->name('admin.purchase-viber.not-arrived-rollback');
     Route::get('/admin/purchase/viber/{viberListId}/shipped-print-items', [PurchaseViberController::class, 'shippedPrintItems'])->name('admin.purchase-viber.shipped-print-items');
-    
+
     // CRUD for Purchase Notes
     Route::get('/admin/purchase/purchase-note/next-number', [PurchaseNoteController::class, 'getNextPurchaseNoteNumber'])->name('admin.purchase.note.next-number');
     Route::get('/admin/purchase/purchase-note/data', [PurchaseNoteController::class, 'fetchPurchaseNotes'])->name('admin.purchase.note.data');

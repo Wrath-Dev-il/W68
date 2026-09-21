@@ -26,7 +26,7 @@
             <h2 class="text-lg font-bold text-slate-800 tracking-tight">Forwarder Master List</h2>
             <p class="text-xs text-slate-400">Logistics and shipment tracking database.</p>
         </div>
-        
+
         <div class="flex items-center space-x-3">
             <button onclick="openAddForwarderModal()" class="px-4 py-2.5 bg-maroon text-white text-xs font-bold rounded-xl shadow-lg flex items-center space-x-2">
                 <i data-lucide="plus-circle" class="w-4 h-4 text-gold"></i>
@@ -133,6 +133,15 @@
                         </div>
                     </div>
                     <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Forwarder Type</label>
+                        <select name="forwarder_type" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-maroon">
+                            <option value="">Select Forwarder Type</option>
+                            <option value="OFFICE">OFFICE</option>
+                            <option value="REGULAR">REGULAR</option>
+                            <option value="RUSH">RUSH</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Contact Number</label>
                         <input type="text" name="contactNo" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-maroon">
                     </div>
@@ -182,6 +191,7 @@
                             <span id="view-fw-code" class="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-slate-200">CODE</span>
                         </div>
                         <div class="space-y-6">
+                            <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Forwarder Type</p><p id="view-fw-type" class="text-sm text-slate-700 font-extrabold mt-1"></p></div>
                             <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</p><p id="view-fw-address" class="text-sm text-slate-700 font-semibold mt-1"></p></div>
                             <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact No#</p><p id="view-fw-contact" class="text-sm text-slate-700 font-semibold mt-1"></p></div>
                             <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Person</p><p id="view-fw-person" class="text-sm text-slate-700 font-semibold mt-1"></p></div>

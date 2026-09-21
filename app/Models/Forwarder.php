@@ -12,6 +12,7 @@ class Forwarder extends Model
     protected $fillable = [
         'code',
         'name',
+        'forwarder_type',
     ];
 
     public function contact(): HasOne

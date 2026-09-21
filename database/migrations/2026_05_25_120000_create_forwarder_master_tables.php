@@ -16,6 +16,7 @@ return new class extends Migration
                 $table->id();
                 $table->string('code')->unique();
                 $table->string('name');
+                $table->string('forwarder_type', 20)->nullable();
                 $table->timestamps();
             });
         }

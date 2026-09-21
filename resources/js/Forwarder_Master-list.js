@@ -286,6 +286,7 @@ window.openViewModal = function(id) {
 
     document.getElementById('view-fw-name').textContent = safeString(fw.name) || 'N/A';
     document.getElementById('view-fw-code').textContent = safeString(fw.code) || 'N/A';
+    document.getElementById('view-fw-type').textContent = safeString(fw.forwarder_type) || 'N/A';
     document.getElementById('view-fw-address').textContent = safeString(fw.address) || 'N/A';
     document.getElementById('view-fw-contact').textContent = safeString(fw.contactNo) || 'N/A';
     document.getElementById('view-fw-person').textContent = safeString(fw.contactPerson) || 'N/A';
@@ -308,6 +309,7 @@ window.openEditModal = function(id) {
 
     form.elements.code.value = fw.code || '';
     form.elements.name.value = fw.name || '';
+    form.elements.forwarder_type.value = fw.forwarder_type || '';
     form.elements.contactNo.value = fw.contactNo || '';
     form.elements.contactPerson.value = fw.contactPerson || '';
     form.elements.address.value = fw.address || '';

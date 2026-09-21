@@ -40,7 +40,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     initializeMockLedger();
-    
+
     // Setup search input listeners with debounce
     const searchInputs = document.querySelectorAll('[id^="col-search-"]');
     searchInputs.forEach(input => {
@@ -48,7 +48,7 @@ window.addEventListener("DOMContentLoaded", () => {
             debounce(() => filterForwarderTable(), 300);
         });
     });
-    
+
     fetchForwarders();
 });
 
@@ -78,19 +78,19 @@ function displayValue(value) {
 async function fetchForwarders(page = 1) {
     try {
         currentPage = page;
-        
+
         // Build search parameters
         const searchParams = new URLSearchParams();
         searchParams.append('page', page);
         searchParams.append('perPage', 50);
-        
+
         // Get search values
         const code = document.getElementById('col-search-code')?.value.trim() || '';
         const name = document.getElementById('col-search-name')?.value.trim() || '';
         const address = document.getElementById('col-search-address')?.value.trim() || '';
         const contactNo = document.getElementById('col-search-contact')?.value.trim() || '';
         const contactPerson = document.getElementById('col-search-person')?.value.trim() || '';
-        
+
         if (code) searchParams.append('search[code]', code);
         if (name) searchParams.append('search[name]', name);
         if (address) searchParams.append('search[address]', address);
@@ -107,7 +107,7 @@ async function fetchForwarders(page = 1) {
         forwarders = result.forwarders || [];
         paginationData = result.pagination || {};
         totalPages = paginationData.last_page || 1;
-        
+
         renderForwarderTable();
         updatePaginationControls();
         updateStats(result.stats);
@@ -346,6 +346,7 @@ window.openViewModal = function(id) {
 
     document.getElementById('view-fw-name').textContent = safeString(fw.name) || 'N/A';
     document.getElementById('view-fw-code').textContent = safeString(fw.code) || 'N/A';
+    document.getElementById('view-fw-type').textContent = safeString(fw.forwarder_type) || 'N/A';
     document.getElementById('view-fw-address').textContent = safeString(fw.address) || 'N/A';
     document.getElementById('view-fw-contact').textContent = safeString(fw.contactNo) || 'N/A';
     document.getElementById('view-fw-person').textContent = safeString(fw.contactPerson) || 'N/A';
@@ -368,6 +369,7 @@ window.openEditModal = function(id) {
 
     form.elements.code.value = fw.code || '';
     form.elements.name.value = fw.name || '';
+    form.elements.forwarder_type.value = fw.forwarder_type || '';
     form.elements.contactNo.value = fw.contactNo || '';
     form.elements.contactPerson.value = fw.contactPerson || '';
     form.elements.address.value = fw.address || '';
