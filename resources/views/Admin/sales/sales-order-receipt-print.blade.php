@@ -42,6 +42,33 @@
         .summary .vl { width: 35%; text-align: right; }
         .summary .bd { font-weight: bold; }
         .rush-text { font-family: 'Arial Black', Arial, sans-serif; font-size: 25px; font-weight: bold; margin: 5px 0; text-align: center; }
+            /* W68_SALES_PRINT_INVOICE_REF_STYLE_20260921 */
+        .invoice-reference,
+        .order-reference {
+            text-align: left !important;
+            white-space: nowrap;
+            padding-left: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .invoice-reference-row .print-invoice-reference {
+            width: 45%;
+            text-align: left;
+            white-space: nowrap;
+            padding-left: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .invoice-reference-row .print-financial-label {
+            width: 20%;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .invoice-reference-row .print-financial-value {
+            width: 35%;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -51,11 +78,19 @@
         @php
             $rawPrintDate = trim((string) ($date ?? ''));
             $displayPrintDate = $rawPrintDate;
+
+            // W68_SALES_PRINT_INVOICE_REF_20260921
+            // Invoice number sent by Sales-Order.js for both new and history prints.
+            $printInvoiceNumber = trim((string) request()->input('invoice_number', ''));
             if ($rawPrintDate !== '') {
                 try {
                     $displayPrintDate = \Carbon\Carbon::parse($rawPrintDate)->format('d-m-Y');
                 } catch (\Throwable $dateFormatError) {
                     $displayPrintDate = $rawPrintDate;
+
+            // W68_SALES_PRINT_INVOICE_REF_20260921
+            // Invoice number sent by Sales-Order.js for both new and history prints.
+            $printInvoiceNumber = trim((string) request()->input('invoice_number', ''));
                 }
             }
         @endphp
@@ -135,11 +170,11 @@
             <tr><td class="lb">Additional Discount ({{ number_format($addlDiscountRate, 2) }}%):</td><td class="vl">{{ number_format($totalAddlDiscount, 2) }}</td></tr>
             @endif
             @if($printType === 'invoice')
-            <tr><td class="lb bd">NET OF VAT:</td><td class="vl bd">{{ number_format($grandTotal, 2) }}</td></tr>
+            <tr class="invoice-reference-row"><td class="print-invoice-reference">{{ $printInvoiceNumber }}</td><td class="print-financial-label bd">NET OF VAT:</td><td class="print-financial-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
             <tr><td class="lb">VAT({{ number_format($vatRate, 2) }}%):</td><td class="vl">{{ number_format($vatAmount, 2) }}</td></tr>
             <tr><td class="lb bd">TOTAL AMOUNT DUE:</td><td class="vl bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
             @else
-            <tr><td class="lb bd">INVOICE AMOUNT:</td><td class="vl bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            <tr class="invoice-reference-row"><td class="print-invoice-reference">{{ $printInvoiceNumber }}</td><td class="print-financial-label bd">INVOICE AMOUNT:</td><td class="print-financial-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
             <tr><td class="lb bd">NET AMOUNT:</td><td class="vl bd">{{ number_format($grandTotal, 2) }}</td></tr>
             @endif
         </table>

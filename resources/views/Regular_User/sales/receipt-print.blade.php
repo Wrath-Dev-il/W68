@@ -237,6 +237,33 @@
         body.print-order .order-financial-summary .order-label { width: 20%; text-align: left; white-space: nowrap; padding-left: 0; }
         body.print-order .order-financial-summary .order-value { width: 12%; text-align: right; padding-right: 3px; }
         .rush-text { font-family: 'Arial Black', Arial, sans-serif; font-size: 25px; font-weight: bold; margin: 5px 0; text-align: center; }
+            /* W68_SALES_PRINT_INVOICE_REF_STYLE_20260921 */
+        .invoice-reference,
+        .order-reference {
+            text-align: left !important;
+            white-space: nowrap;
+            padding-left: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .invoice-reference-row .print-invoice-reference {
+            width: 45%;
+            text-align: left;
+            white-space: nowrap;
+            padding-left: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .invoice-reference-row .print-financial-label {
+            width: 20%;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .invoice-reference-row .print-financial-value {
+            width: 35%;
+            text-align: right;
+        }
     </style>
 </head>
 <body class="print-{{ $printType === 'invoice' ? 'invoice' : 'order' }}">
@@ -246,11 +273,19 @@
         @php
             $rawPrintDate = trim((string) ($date ?? ''));
             $displayPrintDate = $rawPrintDate;
+
+            // W68_SALES_PRINT_INVOICE_REF_20260921
+            // Invoice number sent by Sales-Order.js for both new and history prints.
+            $printInvoiceNumber = trim((string) request()->input('invoice_number', ''));
             if ($rawPrintDate !== '') {
                 try {
                     $displayPrintDate = \Carbon\Carbon::parse($rawPrintDate)->format('d-m-Y');
                 } catch (\Throwable $dateFormatError) {
                     $displayPrintDate = $rawPrintDate;
+
+            // W68_SALES_PRINT_INVOICE_REF_20260921
+            // Invoice number sent by Sales-Order.js for both new and history prints.
+            $printInvoiceNumber = trim((string) request()->input('invoice_number', ''));
                 }
             }
             // W68_SALES_PRINT_BRAND_FIX_20260910
@@ -510,13 +545,13 @@
 
         @if($printType === 'invoice')
         <table class="summary invoice-financial-summary">
-            <tr><td class="invoice-spacer"></td><td class="invoice-label bd">NET OF VAT:</td><td class="invoice-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
+            <tr><td class="invoice-spacer invoice-reference">{{ $printInvoiceNumber }}</td><td class="invoice-label bd">NET OF VAT:</td><td class="invoice-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
             <tr><td class="invoice-spacer"></td><td class="invoice-label">VAT({{ number_format($vatRate, 2) }}%):</td><td class="invoice-value">{{ number_format($vatAmount, 2) }}</td></tr>
             <tr><td class="invoice-spacer"></td><td class="invoice-label bd">TOTAL AMOUNT DUE:</td><td class="invoice-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
         </table>
         @else
         <table class="summary order-financial-summary">
-            <tr><td class="order-spacer"></td><td class="order-label bd">INVOICE AMOUNT:</td><td class="order-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            <tr><td class="order-spacer order-reference">{{ $printInvoiceNumber }}</td><td class="order-label bd">INVOICE AMOUNT:</td><td class="order-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
             <tr><td class="order-spacer"></td><td class="order-label bd">NET AMOUNT:</td><td class="order-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
         </table>
         @endif

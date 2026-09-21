@@ -958,7 +958,7 @@ window.submitPrintReceipt = async function() {
             // History detail returns the exact sales_orders.id. Send it to print so
             // the server can re-read sales_orders.created_at as the authoritative date.
             printSalesOrderId = note.id || window._historyPrintOrderId || null;
-            printInvoiceNumber = note.invoice_number || '';
+            printInvoiceNumber = note.invoice_number || note.invoice_no || note.invoice_numbers || '';
             
             // Read additional discount rate from stored items
             addlDiscRate = (note.items && note.items.length > 0) ? parseFloat(note.items[0].additional_discount) || 0 : 0;
