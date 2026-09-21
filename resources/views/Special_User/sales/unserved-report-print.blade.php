@@ -10,6 +10,7 @@
     {{--
         W68_UNSERVED_PORTRAIT_12PX_FIX_20260921
         W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
+        W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921
 
         Shared print view for Admin, Regular and Special users.
 
@@ -250,6 +251,12 @@
             @if($salesman)
                 <p class="unserved-print-filters">SALES MAN: {{ strtoupper($salesman) }}</p>
             @endif
+            <p class="unserved-print-filters">
+                STATUS:
+                {{ ($statusFilter ?? 'all') === 'open'
+                    ? 'OPEN'
+                    : (($statusFilter ?? 'all') === 'partial' ? 'PARTIAL' : 'ALL (OPEN + PARTIAL)') }}
+            </p>
         </header>
 
         @forelse($customerGroups as $group)

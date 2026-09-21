@@ -1,6 +1,7 @@
 @extends($unservedLayout)
 {{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
-{-- W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921 --}
+{-- W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921 --}
+{{-- W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921 --}}
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
@@ -85,6 +86,18 @@
             </div>
 
             <div class="unserved-field">
+                <label for="unserved-status-filter">Status</label>
+                <div class="unserved-input-wrap">
+                    <i data-lucide="tags"></i>
+                    <select id="unserved-status-filter">
+                        <option value="all">All (Open + Partial)</option>
+                        <option value="open">Open</option>
+                        <option value="partial">Partial</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="unserved-field">
                 <label for="unserved-date-type">Date</label>
                 <div class="unserved-input-wrap">
                     <i data-lucide="calendar-range"></i>
@@ -109,7 +122,7 @@
             </div>
             <button id="unserved-print-btn" type="button" class="unserved-print-button">
                 <i data-lucide="printer"></i>
-                <span>Print Open + Partial</span>
+                <span>Print Report</span>
             </button>
         </div>
     </section>
@@ -123,9 +136,19 @@
             <span>Unserved Lines</span>
             <strong id="unserved-line-count">0</strong>
         </article>
-        <article id="unserved-with-stock-card" class="unserved-summary-action" role="button" tabindex="0" title="Show only unserved items that currently have stock">
+        <article id="unserved-with-stock-card" class="unserved-summary-action" role="button" tabindex="0" title="Show only unserved item lines that currently have stock">
             <span>Unserved With Stocks</span>
             <strong id="unserved-with-stock-count">0</strong>
+            <div class="unserved-stock-status-breakdown">
+                <span class="unserved-stock-status-item is-open">
+                    <small>OPEN</small>
+                    <b id="unserved-with-stock-open-count">0</b>
+                </span>
+                <span class="unserved-stock-status-item is-partial">
+                    <small>PARTIAL</small>
+                    <b id="unserved-with-stock-partial-count">0</b>
+                </span>
+            </div>
         </article>
         <article>
             <span>Selected Period</span>

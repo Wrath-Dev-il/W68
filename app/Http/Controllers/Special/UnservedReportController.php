@@ -13,6 +13,7 @@ use Illuminate\View\View;
 
 class UnservedReportController extends Controller
 {
+    // W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921: stock card counts item lines; print/live support All/Open/Partial status.
     // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921: shared Open + Partial remaining-items report.
     public function index(): View
     {
@@ -135,6 +136,7 @@ class UnservedReportController extends Controller
             'summary' => $report['summary'],
             'customer' => trim((string) $request->query('customer', '')),
             'salesman' => trim((string) $request->query('salesman', '')),
+            'statusFilter' => strtolower(trim((string) $request->query('status_filter', 'all'))),
             'customerDetails' => $report['customer_details'],
             'customerGroups' => $report['customer_groups'],
         ]);
@@ -146,9 +148,21 @@ class UnservedReportController extends Controller
         $customer = trim((string) $request->input('customer', ''));
         $salesman = trim((string) $request->input('salesman', ''));
 
+        $statusFilter = strtolower(trim((string) $request->input('status_filter', 'all')));
+        if (!in_array($statusFilter, ['all', 'open', 'partial'], true)) {
+            $statusFilter = 'all';
+        }
+
         $notesQuery = DB::connection('sales')
             ->table('sales_notes')
             ->whereIn('status', ['Open', 'Partial']);
+
+        if ($statusFilter === 'open') {
+            $notesQuery->where('status', 'Open');
+        } elseif ($statusFilter === 'partial') {
+            $notesQuery->where('status', 'Partial');
+        }
+
 
         // Unserved is a backlog/as-of report. A note created before the selected
         // period can still have remaining items during that period, so do not
@@ -379,6 +393,14 @@ class UnservedReportController extends Controller
             fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0
         ));
         $unservedWithStockLines = count($withStockRows);
+        $unservedWithStockOpenLines = count(array_filter(
+            $withStockRows,
+            fn (array $row) => strcasecmp((string) ($row['status'] ?? ''), 'Open') === 0
+        ));
+        $unservedWithStockPartialLines = count(array_filter(
+            $withStockRows,
+            fn (array $row) => strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0
+        ));
         $unservedWithStockQty = array_sum(array_column($withStockRows, 'unserved'));
 
         $stockFilter = strtolower(trim((string) $request->input('stock_filter', 'all')));
@@ -409,6 +431,8 @@ class UnservedReportController extends Controller
                 'open_partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
                 'line_items' => count($rows),
                 'unserved_with_stock_lines' => $unservedWithStockLines,
+                'unserved_with_stock_open_lines' => $unservedWithStockOpenLines,
+                'unserved_with_stock_partial_lines' => $unservedWithStockPartialLines,
                 'unserved_with_stock_qty' => $unservedWithStockQty,
                 'total_unserved' => $totalUnserved,
                 'total_amount' => $totalAmount,
@@ -724,6 +748,8 @@ class UnservedReportController extends Controller
                 'open_partial_notes' => 0,
                 'line_items' => 0,
                 'unserved_with_stock_lines' => 0,
+                'unserved_with_stock_open_lines' => 0,
+                'unserved_with_stock_partial_lines' => 0,
                 'unserved_with_stock_qty' => 0,
                 'total_unserved' => 0,
                 'total_amount' => 0,

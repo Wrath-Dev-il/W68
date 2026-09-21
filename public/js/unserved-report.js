@@ -13,6 +13,7 @@
     const salesmanInput = document.getElementById('unserved-salesman');
     const stockFilter = document.getElementById('unserved-stock-filter');
     const rushFilter = document.getElementById('unserved-rush-filter');
+    const statusFilter = document.getElementById('unserved-status-filter');
     const dateType = document.getElementById('unserved-date-type');
     const dateFields = document.getElementById('unserved-date-fields');
     const printBtn = document.getElementById('unserved-print-btn');
@@ -21,6 +22,8 @@
     const noteCount = document.getElementById('unserved-note-count');
     const lineCount = document.getElementById('unserved-line-count');
     const withStockCount = document.getElementById('unserved-with-stock-count');
+    const withStockOpenCount = document.getElementById('unserved-with-stock-open-count');
+    const withStockPartialCount = document.getElementById('unserved-with-stock-partial-count');
     const withStockCard = document.getElementById('unserved-with-stock-card');
     const periodLabel = document.getElementById('unserved-period-label');
     const toast = document.getElementById('unserved-toast');
@@ -36,6 +39,7 @@
     let latestRows = [];
     // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
     // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
+    // W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
     const fmtQty = value => Number(value || 0).toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -83,6 +87,7 @@
         params.set('salesman', salesmanInput.value.trim());
         params.set('stock_filter', stockFilter.value || 'all');
         params.set('rush_filter', rushFilter.value || 'all');
+        params.set('status_filter', statusFilter?.value || 'all');
         params.set('date_type', dateType.value);
         dateFields.querySelectorAll('[data-period-field]').forEach(field => params.set(field.dataset.periodField, field.value));
         return params;
@@ -158,7 +163,9 @@
 
             noteCount.textContent = Number(payload.summary?.open_partial_notes ?? payload.summary?.partial_notes ?? 0).toLocaleString();
             lineCount.textContent = Number(payload.summary?.line_items || 0).toLocaleString();
-            withStockCount.textContent = fmtQty(payload.summary?.unserved_with_stock_qty || 0);
+            withStockCount.textContent = Number(payload.summary?.unserved_with_stock_lines || 0).toLocaleString();
+            withStockOpenCount.textContent = Number(payload.summary?.unserved_with_stock_open_lines || 0).toLocaleString();
+            withStockPartialCount.textContent = Number(payload.summary?.unserved_with_stock_partial_lines || 0).toLocaleString();
             periodLabel.textContent = payload.period_label || '—';
             latestRows = Array.isArray(payload.rows) ? payload.rows : [];
             renderRows();
@@ -225,6 +232,7 @@
     dateType.addEventListener('change', renderDateFields);
     stockFilter.addEventListener('change', schedulePreview);
     rushFilter.addEventListener('change', schedulePreview);
+    statusFilter?.addEventListener('change', schedulePreview);
     document.querySelectorAll('[data-column-search]').forEach(input => input.addEventListener('input', renderRows));
     const showWithStock = () => { stockFilter.value = 'with'; schedulePreview(); };
     withStockCard.addEventListener('click', showWithStock);
