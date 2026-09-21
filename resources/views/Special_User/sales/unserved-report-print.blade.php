@@ -236,6 +236,40 @@
             }
         }
     </style>
+
+    <!-- W68_UNSERVED_PRINT_BLACK_11PX_20260921 -->
+    <style>
+        @media print {
+
+            /* Normal print values/body must be solid black. */
+            body.unserved-print-body,
+            .unserved-print-customer-details,
+            .unserved-print-customer-details strong,
+            .unserved-print-table th,
+            .unserved-print-table td,
+            .unserved-print-table td.num,
+            .unserved-print-table td.strong,
+            .unserved-print-footer,
+            .unserved-print-footer span {
+                color: #000 !important;
+            }
+
+            /* Column headings = exactly 11px. */
+            .unserved-print-table th {
+                font-size: 11px !important;
+            }
+
+            /* Body/value cells = exactly 11px. */
+            .unserved-print-table td {
+                font-size: 11px !important;
+            }
+
+            /* Preserve the existing Rush print rule. */
+            .unserved-print-table tr.rush-row td {
+                color: #dc2626 !important;
+            }
+        }
+    </style>
 </head>
 <body class="unserved-print-body">
     @include('partials.global.w68-loader')
