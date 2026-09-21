@@ -8,22 +8,23 @@
     <link rel="stylesheet" href="{{ asset('css/unserved-report.css') }}?v={{ @filemtime(public_path('css/unserved-report.css')) ?: time() }}">
 
     {{--
-        W68_UNSERVED_COMPACT_PRINT_FIX_20260921
-        Keep this print-specific override in the shared print Blade so Admin,
-        Regular and Special users all receive the same pagination/layout fix.
+        W68_UNSERVED_PORTRAIT_12PX_FIX_20260921
 
-        Important:
-        - CUSTOMER TOTAL is now a normal tbody row instead of <tfoot>.
-          Chromium print/PDF can stretch or reserve footer-group space during
-          table fragmentation, which caused huge blank areas in the old PDF.
-        - Customer sections are allowed to flow naturally across pages.
-        - Column headers repeat when a table continues onto another page.
-        - Rows remain intact and compact.
+        Shared print view for Admin, Regular and Special users.
+
+        Fixes:
+        - Force Letter PORTRAIT.
+        - Table body text = 12px.
+        - Customer details = 12px.
+        - Keep CUSTOMER TOTAL inside tbody (not tfoot) to avoid giant blank
+          customer-total areas during Chromium print/PDF pagination.
+        - Customer sections may continue naturally across pages.
+        - Table headers repeat when a customer table spans pages.
     --}}
     <style>
         @media print {
             @page {
-                size: Letter landscape;
+                size: Letter portrait;
                 margin: 5mm;
             }
 
@@ -44,30 +45,30 @@
             }
 
             .unserved-print-main-header {
-                margin: 0 0 1.5mm !important;
+                margin: 0 0 2mm !important;
             }
 
             .unserved-print-header h1 {
                 margin: 0 !important;
-                font-size: 11pt !important;
-                line-height: 1 !important;
+                font-size: 18px !important;
+                line-height: 1.1 !important;
             }
 
             .unserved-print-header h2 {
-                margin: .7mm 0 .35mm !important;
-                font-size: 8.5pt !important;
-                line-height: 1 !important;
+                margin: 1mm 0 .5mm !important;
+                font-size: 14px !important;
+                line-height: 1.1 !important;
             }
 
             .unserved-print-header p {
-                margin: .3mm 0 !important;
-                font-size: 5.8pt !important;
-                line-height: 1.05 !important;
+                margin: .5mm 0 !important;
+                font-size: 11px !important;
+                line-height: 1.15 !important;
             }
 
             .unserved-print-customer-section {
                 width: 100%;
-                margin: 0 0 1.8mm !important;
+                margin: 0 0 2mm !important;
                 padding: 0 !important;
                 border: 0 !important;
                 break-inside: auto !important;
@@ -75,9 +76,9 @@
             }
 
             .unserved-print-customer-section + .unserved-print-customer-section {
-                margin-top: 1.8mm !important;
-                padding-top: .8mm !important;
-                border-top: .6pt solid #000 !important;
+                margin-top: 2mm !important;
+                padding-top: 1mm !important;
+                border-top: 1px solid #000 !important;
                 break-before: auto !important;
                 page-break-before: auto !important;
             }
@@ -85,15 +86,15 @@
             .unserved-print-customer-details {
                 width: 100% !important;
                 max-width: none !important;
-                margin: 0 0 .8mm !important;
-                padding: .55mm .8mm !important;
-                gap: .25mm 3mm !important;
+                margin: 0 0 1mm !important;
+                padding: .8mm 1mm !important;
+                gap: .4mm 3mm !important;
                 grid-template-columns: 1fr 1fr !important;
                 box-sizing: border-box !important;
-                border-top: .6pt solid #000 !important;
-                border-bottom: .6pt solid #000 !important;
-                font-size: 5.8pt !important;
-                line-height: 1.05 !important;
+                border-top: 1px solid #000 !important;
+                border-bottom: 1px solid #000 !important;
+                font-size: 12px !important;
+                line-height: 1.15 !important;
                 break-after: avoid !important;
                 page-break-after: avoid !important;
             }
@@ -112,7 +113,7 @@
                 margin: 0 !important;
                 border-collapse: collapse !important;
                 table-layout: fixed !important;
-                font-size: 5.8pt !important;
+                font-size: 12px !important;
             }
 
             .unserved-print-table thead {
@@ -123,23 +124,29 @@
                 display: table-row-group !important;
             }
 
-            .unserved-print-table th,
+            .unserved-print-table th {
+                border: 1px solid #000 !important;
+                padding: .8mm .55mm !important;
+                font-size: 10px !important;
+                line-height: 1.1 !important;
+                text-align: center !important;
+                font-weight: 800 !important;
+                background: #eee !important;
+                vertical-align: middle !important;
+                overflow-wrap: anywhere !important;
+                word-break: normal !important;
+            }
+
             .unserved-print-table td {
-                border: .6pt solid #000 !important;
-                padding: .5mm .55mm !important;
-                font-size: 5.8pt !important;
-                line-height: 1.05 !important;
+                border: 1px solid #000 !important;
+                padding: .8mm .55mm !important;
+                font-size: 12px !important;
+                line-height: 1.15 !important;
                 vertical-align: top !important;
                 overflow-wrap: anywhere !important;
                 word-break: normal !important;
                 height: auto !important;
                 min-height: 0 !important;
-            }
-
-            .unserved-print-table th {
-                text-align: center !important;
-                font-weight: 800 !important;
-                background: #eee !important;
             }
 
             .unserved-print-table tr {
@@ -149,27 +156,21 @@
             }
 
             /*
-             * 11-column Letter-landscape allocation.
-             * Give more room to Product Code / Part No. / Description so text
-             * wraps less and each item row stays shorter.
+             * 11-column Letter portrait allocation.
+             * Product Code / Part No. / Description get the most room.
              */
-            .unserved-print-table th:nth-child(1)  { width: 7.5% !important; }
-            .unserved-print-table th:nth-child(2)  { width: 9.5% !important; }
-            .unserved-print-table th:nth-child(3)  { width: 7.5% !important; }
-            .unserved-print-table th:nth-child(4)  { width: 17% !important; }
-            .unserved-print-table th:nth-child(5)  { width: 12% !important; }
-            .unserved-print-table th:nth-child(6)  { width: 15.5% !important; }
-            .unserved-print-table th:nth-child(7)  { width: 5.5% !important; }
-            .unserved-print-table th:nth-child(8)  { width: 5.5% !important; }
-            .unserved-print-table th:nth-child(9)  { width: 5.5% !important; }
-            .unserved-print-table th:nth-child(10) { width: 7% !important; }
-            .unserved-print-table th:nth-child(11) { width: 7.5% !important; }
+            .unserved-print-table th:nth-child(1)  { width: 8% !important; }
+            .unserved-print-table th:nth-child(2)  { width: 10% !important; }
+            .unserved-print-table th:nth-child(3)  { width: 8% !important; }
+            .unserved-print-table th:nth-child(4)  { width: 16% !important; }
+            .unserved-print-table th:nth-child(5)  { width: 11% !important; }
+            .unserved-print-table th:nth-child(6)  { width: 15% !important; }
+            .unserved-print-table th:nth-child(7)  { width: 5% !important; }
+            .unserved-print-table th:nth-child(8)  { width: 5% !important; }
+            .unserved-print-table th:nth-child(9)  { width: 5% !important; }
+            .unserved-print-table th:nth-child(10) { width: 8% !important; }
+            .unserved-print-table th:nth-child(11) { width: 9% !important; }
 
-            /*
-             * Do NOT use <tfoot> for CUSTOMER TOTAL.
-             * Keeping the total as a regular tbody row avoids Chromium's
-             * footer-group pagination/stretching behavior.
-             */
             .unserved-print-table .customer-total-row {
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
@@ -178,9 +179,9 @@
             .unserved-print-table .customer-total-row td {
                 height: auto !important;
                 min-height: 0 !important;
-                padding: .5mm .55mm !important;
-                font-size: 5.8pt !important;
-                line-height: 1.05 !important;
+                padding: .8mm .55mm !important;
+                font-size: 12px !important;
+                line-height: 1.15 !important;
                 background: #f3f3f3 !important;
                 vertical-align: middle !important;
             }
@@ -204,16 +205,16 @@
                 display: flex !important;
                 flex-wrap: wrap !important;
                 justify-content: flex-end !important;
-                gap: 1.2mm 4mm !important;
-                margin-top: 1.5mm !important;
-                font-size: 5.8pt !important;
-                line-height: 1.05 !important;
+                gap: 1.5mm 4mm !important;
+                margin-top: 2mm !important;
+                font-size: 11px !important;
+                line-height: 1.15 !important;
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
             }
 
             .unserved-print-footer span {
-                padding-top: .5mm !important;
+                padding-top: .6mm !important;
             }
 
             .unserved-print-body,
@@ -279,7 +280,6 @@
                             </tr>
                         @endforeach
 
-                        {{-- Keep the total in tbody so it does not stretch to fill page footer space. --}}
                         <tr class="customer-total-row">
                             <td colspan="8" class="customer-total-label">CUSTOMER TOTAL</td>
                             <td class="num strong">{{ rtrim(rtrim(number_format((float) ($group['summary']['total_unserved'] ?? 0), 2, '.', ','), '0'), '.') }}</td>
@@ -296,6 +296,7 @@
                     <div><strong>TIN:</strong> {{ strtoupper($customerDetails['tin'] ?? '—') }}</div>
                     <div class="terms"><strong>TERMS:</strong> {{ strtoupper($customerDetails['terms'] ?? '—') }}</div>
                 </div>
+
                 <table class="unserved-print-table">
                     <thead>
                         <tr>
@@ -313,7 +314,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td colspan="11" class="empty">No unserved items found for the selected filters.</td></tr>
+                        <tr>
+                            <td colspan="11" class="empty">No unserved items found for the selected filters.</td>
+                        </tr>
                     </tbody>
                 </table>
             </section>
