@@ -130,3 +130,15 @@ body.unserved-modal-open{overflow:hidden}
     letter-spacing:.08em;
     color:#64748b
 }
+
+/* W68_UNSERVED_EXCEL_EXPORT_20260921 */
+.unserved-export-button{
+    background:#166534!important;
+    color:#fff!important
+}
+.unserved-export-button:hover{
+    background:#15803d!important
+}
+.unserved-export-button svg{
+    color:#fff!important
+}

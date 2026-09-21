@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Special;
 
+use App\Exports\UnservedReportExport;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 
 class UnservedReportController extends Controller
 {
@@ -283,6 +285,35 @@ class UnservedReportController extends Controller
         ]);
     }
 
+
+    public function exportExcel(Request $request)
+    {
+        $this->authorizeReportUser();
+
+        /*
+         * Use the exact same report builder used by Preview/Print.
+         * Customer, Salesman, Date, Stock, Rush and Status filters
+         * therefore stay synchronized with the report.
+         */
+        $report = $this->buildReport($request);
+
+        $filters = [
+            'customer' => trim((string) $request->query('customer', '')),
+            'salesman' => trim((string) $request->query('salesman', '')),
+            'stock_filter' => strtolower(trim((string) $request->query('stock_filter', 'all'))),
+            'rush_filter' => strtolower(trim((string) $request->query('rush_filter', 'all'))),
+            'status_filter' => strtolower(trim((string) $request->query('status_filter', 'all'))),
+        ];
+
+        $filename = 'unserved-report-'
+            . Carbon::now('Asia/Manila')->format('Ymd-His')
+            . '.xlsx';
+
+        return Excel::download(
+            new UnservedReportExport($report, $filters),
+            $filename
+        );
+    }
     public function print(Request $request): View
     {
         $this->authorizeReportUser();

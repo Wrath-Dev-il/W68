@@ -13,6 +13,7 @@
      data-salesmen-url="{{ route($unservedRoutePrefix . '.unserved-report.salesmen') }}"
      data-data-url="{{ route($unservedRoutePrefix . '.unserved-report.data') }}"
      data-product-history-url="{{ route($unservedRoutePrefix . '.unserved-report.product-history') }}"
+     data-export-excel-url="{{ route($unservedRoutePrefix . '.unserved-report.export-excel') }}"
      data-print-url="{{ route($unservedRoutePrefix . '.unserved-report.print') }}">
 
     <section class="unserved-hero">
@@ -120,6 +121,10 @@
                 <i data-lucide="database"></i>
                 <span>Preview shows remaining quantities from Open and Partial Sales Notes.</span>
             </div>
+            <button id="unserved-export-excel-btn" type="button" class="unserved-print-button unserved-export-button">
+                <i data-lucide="file-spreadsheet"></i>
+                <span>Export as Excel</span>
+            </button>
             <button id="unserved-print-btn" type="button" class="unserved-print-button">
                 <i data-lucide="printer"></i>
                 <span>Print Report</span>

@@ -7,6 +7,7 @@
         salesmen: root.dataset.salesmenUrl,
         data: root.dataset.dataUrl,
         productHistory: root.dataset.productHistoryUrl,
+        exportExcel: root.dataset.exportExcelUrl,
         print: root.dataset.printUrl,
     };
 
@@ -17,6 +18,7 @@
     const statusFilter = document.getElementById('unserved-status-filter');
     const dateType = document.getElementById('unserved-date-type');
     const dateFields = document.getElementById('unserved-date-fields');
+    const exportExcelBtn = document.getElementById('unserved-export-excel-btn');
     const printBtn = document.getElementById('unserved-print-btn');
     const tbody = document.getElementById('unserved-table-body');
     const loadingLabel = document.getElementById('unserved-loading-label');
@@ -485,6 +487,19 @@
     bindSummaryCard(withStockCard, 'with-stock');
     bindSummaryCard(servableCard, 'servable');
 
+    /*
+     * Excel uses exactly the same active filtering parameters
+     * that Print Report sends through collectParams().
+     */
+    exportExcelBtn?.addEventListener('click', () => {
+        if (!routes.exportExcel) {
+            showToast('Excel export route is unavailable.');
+            return;
+        }
+
+        const url = `${routes.exportExcel}?${collectParams().toString()}`;
+        window.location.href = url;
+    });
     printBtn.addEventListener('click', () => {
         const url = `${routes.print}?${collectParams().toString()}`;
         window.open(url, '_blank', 'noopener');
