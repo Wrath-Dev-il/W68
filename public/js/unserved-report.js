@@ -136,14 +136,12 @@
         }
 
         if (activeSummaryMode === 'servable') {
+            // W68_SERVABLE_GTE_UNSERVED_20260921
             return latestRows.filter(row =>
-                Math.abs(
-                    Number(row.on_hand || 0)
-                    - Number(row.unserved || 0)
-                ) < 0.000001
+                Number(row.on_hand || 0) + 0.000001
+                >= Number(row.unserved || 0)
             );
         }
-
         return latestRows;
     }
 

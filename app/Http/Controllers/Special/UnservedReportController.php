@@ -613,15 +613,14 @@ class UnservedReportController extends Controller
                 abs((float) ($row['on_hand'] ?? 0)) < 0.000001
         ));
 
+        // W68_SERVABLE_GTE_UNSERVED_20260921
+        // Servable when ON HAND is equal to or greater than UNSERVED.
         $servableItemLines = count(array_filter(
             $dashboardRows,
             fn (array $row) =>
-                abs(
-                    (float) ($row['on_hand'] ?? 0)
-                    - (float) ($row['unserved'] ?? 0)
-                ) < 0.000001
+                (float) ($row['on_hand'] ?? 0) + 0.000001
+                >= (float) ($row['unserved'] ?? 0)
         ));
-
         $withStockRows = array_values(array_filter(
             $rows,
             fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0
@@ -650,9 +649,9 @@ class UnservedReportController extends Controller
         $totalAmount = array_sum(array_column($rows, 'total_amount'));
         $servableItems = count(array_filter(
             $rows,
-            fn (array $row) => abs(
-                (float) ($row['on_hand'] ?? 0) - (float) ($row['unserved'] ?? 0)
-            ) < 0.000001
+            fn (array $row) =>
+                (float) ($row['on_hand'] ?? 0) + 0.000001
+                >= (float) ($row['unserved'] ?? 0)
         ));
         $customerGroups = $this->buildCustomerGroups($rows, $notes);
 

@@ -206,13 +206,13 @@
             class="unserved-summary-action"
             role="button"
             tabindex="0"
-            title="Show items where ON HAND exactly equals UNSERVED">
+            title="Show items where ON HAND is equal to or greater than UNSERVED">
 
             <span>Servable Item</span>
             <strong id="unserved-servable-count">0</strong>
 
             <small class="unserved-summary-rule">
-                ON HAND = UNSERVED
+                ON HAND >= UNSERVED
             </small>
         </article>
 
