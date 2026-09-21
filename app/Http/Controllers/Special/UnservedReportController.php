@@ -504,6 +504,7 @@ class UnservedReportController extends Controller
 
                 $rows[] = [
                     'sales_note_id' => $noteId,
+                    'product_id' => $productId,
                     'so_no' => (string) ($note->sales_number ?? ''),
                     'product_code' => (string) ($product->product_code ?? ''),
                     'part_number' => (string) ($product->part_number ?? ''),
