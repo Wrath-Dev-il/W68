@@ -15856,7 +15856,8 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
                 $q->where('order_number', 'like', "%{$search}%")
                   ->orWhere('customer_name', 'like', "%{$search}%")
                   ->orWhere('invoice_numbers', 'like', "%{$search}%")
-                  ->orWhere('waybill_no', 'like', "%{$search}%");
+                  ->orWhere('waybill_no', 'like', "%{$search}%")
+                  ->orWhere('remarks', 'like', "%{$search}%");
             });
         }
         $total = $query->count();
