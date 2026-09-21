@@ -1914,7 +1914,10 @@ window.loadReportContent = async function(ids, type, onlinePricesConfirmed, rang
     window._reportIds = ids;
     window._reportRange = range || { outDate1: new Date().getFullYear().toString(), outDate2: (new Date().getFullYear() + 1).toString(), outDate3: '' };
     try {
-        const res = await fetch(window.salesRoutes.reportUrl, {
+        const reportUrl = new URL(window.salesRoutes.reportUrl, window.location.origin);
+        reportUrl.searchParams.set('type', type);
+
+        const res = await fetch(reportUrl.toString(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.csrfToken, 'Accept': 'application/json' },
             body: JSON.stringify({
