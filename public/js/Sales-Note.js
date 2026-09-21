@@ -1917,7 +1917,10 @@ window.loadReportContent = async function(ids, type, onlinePricesConfirmed, rang
         const res = await fetch(window.salesRoutes.reportUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.csrfToken, 'Accept': 'application/json' },
-            body: JSON.stringify({ ids: Array.isArray(ids) ? ids : ids.split(',').map(Number) }),
+            body: JSON.stringify({
+                ids: Array.isArray(ids) ? ids : ids.split(',').map(Number),
+                type: type
+            }),
         });
         const data = await res.json();
         if (data.success) { renderNoteReport(data.notes); }

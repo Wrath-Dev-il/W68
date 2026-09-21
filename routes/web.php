@@ -14753,7 +14753,7 @@ Route::post('/admin/sales/sales-note/report', function (Request $request) {
                         }
                         $product = $resolvedProductId ? \App\Models\Product::on('masterlist')->find($resolvedProductId) : null;
                         return [
-                            'product_id' => $item->product_id,
+                            'product_id' => $resolvedProductId,
                             'product_code' => (string) ($item->product_code ?? ''),
                             'description' => $item->description,
                             'part_number' => $product ? $product->part_number : '',
@@ -14775,55 +14775,57 @@ Route::post('/admin/sales/sales-note/report', function (Request $request) {
 
     if ($isNoteUnserved) {
         $notes = $notes->map(function ($note) {
-            $so = \App\Models\SalesOrder::on('sales')
-                ->with('items')
-                ->where('order_number', $note['sales_number'])
-                ->first();
+            // NOTE UNSERVED must follow the same rule used by Sales Order Proceed:
+            // remaining = Sales Note quantity - total ACTUAL served quantity
+            // across every invoice/Sales Order linked to this Sales Note.
+            $servedRows = DB::connection('sales')
+                ->table('sales_orders as so')
+                ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+                ->where('so.sales_note_id', $note['id'])
+                ->select([
+                    'soi.product_id',
+                    DB::raw('SUM(COALESCE(soi.actual_qty, 0)) as served_qty'),
+                ])
+                ->groupBy('soi.product_id')
+                ->get();
 
-            if (!$so) {
-                $note['items'] = collect([
-                    [
-                        'product_id' => null,
-                        'product_code' => '',
-                        'description' => 'NONE',
-                        'part_number' => '',
-                        'quantity' => 0,
-                        'additional_qty' => 0,
-                        'print_qty_label' => 'NONE',
-                        'print_qty' => 0,
-                        'oum' => '',
-                        'unit_price' => 0,
-                        'discount' => 0,
-                        'subtotal' => 0,
-                        'on_hand' => 0,
-                        'cost' => 0,
-                        'selling_price' => 0,
-                        'price_online' => 0,
-                    ],
-                ]);
-                return $note;
+            $servedRemaining = [];
+            foreach ($servedRows as $row) {
+                $servedRemaining[(int) $row->product_id] = max(
+                    0,
+                    (float) ($row->served_qty ?? 0)
+                );
             }
 
-            $diffByProduct = $so->items
-                ->groupBy('product_id')
-                ->map(function ($rows) {
-                    $qty = (int) $rows->sum(fn ($r) => (int) $r->quantity + (int) ($r->additional_qty ?? 0));
-                    $actual = (int) $rows->sum(fn ($r) => (int) ($r->actual_qty ?? 0));
-                    return max(0, $qty - $actual);
-                })
-                ->toArray();
-
+            // Allocate served QTY across duplicate Sales Note rows in row order.
+            // This avoids subtracting the same served quantity from every duplicate row.
             $note['items'] = collect($note['items'])
-                ->map(function ($item) use ($diffByProduct) {
-                    if (array_key_exists($item['product_id'], $diffByProduct)) {
-                        $orderedDiff = (int) $diffByProduct[$item['product_id']];
-                    } else {
-                        $orderedDiff = (int) $item['quantity'] + (int) ($item['additional_qty'] ?? 0);
-                    }
-                    $item['print_qty'] = $orderedDiff;
+                ->map(function ($item) use (&$servedRemaining) {
+                    $productId = (int) ($item['product_id'] ?? 0);
+                    $orderedQty = max(0, (float) ($item['quantity'] ?? 0));
+                    $availableServed = max(
+                        0,
+                        (float) ($servedRemaining[$productId] ?? 0)
+                    );
+
+                    $servedForRow = min($orderedQty, $availableServed);
+                    $remainingQty = max(0, $orderedQty - $servedForRow);
+
+                    $servedRemaining[$productId] = max(
+                        0,
+                        $availableServed - $servedForRow
+                    );
+
+                    $item['print_qty'] = $remainingQty;
+
+                    // The modal renderer uses quantity/additional_qty directly.
+                    // For NOTE UNSERVED, show only the real remaining main quantity.
+                    $item['quantity'] = $remainingQty;
+                    $item['additional_qty'] = 0;
+
                     return $item;
                 })
-                ->filter(fn ($item) => (int) ($item['print_qty'] ?? 0) > 0)
+                ->filter(fn ($item) => (float) ($item['print_qty'] ?? 0) > 0)
                 ->values();
 
             if ($note['items']->count() === 0) {
@@ -15473,28 +15475,32 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
         ->get()
         ->map(function ($note) use ($isNoteUnserved, $yearlyOutMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
             $customer = \App\Models\Customer::on('masterlist')->find($note->customer_id);
-            $diffByProduct = [];
+            $servedRemaining = [];
 
             if ($isNoteUnserved) {
-                $so = \App\Models\SalesOrder::on('sales')
-                    ->with('items')
-                    ->where('order_number', $note->sales_number)
-                    ->first();
+                // Use every Sales Order/invoice belonging to this Sales Note.
+                // actual_qty is the authoritative served/invoiced quantity.
+                $servedRows = DB::connection('sales')
+                    ->table('sales_orders as so')
+                    ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+                    ->where('so.sales_note_id', $note->id)
+                    ->select([
+                        'soi.product_id',
+                        DB::raw('SUM(COALESCE(soi.actual_qty, 0)) as served_qty'),
+                    ])
+                    ->groupBy('soi.product_id')
+                    ->get();
 
-                if ($so) {
-                    $diffByProduct = $so->items
-                        ->groupBy('product_id')
-                        ->map(function ($rows) {
-                            $qty = (int) $rows->sum(fn ($r) => (int) $r->quantity + (int) ($r->additional_qty ?? 0));
-                            $actual = (int) $rows->sum(fn ($r) => (int) ($r->actual_qty ?? 0));
-                            return max(0, $qty - $actual);
-                        })
-                        ->toArray();
+                foreach ($servedRows as $row) {
+                    $servedRemaining[(int) $row->product_id] = max(
+                        0,
+                        (float) ($row->served_qty ?? 0)
+                    );
                 }
             }
 
             $items = $note->items
-                ->map(function ($item) use ($diffByProduct, $isNoteUnserved, $yearlyOutMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
+                ->map(function ($item) use (&$servedRemaining, $isNoteUnserved, $yearlyOutMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
                     // Resolve product_id: use direct product_id if available, fallback to product_code lookup
                     $resolvedProductId = (int)$item->product_id;
                     if (!$resolvedProductId && $item->product_code && isset($codeToIdMap[strtoupper(trim($item->product_code))])) {
@@ -15505,11 +15511,21 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
                     $latestCost = $latestCostByProductId[$resolvedProductId] ?? 0;
 
                     if ($isNoteUnserved) {
-                        if (array_key_exists($resolvedProductId, $diffByProduct)) {
-                            $printQty = (int) $diffByProduct[$resolvedProductId];
-                        } else {
-                            $printQty = (int) $item->quantity + (int) ($item->additional_qty ?? 0);
-                        }
+                        $orderedQty = max(0, (float) ($item->quantity ?? 0));
+                        $availableServed = max(
+                            0,
+                            (float) ($servedRemaining[$resolvedProductId] ?? 0)
+                        );
+
+                        // Allocate the product's served quantity once across duplicate
+                        // Sales Note rows, matching the force-close reconciliation rule.
+                        $servedForRow = min($orderedQty, $availableServed);
+                        $printQty = max(0, $orderedQty - $servedForRow);
+
+                        $servedRemaining[$resolvedProductId] = max(
+                            0,
+                            $availableServed - $servedForRow
+                        );
                     } else {
                         $printQty = (int) $item->quantity + (int) ($item->additional_qty ?? 0);
                     }
