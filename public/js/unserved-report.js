@@ -491,14 +491,169 @@
      * Excel uses exactly the same active filtering parameters
      * that Print Report sends through collectParams().
      */
-    exportExcelBtn?.addEventListener('click', () => {
+    /* W68_EXCEL_FETCH_DOWNLOAD_V2_20260921 */
+    let excelExportInProgress = false;
+
+    exportExcelBtn?.addEventListener('click', async () => {
         if (!routes.exportExcel) {
             showToast('Excel export route is unavailable.');
             return;
         }
 
-        const url = `${routes.exportExcel}?${collectParams().toString()}`;
-        window.location.href = url;
+        if (excelExportInProgress) {
+            return;
+        }
+
+        excelExportInProgress = true;
+
+        const label = exportExcelBtn.querySelector('span');
+        const originalLabel = label?.textContent || 'Export as Excel';
+
+        exportExcelBtn.disabled = true;
+        exportExcelBtn.classList.add('is-loading');
+
+        if (label) {
+            label.textContent = 'Exporting...';
+        }
+
+        const controller = new AbortController();
+        const timeout = window.setTimeout(
+            () => controller.abort(),
+            120000
+        );
+
+        try {
+            const url =
+                `${routes.exportExcel}?${collectParams().toString()}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                },
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => '');
+
+                if (errorText) {
+                    console.error(
+                        'Unserved Excel export server response:',
+                        errorText
+                    );
+                }
+
+                throw new Error(
+                    `Excel export failed (${response.status}).`
+                );
+            }
+
+            const contentType =
+                response.headers.get('content-type') || '';
+
+            if (
+                !contentType.includes('spreadsheet') &&
+                !contentType.includes('application/octet-stream')
+            ) {
+                const invalidResponse =
+                    await response.text().catch(() => '');
+
+                console.error(
+                    'Invalid Excel export response:',
+                    invalidResponse
+                );
+
+                throw new Error(
+                    'Excel export returned an invalid response.'
+                );
+            }
+
+            const blob = await response.blob();
+
+            if (!blob.size) {
+                throw new Error(
+                    'The exported Excel file is empty.'
+                );
+            }
+
+            const disposition =
+                response.headers.get('content-disposition') || '';
+
+            let filename = 'unserved-report.xlsx';
+
+            const utf8Filename =
+                disposition.match(
+                    /filename\*=UTF-8''([^;]+)/i
+                );
+
+            const normalFilename =
+                disposition.match(
+                    /filename="?([^";]+)"?/i
+                );
+
+            if (utf8Filename?.[1]) {
+                filename =
+                    decodeURIComponent(
+                        utf8Filename[1]
+                    );
+            } else if (normalFilename?.[1]) {
+                filename =
+                    normalFilename[1];
+            }
+
+            const objectUrl =
+                URL.createObjectURL(blob);
+
+            const downloadLink =
+                document.createElement('a');
+
+            downloadLink.href = objectUrl;
+            downloadLink.download = filename;
+            downloadLink.style.display = 'none';
+
+            document.body.appendChild(downloadLink);
+
+            downloadLink.click();
+            downloadLink.remove();
+
+            window.setTimeout(
+                () => URL.revokeObjectURL(objectUrl),
+                1000
+            );
+
+            showToast(
+                'Excel export downloaded successfully.'
+            );
+        } catch (error) {
+            console.error(
+                'Unserved Excel export error:',
+                error
+            );
+
+            if (error?.name === 'AbortError') {
+                showToast(
+                    'Excel export timed out. Please try again.'
+                );
+            } else {
+                showToast(
+                    error?.message ||
+                    'Unable to export Excel.'
+                );
+            }
+        } finally {
+            window.clearTimeout(timeout);
+
+            excelExportInProgress = false;
+
+            exportExcelBtn.disabled = false;
+            exportExcelBtn.classList.remove('is-loading');
+
+            if (label) {
+                label.textContent = originalLabel;
+            }
+        }
     });
     printBtn.addEventListener('click', () => {
         const url = `${routes.print}?${collectParams().toString()}`;

@@ -142,3 +142,29 @@ body.unserved-modal-open{overflow:hidden}
 .unserved-export-button svg{
     color:#fff!important
 }
+
+/* W68_UNSERVED_EXPORT_ACTION_LAYOUT_V2_20260921 */
+.unserved-actions{
+    justify-content:flex-start!important
+}
+.unserved-live-hint{
+    margin-right:auto
+}
+.unserved-export-button{
+    margin-left:0!important
+}
+.unserved-export-button:disabled{
+    opacity:.7;
+    cursor:wait!important
+}
+.unserved-export-button.is-loading svg{
+    animation:w68-unserved-excel-spin .8s linear infinite
+}
+@keyframes w68-unserved-excel-spin{
+    to{transform:rotate(360deg)}
+}
+@media(max-width:640px){
+    .unserved-live-hint{
+        margin-right:0
+    }
+}
