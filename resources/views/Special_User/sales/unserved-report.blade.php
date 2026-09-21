@@ -31,7 +31,7 @@
         <div class="unserved-card-heading">
             <div>
                 <span class="unserved-card-kicker">Report Filters</span>
-                <h3>Unserved Details</h3>
+                <h3 id="unserved-preview-title">Unserved Details</h3>
             </div>
             <i data-lucide="sliders-horizontal"></i>
         </div>
@@ -127,33 +127,90 @@
         </div>
     </section>
 
+    {{-- W68_UNSERVED_SUMMARY_CARDS_V3_20260921 --}}
     <section class="unserved-summary-grid">
-        <article>
-            <span>Open / Partial Notes</span>
-            <strong id="unserved-note-count">0</strong>
+
+        <article
+            id="unserved-all-card"
+            class="unserved-summary-action"
+            role="button"
+            tabindex="0"
+            title="Show all Open and Partial unserved items">
+
+            <span>All Unserved Items</span>
+            <strong id="unserved-all-count">0</strong>
+
+            <div class="unserved-note-breakdown">
+                <span>
+                    <small>TOTAL</small>
+                    <b id="unserved-total-notes-count">0</b>
+                </span>
+
+                <span class="is-open">
+                    <small>OPEN</small>
+                    <b id="unserved-open-notes-count">0</b>
+                </span>
+
+                <span class="is-partial">
+                    <small>PARTIAL</small>
+                    <b id="unserved-partial-notes-count">0</b>
+                </span>
+            </div>
         </article>
-        <article>
-            <span>Unserved Lines</span>
-            <strong id="unserved-line-count">0</strong>
+
+        <article
+            id="unserved-without-stock-card"
+            class="unserved-summary-action"
+            role="button"
+            tabindex="0"
+            title="Show unserved items where ON HAND equals zero">
+
+            <span>Unserved Items Without Stocks</span>
+            <strong id="unserved-without-stock-count">0</strong>
+
+            <small class="unserved-summary-rule">
+                ON HAND = 0
+            </small>
         </article>
-        <article id="unserved-with-stock-card" class="unserved-summary-action" role="button" tabindex="0" title="Show only unserved item lines that currently have stock">
+
+        <article
+            id="unserved-with-stock-card"
+            class="unserved-summary-action"
+            role="button"
+            tabindex="0"
+            title="Show unserved items that currently have stock">
+
             <span>Unserved With Stocks</span>
             <strong id="unserved-with-stock-count">0</strong>
+
             <div class="unserved-stock-status-breakdown">
                 <span class="unserved-stock-status-item is-open">
                     <small>OPEN</small>
                     <b id="unserved-with-stock-open-count">0</b>
                 </span>
+
                 <span class="unserved-stock-status-item is-partial">
                     <small>PARTIAL</small>
                     <b id="unserved-with-stock-partial-count">0</b>
                 </span>
             </div>
         </article>
-        <article>
-            <span>Selected Period</span>
-            <strong id="unserved-period-label">—</strong>
+
+        <article
+            id="unserved-servable-card"
+            class="unserved-summary-action"
+            role="button"
+            tabindex="0"
+            title="Show items where ON HAND exactly equals UNSERVED">
+
+            <span>Servable Item</span>
+            <strong id="unserved-servable-count">0</strong>
+
+            <small class="unserved-summary-rule">
+                ON HAND = UNSERVED
+            </small>
         </article>
+
     </section>
 
     <section class="unserved-table-card">

@@ -549,6 +549,48 @@ class UnservedReportController extends Controller
             $rows = array_values(array_filter($rows, fn (array $row) => empty($row['is_rush'])));
         }
 
+        // W68_UNSERVED_SUMMARY_CARDS_V3_20260921
+        // Dashboard buckets are calculated before the Stock filter.
+        $dashboardRows = $rows;
+
+        $allUnservedItems = count($dashboardRows);
+
+        $allUnservedTotalNotes = collect($dashboardRows)
+            ->pluck('sales_note_id')
+            ->unique()
+            ->count();
+
+        $allUnservedOpenNotes = collect($dashboardRows)
+            ->filter(fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Open') === 0
+            )
+            ->pluck('sales_note_id')
+            ->unique()
+            ->count();
+
+        $allUnservedPartialNotes = collect($dashboardRows)
+            ->filter(fn (array $row) =>
+                strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0
+            )
+            ->pluck('sales_note_id')
+            ->unique()
+            ->count();
+
+        $unservedWithoutStockLines = count(array_filter(
+            $dashboardRows,
+            fn (array $row) =>
+                abs((float) ($row['on_hand'] ?? 0)) < 0.000001
+        ));
+
+        $servableItemLines = count(array_filter(
+            $dashboardRows,
+            fn (array $row) =>
+                abs(
+                    (float) ($row['on_hand'] ?? 0)
+                    - (float) ($row['unserved'] ?? 0)
+                ) < 0.000001
+        ));
+
         $withStockRows = array_values(array_filter(
             $rows,
             fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0
@@ -590,6 +632,12 @@ class UnservedReportController extends Controller
             'customer_details' => $customerDetails,
             'customer_groups' => $customerGroups,
             'summary' => [
+                'all_unserved_items' => $allUnservedItems,
+                'all_unserved_total_notes' => $allUnservedTotalNotes,
+                'all_unserved_open_notes' => $allUnservedOpenNotes,
+                'all_unserved_partial_notes' => $allUnservedPartialNotes,
+                'unserved_without_stock_lines' => $unservedWithoutStockLines,
+                'servable_item_lines' => $servableItemLines,
                 'partial_notes' => collect($rows)
                     ->filter(fn (array $row) => strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0)
                     ->pluck('sales_note_id')
@@ -912,6 +960,12 @@ class UnservedReportController extends Controller
             ],
             'customer_groups' => [],
             'summary' => [
+                'all_unserved_items' => 0,
+                'all_unserved_total_notes' => 0,
+                'all_unserved_open_notes' => 0,
+                'all_unserved_partial_notes' => 0,
+                'unserved_without_stock_lines' => 0,
+                'servable_item_lines' => 0,
                 'partial_notes' => 0,
                 'open_partial_notes' => 0,
                 'line_items' => 0,

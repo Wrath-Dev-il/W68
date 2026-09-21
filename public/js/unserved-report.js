@@ -20,13 +20,22 @@
     const printBtn = document.getElementById('unserved-print-btn');
     const tbody = document.getElementById('unserved-table-body');
     const loadingLabel = document.getElementById('unserved-loading-label');
-    const noteCount = document.getElementById('unserved-note-count');
-    const lineCount = document.getElementById('unserved-line-count');
+    const allUnservedCount = document.getElementById('unserved-all-count');
+    const totalNotesCount = document.getElementById('unserved-total-notes-count');
+    const openNotesCount = document.getElementById('unserved-open-notes-count');
+    const partialNotesCount = document.getElementById('unserved-partial-notes-count');
+
+    const withoutStockCount = document.getElementById('unserved-without-stock-count');
     const withStockCount = document.getElementById('unserved-with-stock-count');
     const withStockOpenCount = document.getElementById('unserved-with-stock-open-count');
     const withStockPartialCount = document.getElementById('unserved-with-stock-partial-count');
+    const servableCount = document.getElementById('unserved-servable-count');
+
+    const allUnservedCard = document.getElementById('unserved-all-card');
+    const withoutStockCard = document.getElementById('unserved-without-stock-card');
     const withStockCard = document.getElementById('unserved-with-stock-card');
-    const periodLabel = document.getElementById('unserved-period-label');
+    const servableCard = document.getElementById('unserved-servable-card');
+    const previewTitle = document.getElementById('unserved-preview-title');
     const toast = document.getElementById('unserved-toast');
     const historyModal = document.getElementById('unserved-history-modal');
     const historyClose = document.getElementById('unserved-history-close');
@@ -46,6 +55,7 @@
     let previewTimer = null;
     let previewAbort = null;
     let latestRows = [];
+    let activeSummaryMode = null;
     // W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918
     // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
     // W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921
@@ -110,12 +120,52 @@
         return String(raw).toLowerCase();
     }
 
+    function summaryModeRows() {
+        if (activeSummaryMode === 'without-stock') {
+            return latestRows.filter(
+                row => Math.abs(Number(row.on_hand || 0)) < 0.000001
+            );
+        }
+
+        if (activeSummaryMode === 'with-stock') {
+            return latestRows.filter(
+                row => Number(row.on_hand || 0) > 0
+            );
+        }
+
+        if (activeSummaryMode === 'servable') {
+            return latestRows.filter(row =>
+                Math.abs(
+                    Number(row.on_hand || 0)
+                    - Number(row.unserved || 0)
+                ) < 0.000001
+            );
+        }
+
+        return latestRows;
+    }
+
     function visibleRows() {
-        const searches = Array.from(document.querySelectorAll('[data-column-search]'))
-            .map(input => ({key: input.dataset.columnSearch, value: input.value.trim().toLowerCase()}))
+        const baseRows = summaryModeRows();
+
+        const searches = Array.from(
+            document.querySelectorAll('[data-column-search]')
+        )
+            .map(input => ({
+                key: input.dataset.columnSearch,
+                value: input.value.trim().toLowerCase()
+            }))
             .filter(entry => entry.value !== '');
-        if (!searches.length) return latestRows;
-        return latestRows.filter(row => searches.every(entry => searchableValue(row, entry.key).includes(entry.value)));
+
+        if (!searches.length) {
+            return baseRows;
+        }
+
+        return baseRows.filter(row =>
+            searches.every(entry =>
+                searchableValue(row, entry.key).includes(entry.value)
+            )
+        );
     }
 
     function renderRows() {
@@ -170,12 +220,33 @@
             const payload = await response.json().catch(() => null);
             if (!response.ok || !payload?.success) throw new Error(payload?.message || `Unable to load report (${response.status}).`);
 
-            noteCount.textContent = Number(payload.summary?.open_partial_notes ?? payload.summary?.partial_notes ?? 0).toLocaleString();
-            lineCount.textContent = Number(payload.summary?.line_items || 0).toLocaleString();
-            withStockCount.textContent = Number(payload.summary?.unserved_with_stock_lines || 0).toLocaleString();
-            withStockOpenCount.textContent = Number(payload.summary?.unserved_with_stock_open_lines || 0).toLocaleString();
-            withStockPartialCount.textContent = Number(payload.summary?.unserved_with_stock_partial_lines || 0).toLocaleString();
-            periodLabel.textContent = payload.period_label || '—';
+            allUnservedCount.textContent =
+                Number(payload.summary?.all_unserved_items || 0).toLocaleString();
+
+            totalNotesCount.textContent =
+                Number(payload.summary?.all_unserved_total_notes || 0).toLocaleString();
+
+            openNotesCount.textContent =
+                Number(payload.summary?.all_unserved_open_notes || 0).toLocaleString();
+
+            partialNotesCount.textContent =
+                Number(payload.summary?.all_unserved_partial_notes || 0).toLocaleString();
+
+            withoutStockCount.textContent =
+                Number(payload.summary?.unserved_without_stock_lines || 0).toLocaleString();
+
+            withStockCount.textContent =
+                Number(payload.summary?.unserved_with_stock_lines || 0).toLocaleString();
+
+            withStockOpenCount.textContent =
+                Number(payload.summary?.unserved_with_stock_open_lines || 0).toLocaleString();
+
+            withStockPartialCount.textContent =
+                Number(payload.summary?.unserved_with_stock_partial_lines || 0).toLocaleString();
+
+            servableCount.textContent =
+                Number(payload.summary?.servable_item_lines || 0).toLocaleString();
+
             latestRows = Array.isArray(payload.rows) ? payload.rows : [];
             renderRows();
         } catch (error) {
@@ -275,6 +346,73 @@
         previewTimer = setTimeout(loadPreview, 350);
     }
 
+    function updatePreviewTitle() {
+        if (!previewTitle) return;
+
+        const titles = {
+            all: 'All Unserved Items',
+            'without-stock': 'Unserved Items Without Stocks',
+            'with-stock': 'Unserved Items With Stocks',
+            servable: 'Servable Items',
+        };
+
+        previewTitle.textContent =
+            titles[activeSummaryMode] || 'Unserved Details';
+
+        [
+            allUnservedCard,
+            withoutStockCard,
+            withStockCard,
+            servableCard
+        ].forEach(card => card?.classList.remove('is-active'));
+
+        const activeCard = {
+            all: allUnservedCard,
+            'without-stock': withoutStockCard,
+            'with-stock': withStockCard,
+            servable: servableCard,
+        }[activeSummaryMode];
+
+        activeCard?.classList.add('is-active');
+    }
+
+    function showSummaryMode(mode) {
+        activeSummaryMode = mode;
+
+        if (statusFilter) {
+            statusFilter.value = 'all';
+        }
+
+        if (mode === 'with-stock') {
+            stockFilter.value = 'with';
+        } else if (mode === 'without-stock') {
+            stockFilter.value = 'without';
+        } else {
+            stockFilter.value = 'all';
+        }
+
+        updatePreviewTitle();
+        schedulePreview();
+    }
+
+    function bindSummaryCard(card, mode) {
+        if (!card) return;
+
+        card.addEventListener(
+            'click',
+            () => showSummaryMode(mode)
+        );
+
+        card.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            event.preventDefault();
+            showSummaryMode(mode);
+        });
+    }
+
     function setupCombobox(container, input, endpoint) {
         const menu = container.querySelector('.unserved-combo-menu');
         const toggle = container.querySelector('.unserved-combo-toggle');
@@ -323,13 +461,30 @@
     setupCombobox(root.querySelector('[data-combobox="salesman"]'), salesmanInput, routes.salesmen);
 
     dateType.addEventListener('change', renderDateFields);
-    stockFilter.addEventListener('change', schedulePreview);
+
+    stockFilter.addEventListener('change', () => {
+        activeSummaryMode = null;
+        updatePreviewTitle();
+        schedulePreview();
+    });
+
     rushFilter.addEventListener('change', schedulePreview);
-    statusFilter?.addEventListener('change', schedulePreview);
-    document.querySelectorAll('[data-column-search]').forEach(input => input.addEventListener('input', renderRows));
-    const showWithStock = () => { stockFilter.value = 'with'; schedulePreview(); };
-    withStockCard.addEventListener('click', showWithStock);
-    withStockCard.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showWithStock(); } });
+
+    statusFilter?.addEventListener('change', () => {
+        activeSummaryMode = null;
+        updatePreviewTitle();
+        schedulePreview();
+    });
+
+    document.querySelectorAll('[data-column-search]').forEach(
+        input => input.addEventListener('input', renderRows)
+    );
+
+    bindSummaryCard(allUnservedCard, 'all');
+    bindSummaryCard(withoutStockCard, 'without-stock');
+    bindSummaryCard(withStockCard, 'with-stock');
+    bindSummaryCard(servableCard, 'servable');
+
     printBtn.addEventListener('click', () => {
         const url = `${routes.print}?${collectParams().toString()}`;
         window.open(url, '_blank', 'noopener');
