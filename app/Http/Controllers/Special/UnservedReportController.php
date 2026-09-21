@@ -13,6 +13,7 @@ use Illuminate\View\View;
 
 class UnservedReportController extends Controller
 {
+    // W68_UNSERVED_ALL_USERS_PRINT_SUMMARY_FIX_20260921: shared routes + print heading/footer summary.
     // W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921: stock card counts item lines; print/live support All/Open/Partial status.
     // W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921: shared Open + Partial remaining-items report.
     public function index(): View
@@ -414,6 +415,12 @@ class UnservedReportController extends Controller
         }
         $totalUnserved = array_sum(array_column($rows, 'unserved'));
         $totalAmount = array_sum(array_column($rows, 'total_amount'));
+        $servableItems = count(array_filter(
+            $rows,
+            fn (array $row) => abs(
+                (float) ($row['on_hand'] ?? 0) - (float) ($row['unserved'] ?? 0)
+            ) < 0.000001
+        ));
         $customerGroups = $this->buildCustomerGroups($rows, $notes);
 
         return [
@@ -430,6 +437,7 @@ class UnservedReportController extends Controller
                     ->count(),
                 'open_partial_notes' => collect($rows)->pluck('sales_note_id')->unique()->count(),
                 'line_items' => count($rows),
+                'servable_items' => $servableItems,
                 'unserved_with_stock_lines' => $unservedWithStockLines,
                 'unserved_with_stock_open_lines' => $unservedWithStockOpenLines,
                 'unserved_with_stock_partial_lines' => $unservedWithStockPartialLines,
@@ -747,6 +755,7 @@ class UnservedReportController extends Controller
                 'partial_notes' => 0,
                 'open_partial_notes' => 0,
                 'line_items' => 0,
+                'servable_items' => 0,
                 'unserved_with_stock_lines' => 0,
                 'unserved_with_stock_open_lines' => 0,
                 'unserved_with_stock_partial_lines' => 0,

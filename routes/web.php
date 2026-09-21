@@ -30415,3 +30415,11 @@ foreach (['admin', 'regular', 'special'] as $w68SoaPrefix) {
         [\App\Http\Controllers\CustomerSoaAutoController::class, 'save']
     )->name($w68SoaPrefix . '.customer-master.soa-auto.save');
 }
+
+
+/* W68_UNSERVED_REPORT_ALL_USERS_ROUTES_20260921 */
+foreach (['admin', 'regular', 'special'] as $w68UnservedPrefix) {
+    \Illuminate\Support\Facades\Route::prefix($w68UnservedPrefix)
+        ->name($w68UnservedPrefix . '.')
+        ->group(base_path('routes/unserved-report.php'));
+}

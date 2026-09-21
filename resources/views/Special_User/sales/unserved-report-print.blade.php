@@ -9,6 +9,7 @@
 
     {{--
         W68_UNSERVED_PORTRAIT_12PX_FIX_20260921
+        W68_UNSERVED_ALL_USERS_PRINT_SUMMARY_FIX_20260921
         W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
         W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921
 
@@ -242,21 +243,24 @@
 <body class="unserved-print-body">
     @include('partials.global.w68-loader')
 
+    @php
+        $normalizedStatusFilter = strtolower((string) ($statusFilter ?? 'all'));
+        $unservedPrintHeading = match ($normalizedStatusFilter) {
+            'open' => 'OPEN UNSERVED',
+            'partial' => 'PARTIAL UNSERVED',
+            default => 'OPEN/PARTIAL UNSERVED',
+        };
+    @endphp
+
     <main class="unserved-print-sheet">
         <header class="unserved-print-header unserved-print-main-header">
             <h1>W68 AUTOPARTS AND SERVICE CENTER</h1>
-            <h2>OPEN / PARTIAL UNSERVED</h2>
+            <h2>{{ $unservedPrintHeading }}</h2>
             {{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
             <p>GENERATED: {{ strtoupper($generatedAt) }} &nbsp; | &nbsp; DATE: {{ strtoupper($periodLabel) }}</p>
             @if($salesman)
                 <p class="unserved-print-filters">SALES MAN: {{ strtoupper($salesman) }}</p>
             @endif
-            <p class="unserved-print-filters">
-                STATUS:
-                {{ ($statusFilter ?? 'all') === 'open'
-                    ? 'OPEN'
-                    : (($statusFilter ?? 'all') === 'partial' ? 'PARTIAL' : 'ALL (OPEN + PARTIAL)') }}
-            </p>
         </header>
 
         @forelse($customerGroups as $group)
@@ -343,11 +347,9 @@
         @endforelse
 
         <footer class="unserved-print-footer">
-            <span>Open / Partial Notes: {{ number_format($summary['open_partial_notes'] ?? $summary['partial_notes'] ?? 0) }}</span>
-            <span>Lines: {{ number_format($summary['line_items']) }}</span>
-            <span>Unserved With Stocks: {{ rtrim(rtrim(number_format((float) ($summary['unserved_with_stock_qty'] ?? 0), 2, '.', ','), '0'), '.') }}</span>
-            <span>Total Unserved: {{ rtrim(rtrim(number_format((float) $summary['total_unserved'], 2, '.', ','), '0'), '.') }}</span>
-            <span>Total Amount: {{ number_format((float) ($summary['total_amount'] ?? 0), 2) }}</span>
+            <span>TOTAL UNSERVED ITEMS: {{ number_format((int) ($summary['line_items'] ?? 0)) }}</span>
+            <span>SERVABLE ITEM: {{ number_format((int) ($summary['servable_items'] ?? 0)) }}</span>
+            <span>TOTAL AMOUNT: {{ number_format((float) ($summary['total_amount'] ?? 0), 2) }}</span>
         </footer>
     </main>
 
