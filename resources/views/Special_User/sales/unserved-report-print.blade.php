@@ -9,6 +9,7 @@
 
     {{--
         W68_UNSERVED_PORTRAIT_12PX_FIX_20260921
+        W68_UNSERVED_PRINT_10COL_11PX_NO_TOTALS_20260921
         W68_UNSERVED_ALL_USERS_PRINT_SUMMARY_FIX_20260921
         W68_UNSERVED_OPEN_PARTIAL_STATUS_FIX_V2_20260921
         W68_UNSERVED_STOCK_STATUS_FILTER_V2_20260921
@@ -17,10 +18,8 @@
 
         Fixes:
         - Force Letter PORTRAIT.
-        - Table body text = 12px.
-        - Customer details = 12px.
-        - Keep CUSTOMER TOTAL inside tbody (not tfoot) to avoid giant blank
-          customer-total areas during Chromium print/PDF pagination.
+        - Table body text = 11px.
+        - Customer details = 11px.
         - Customer sections may continue naturally across pages.
         - Table headers repeat when a customer table spans pages.
     --}}
@@ -96,7 +95,7 @@
                 box-sizing: border-box !important;
                 border-top: 1px solid #000 !important;
                 border-bottom: 1px solid #000 !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 line-height: 1.15 !important;
                 break-after: avoid !important;
                 page-break-after: avoid !important;
@@ -116,7 +115,7 @@
                 margin: 0 !important;
                 border-collapse: collapse !important;
                 table-layout: fixed !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
             }
 
             .unserved-print-table thead {
@@ -130,7 +129,7 @@
             .unserved-print-table th {
                 border: 1px solid #000 !important;
                 padding: .8mm .55mm !important;
-                font-size: 10px !important;
+                font-size: 11px !important;
                 line-height: 1.1 !important;
                 text-align: center !important;
                 font-weight: 800 !important;
@@ -143,7 +142,7 @@
             .unserved-print-table td {
                 border: 1px solid #000 !important;
                 padding: .8mm .55mm !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 line-height: 1.15 !important;
                 vertical-align: top !important;
                 overflow-wrap: anywhere !important;
@@ -159,11 +158,11 @@
             }
 
             /*
-             * 11-column Letter portrait allocation.
-             * Product Code / Part No. / Description get the most room.
+             * 10-column Letter portrait allocation.
+             * TOTAL AMOUNT removed and its width transferred to NAME.
              */
             .unserved-print-table th:nth-child(1)  { width: 8% !important; }
-            .unserved-print-table th:nth-child(2)  { width: 10% !important; }
+            .unserved-print-table th:nth-child(2)  { width: 19% !important; }
             .unserved-print-table th:nth-child(3)  { width: 8% !important; }
             .unserved-print-table th:nth-child(4)  { width: 16% !important; }
             .unserved-print-table th:nth-child(5)  { width: 11% !important; }
@@ -172,9 +171,7 @@
             .unserved-print-table th:nth-child(8)  { width: 5% !important; }
             .unserved-print-table th:nth-child(9)  { width: 5% !important; }
             .unserved-print-table th:nth-child(10) { width: 8% !important; }
-            .unserved-print-table th:nth-child(11) { width: 9% !important; }
-
-            .unserved-print-table .customer-total-row {
+.unserved-print-table .customer-total-row {
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
             }
@@ -183,7 +180,7 @@
                 height: auto !important;
                 min-height: 0 !important;
                 padding: .8mm .55mm !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 line-height: 1.15 !important;
                 background: #f3f3f3 !important;
                 vertical-align: middle !important;
@@ -284,8 +281,7 @@
                             <th>SERVED</th>
                             <th>UNSERVED</th>
                             <th>UNIT PRICE</th>
-                            <th>TOTAL AMOUNT</th>
-                        </tr>
+</tr>
                     </thead>
                     <tbody>
                         @foreach($group['rows'] as $row)
@@ -300,16 +296,8 @@
                                 <td class="num">{{ rtrim(rtrim(number_format((float) $row['served'], 2, '.', ','), '0'), '.') }}</td>
                                 <td class="num strong">{{ rtrim(rtrim(number_format((float) $row['unserved'], 2, '.', ','), '0'), '.') }}</td>
                                 <td class="num">{{ number_format((float) $row['unit_price'], 2) }}</td>
-                                <td class="num strong">{{ number_format((float) $row['total_amount'], 2) }}</td>
-                            </tr>
+</tr>
                         @endforeach
-
-                        <tr class="customer-total-row">
-                            <td colspan="8" class="customer-total-label">CUSTOMER TOTAL</td>
-                            <td class="num strong">{{ rtrim(rtrim(number_format((float) ($group['summary']['total_unserved'] ?? 0), 2, '.', ','), '0'), '.') }}</td>
-                            <td></td>
-                            <td class="num strong">{{ number_format((float) ($group['summary']['total_amount'] ?? 0), 2) }}</td>
-                        </tr>
                     </tbody>
                 </table>
             </section>
@@ -334,12 +322,11 @@
                             <th>SERVED</th>
                             <th>UNSERVED</th>
                             <th>UNIT PRICE</th>
-                            <th>TOTAL AMOUNT</th>
-                        </tr>
+</tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td colspan="11" class="empty">No unserved items found for the selected filters.</td>
+                            <td colspan="10" class="empty">No unserved items found for the selected filters.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -349,8 +336,7 @@
         <footer class="unserved-print-footer">
             <span>TOTAL UNSERVED ITEMS: {{ number_format((int) ($summary['line_items'] ?? 0)) }}</span>
             <span>SERVABLE ITEM: {{ number_format((int) ($summary['servable_items'] ?? 0)) }}</span>
-            <span>TOTAL AMOUNT: {{ number_format((float) ($summary['total_amount'] ?? 0), 2) }}</span>
-        </footer>
+</footer>
     </main>
 
     <script src="{{ asset('js/unserved-report-print.js') }}?v={{ @filemtime(public_path('js/unserved-report-print.js')) ?: time() }}"></script>
