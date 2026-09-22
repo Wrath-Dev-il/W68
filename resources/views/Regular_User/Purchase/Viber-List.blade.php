@@ -65,7 +65,7 @@
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
             </div>
-            <input type="text" id="viber-search-input" oninput="handleViberSearch(this)" placeholder="Search item code, part no, description..." class="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-colors">
+            <input type="text" id="viber-search-input" oninput="handleViberSearch(this)" placeholder="Search ALL suppliers: item code, part no, description, application..." class="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-colors">
         </div>
     </div>
 
