@@ -126,6 +126,46 @@ class UnservedReportController extends Controller
         }
     }
 
+    /**
+     * Live totals for the global 4:00 PM / 5:00 PM Manila-time reminder.
+     * Reuses buildReport() so the modal always matches the Unserved Report.
+     */
+    public function notificationSummary(Request $request): JsonResponse
+    {
+        $this->authorizeReportUser();
+
+        try {
+            $now = Carbon::now('Asia/Manila');
+            $summaryRequest = Request::create('/sales/unserved-report/notification-summary', 'GET', [
+                'date_type' => 'as-of',
+                'as_of' => $now->toDateString(),
+                'stock_filter' => 'all',
+                'rush_filter' => 'all',
+                'status_filter' => 'all',
+            ]);
+
+            $report = $this->buildReport($summaryRequest);
+            $summary = $report['summary'] ?? [];
+
+            return response()->json([
+                'success' => true,
+                'generated_at' => $report['generated_at'] ?? $now->format('F d, Y h:i A'),
+                'counts' => [
+                    'servable_items' => (int) ($summary['servable_item_lines'] ?? $summary['servable_items'] ?? 0),
+                    'unserved_with_stocks' => (int) ($summary['unserved_with_stock_lines'] ?? 0),
+                    'unserved_without_stocks' => (int) ($summary['unserved_without_stock_lines'] ?? 0),
+                    'all_unserved_items' => (int) ($summary['all_unserved_items'] ?? $summary['line_items'] ?? 0),
+                ],
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load the scheduled Unserved Report notification.',
+            ], 500);
+        }
+    }
     public function productHistory(Request $request): JsonResponse
     {
         $this->authorizeReportUser();

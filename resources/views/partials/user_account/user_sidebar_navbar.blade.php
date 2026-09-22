@@ -2075,5 +2075,7 @@
         }
     </style>
 
+    @include('partials.unserved_global_notification')
+
 </body>
 </html>
