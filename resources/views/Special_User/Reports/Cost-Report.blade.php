@@ -559,10 +559,10 @@
                 var y2s = String(crGetYear2()).slice(-2);
                 var y3s = String(crGetYear3()).slice(-2);
                 var html = '';
-                var descKeys = Object.keys(groups);
+                var descKeys = Object.keys(groups).sort(function(a, b) { return a.localeCompare(b, undefined, { sensitivity: 'base' }); });
                 for (var g = 0; g < descKeys.length; g++) {
                     var descName = descKeys[g];
-                    var groupItems = groups[descName];
+                    var groupItems = groups[descName].slice().sort(function(a, b) { return (a.product_code || '').localeCompare(b.product_code || '', undefined, { sensitivity: 'base' }); });
                     html += '<div class="cr-desc-head" style="margin-top:8px;margin-bottom:2px;page-break-after:avoid">DESCRIPTION: ' + descName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' +
                         '<table style="width:100%;border-collapse:collapse;table-layout:fixed">' +
                         '<colgroup>' +
