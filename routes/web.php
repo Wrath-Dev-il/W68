@@ -9654,8 +9654,8 @@ Route::get('/admin/inventory/adjustment/data', function (\Illuminate\Http\Reques
     if (!empty($search['code'])) {
         $query->where('product_code', 'LIKE', '%' . $search['code'] . '%');
     }
-    if (!empty($search['name'])) {
-        $query->where('part_number', 'LIKE', '%' . $search['name'] . '%');
+    if (!empty($search['part'])) {
+        $query->where('part_number', 'LIKE', '%' . $search['part'] . '%');
     }
     if (!empty($search['desc'])) {
         $query->where('description', 'LIKE', '%' . $search['desc'] . '%');
