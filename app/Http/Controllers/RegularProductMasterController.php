@@ -54,18 +54,19 @@ class RegularProductMasterController extends Controller
         }
 
         $searchMap = [
-            'productCode' => 'product_code',
-            'partNumber' => 'part_number',
-            'description' => 'description',
-            'application' => 'application',
-            'specification' => 'specification',
-            'position' => 'position',
-            'category' => 'category',
-            'onHand' => 'on_hand',
+            'productCode'  => 'product_code',
+            'productCode2' => 'product_code2',
+            'partNumber'   => 'part_number',
+            'description'  => 'description',
+            'application'  => 'application',
+            'specification'=> 'specification',
+            'position'     => 'position',
+            'category'     => 'category',
+            'onHand'       => 'on_hand',
             'restockLevel' => 'Re_order_level',
             'sellingPrice' => 'selling_price',
-            'priceOnline' => 'price_online',
-            'dateAdded' => 'date_added',
+            'priceOnline'  => 'price_online',
+            'dateAdded'    => 'date_added',
         ];
 
         $escapeLike = static fn ($value) => str_replace(
@@ -105,19 +106,20 @@ class RegularProductMasterController extends Controller
         }
 
         $sortableColumns = [
-            'productCode' => 'product_code',
-            'description' => 'description',
-            'application' => 'application',
-            'brand' => 'category',
-            'partNumber' => 'part_number',
-            'position' => 'position',
-            'specification' => 'specification',
-            'unit' => 'unit',
-            'priceOnline' => 'price_online',
+            'productCode'  => 'product_code',
+            'productCode2' => 'product_code2',
+            'description'  => 'description',
+            'application'  => 'application',
+            'brand'        => 'category',
+            'partNumber'   => 'part_number',
+            'position'     => 'position',
+            'specification'=> 'specification',
+            'unit'         => 'unit',
+            'priceOnline'  => 'price_online',
             'sellingPrice' => 'selling_price',
-            'onHand' => 'on_hand',
+            'onHand'       => 'on_hand',
             'restockLevel' => 'Re_order_level',
-            'dateAdded' => 'date_added',
+            'dateAdded'    => 'date_added',
         ];
 
         if ($sortBy !== '' && isset($sortableColumns[$sortBy])) {
