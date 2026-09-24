@@ -30213,6 +30213,7 @@ Route::post('/admin/chat/send', [App\Http\Controllers\ChatController::class, 'se
 Route::get('/admin/chat/usage', [App\Http\Controllers\ChatController::class, 'usage'])->name('admin.chat.usage');
 
 // ── Shared Slow Moving Products Generate Helper ──
+if (!function_exists('hatdogGenerateSlowMovingExportResponse')) {
 function hatdogGenerateSlowMovingExportResponse($downloadPrefix, $user, $startDate = null, $endDate = null, $dateRangeLabel = '') {
     try {
         set_time_limit(600);
@@ -30261,14 +30262,17 @@ function hatdogGenerateSlowMovingExportResponse($downloadPrefix, $user, $startDa
         return response()->json(['success' => false, 'error' => 'Unable to generate the Excel report.', 'message' => $e->getMessage()], 500);
     }
 }
+}
 
 // ── Shared AI Chat Download Helper ──
+if (!function_exists('hatdogDownloadAIChatExport')) {
 function hatdogDownloadAIChatExport($token, $user) {
     $export = DB::table('ai_exports')->where('token', $token)->first();
     if (!$export) return response()->json(['error' => 'File not found'], 404);
     if ((int)$export->user_id !== (int)($user->login_ID ?? 0)) return response()->json(['error' => 'Forbidden'], 403);
     if (!file_exists($export->file_path)) return response()->json(['error' => 'File expired or missing'], 410);
     return response()->download($export->file_path, $export->file_name, ['Content-Type' => $export->mime_type]);
+}
 }
 
 // Admin AI — Slow Moving Products Estimate (returns ETA before generation)
