@@ -615,35 +615,37 @@
             <div class="p-5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between gap-4">
                 <div>
                     <h3 class="text-xs font-bold text-slate-700 uppercase tracking-widest">Payment History</h3>
-                    <p class="text-[10px] text-slate-400 font-medium mt-1">One row per Payor. Click View to see that Payor's Payment Nos.</p>
+                    <p class="text-[10px] text-slate-400 font-medium mt-1">One row per payment. Search by name, payment no, invoice, date, or amount.</p>
                 </div>
-                <span class="rounded-full bg-maroon/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-maroon">Payor Summary</span>
+                <span class="rounded-full bg-maroon/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-maroon">Per Payment</span>
             </div>
             <div class="overflow-x-auto custom-scrollbar">
-                <table class="w-full min-w-[760px] text-left border-collapse">
+                <table class="w-full min-w-[900px] text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                            <th class="py-4 px-5">Payor's Name</th>
-                            <th class="py-4 px-5 text-center">Paid Invoices</th>
-                            <th class="py-4 px-5 text-center">Latest Paid Date</th>
+                            <th class="py-4 px-5">Name</th>
+                            <th class="py-4 px-5">Payment No</th>
+                            <th class="py-4 px-5">Invoices</th>
+                            <th class="py-4 px-5">Date</th>
+                            <th class="py-4 px-5 text-right">Check Amount</th>
                             <th class="py-4 px-5 text-center">Action</th>
                         </tr>
                         <tr class="bg-white border-t border-slate-100">
-                            <th class="p-2 px-5">
-                                <input id="payments-history-payor-search" type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Search Payor's Name...">
-                            </th>
-                            <th class="p-2 px-5"></th>
-                            <th class="p-2 px-5"></th>
+                            <th class="p-2 px-5"><input id="ph-search-name"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Name..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-payno"    type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Pay No..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-invoices" type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Invoice..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-date"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Date..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-amount"   type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Amount..."></th>
                             <th class="p-2 px-5"></th>
                         </tr>
                     </thead>
                     <tbody id="payments-history-tbody" class="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
-                        <tr><td colspan="4" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
+                        <tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
                     </tbody>
                 </table>
             </div>
             <div class="p-4 border-t border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <span id="payments-history-page-info" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Showing 0 of 0 payors</span>
+                <span id="payments-history-page-info" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Showing 0 of 0 payments</span>
                 <div class="flex items-center gap-2">
                     <button id="payments-history-prev-btn" onclick="window.changePaymentsHistoryPage(-1)" class="px-4 py-2 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 disabled:opacity-40">Previous</button>
                     <button id="payments-history-next-btn" onclick="window.changePaymentsHistoryPage(1)" class="px-4 py-2 rounded-lg bg-maroon text-white text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800 disabled:opacity-40">Next</button>
