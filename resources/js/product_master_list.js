@@ -127,6 +127,39 @@ function setupEventListeners() {
             filters.search[col] = e.target.value.toLowerCase().trim();
             debouncedFilter();
         });
+
+        // Keyboard friendly: navigate left/right arrow key across main table search inputs
+        input.addEventListener("keydown", function(e) {
+            if (e.shiftKey || e.ctrlKey || e.altKey) return;
+
+            if (e.key === "ArrowRight") {
+                const atEnd = this.selectionStart === this.value.length && this.selectionEnd === this.value.length;
+                if (atEnd) {
+                    const rowInputs = Array.from(document.querySelectorAll("#page-prod-master-root thead .column-search-input"));
+                    const idx = rowInputs.indexOf(this);
+                    if (idx >= 0 && idx < rowInputs.length - 1) {
+                        e.preventDefault();
+                        const nextInput = rowInputs[idx + 1];
+                        nextInput.focus();
+                        nextInput.setSelectionRange(0, 0);
+                        nextInput.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                    }
+                }
+            } else if (e.key === "ArrowLeft") {
+                const atStart = this.selectionStart === 0 && this.selectionEnd === 0;
+                if (atStart) {
+                    const rowInputs = Array.from(document.querySelectorAll("#page-prod-master-root thead .column-search-input"));
+                    const idx = rowInputs.indexOf(this);
+                    if (idx > 0) {
+                        e.preventDefault();
+                        const prevInput = rowInputs[idx - 1];
+                        prevInput.focus();
+                        prevInput.setSelectionRange(prevInput.value.length, prevInput.value.length);
+                        prevInput.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                    }
+                }
+            }
+        });
     });
 
     // Product Ledger column searches (client-side, combined across all columns)
@@ -220,7 +253,8 @@ if (!window.__productMasterKeyboardNavBound) {
             return;
         }
 
-        if (!modalOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        const isInputFocused = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+        if (!modalOpen && !isInputFocused && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
             const container = document.querySelector('.overflow-x-auto.custom-scrollbar');
             if (container) {
                 e.preventDefault();
@@ -1280,8 +1314,8 @@ window.handleGenerateReport = async function() {
     toggleModal('generate-report-modal', false);
     toggleModal('report-filter-modal', true);
     
-    // Show loading state in all 4 combobox inputs
-    ['description', 'brand', 'application', 'year'].forEach(key => {
+    // Show loading state in all combobox inputs
+    ['description', 'pricelist-code', 'brand', 'application', 'year'].forEach(key => {
         const input = document.getElementById('report-filter-' + key);
         const dropdown = document.getElementById('report-filter-' + key + '-dropdown');
         if (input) input.placeholder = 'Loading...';
@@ -1295,13 +1329,14 @@ window.handleGenerateReport = async function() {
         
         const filters = data.filters || {};
         if (filters.descriptions) initReportCombobox('description', filters.descriptions);
+        if (filters.pricelist_codes) initReportCombobox('pricelist-code', filters.pricelist_codes);
         if (filters.brands) initReportCombobox('brand', filters.brands);
         if (filters.applications) initReportCombobox('application', filters.applications);
         if (filters.years) initReportCombobox('year', filters.years);
     } catch (e) {
         console.error('Failed to load report filters:', e);
         // Show error in dropdowns
-        ['description', 'brand', 'application', 'year'].forEach(key => {
+        ['description', 'pricelist-code', 'brand', 'application', 'year'].forEach(key => {
             const input = document.getElementById('report-filter-' + key);
             const dropdown = document.getElementById('report-filter-' + key + '-dropdown');
             if (input) input.placeholder = 'All';
@@ -1323,8 +1358,13 @@ function initReportCombobox(key, options) {
     if (!input || !dropdown) return;
     
     // Reset placeholder
-    input.placeholder = 'All ' + key.charAt(0).toUpperCase() + key.slice(1) + 's';
-    if (key === 'year') input.placeholder = 'All Years';
+    if (key === 'pricelist-code') {
+        input.placeholder = 'All Pricelist Codes';
+    } else if (key === 'year') {
+        input.placeholder = 'All Years';
+    } else {
+        input.placeholder = 'All ' + key.charAt(0).toUpperCase() + key.slice(1) + 's';
+    }
     
     // Store options on the input element
     input._reportOptions = options;
@@ -1369,7 +1409,7 @@ function initReportCombobox(key, options) {
 }
 
 window.clearReportFilters = function() {
-    ['description', 'brand', 'application', 'year'].forEach(key => {
+    ['description', 'pricelist-code', 'brand', 'application', 'year'].forEach(key => {
         const input = document.getElementById('report-filter-' + key);
         if (input) input.value = '';
         const dropdown = document.getElementById('report-filter-' + key + '-dropdown');
@@ -1382,11 +1422,13 @@ window.applyReportFilters = function() {
     const params = new URLSearchParams();
     
     const desc = document.getElementById('report-filter-description')?.value?.trim();
+    const pricelistCode = document.getElementById('report-filter-pricelist-code')?.value?.trim();
     const brand = document.getElementById('report-filter-brand')?.value?.trim();
     const app = document.getElementById('report-filter-application')?.value?.trim();
     const year = document.getElementById('report-filter-year')?.value?.trim();
     
     if (desc) params.set('description', desc);
+    if (pricelistCode) params.set('pricelist_code', pricelistCode);
     if (brand) params.set('brand', brand);
     if (app) params.set('application', app);
     if (year) params.set('year', year);

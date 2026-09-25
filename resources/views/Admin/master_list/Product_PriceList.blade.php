@@ -313,7 +313,7 @@
         </a>
     </div>
 
-    @php $exportQuery = http_build_query(request()->only(['description', 'brand', 'application', 'year'])); @endphp
+    @php $exportQuery = http_build_query(request()->only(['description', 'brand', 'application', 'year', 'pricelist_code'])); @endphp
     <div class="fixed top-5 right-5 z-[110] no-print flex flex-col gap-2">
         <button id="print-btn" onclick="triggerPrint()" class="px-8 py-3 bg-maroon-900 text-gold font-black rounded-2xl shadow-2xl hover:bg-maroon-800 transition-all flex items-center gap-3 border-2 border-goldlining-500">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>

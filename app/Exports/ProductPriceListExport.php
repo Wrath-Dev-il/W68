@@ -179,6 +179,16 @@ class ProductPriceListExport implements FromCollection, WithEvents
             $query->whereYear('created_at', (int) $year);
         }
 
+        if ($pricelistCode = $this->filterValue('pricelist_code')) {
+            $safeCode = $this->escapeLike($pricelistCode);
+            $query->where(function ($q) use ($safeCode) {
+                $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
+                  ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
+                      $sub->where('price_code', 'like', '%' . $safeCode . '%');
+                  });
+            });
+        }
+
         return $query
             ->orderBy('description', 'asc')
             ->orderBy('category', 'asc')

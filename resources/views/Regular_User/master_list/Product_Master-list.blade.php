@@ -1452,6 +1452,13 @@
                         </div>
                     </div>
                     <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Pricelist Code</label>
+                        <div class="report-filter-combobox">
+                            <input type="text" id="report-filter-pricelist-code" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-maroon-900/10 focus:border-maroon-900 transition-all" placeholder="All Pricelist Codes" autocomplete="off">
+                            <div id="report-filter-pricelist-code-dropdown" class="report-filter-dropdown hidden"></div>
+                        </div>
+                    </div>
+                    <div>
                         <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Brand</label>
                         <div class="report-filter-combobox">
                             <input type="text" id="report-filter-brand" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-maroon-900/10 focus:border-maroon-900 transition-all" placeholder="All Brands" autocomplete="off">

@@ -3856,7 +3856,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
         $filename = 'product-price-list-' . now('Asia/Manila')->format('Y-m-d') . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\ProductPriceListExport($request->only(['description', 'brand', 'application', 'year'])),
+            new \App\Exports\ProductPriceListExport($request->only(['description', 'brand', 'application', 'year', 'pricelist_code'])),
             $filename
         );
     })->name('prod-master.price-list.export-excel');
@@ -7507,13 +7507,30 @@ Route::get('/admin/masterlist/product/selected-filters', function (Request $requ
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        $products = \App\Models\Product::where('is_selected_for_report', true)->get(['description', 'category', 'application', 'created_at']);
+        $products = \App\Models\Product::where('is_selected_for_report', true)
+            ->with('priceCodes')
+            ->get(['id', 'description', 'category', 'application', 'created_at', 'pricelist_code']);
+
+        $pricelistCodes = collect();
+        foreach ($products as $p) {
+            if ($p->pricelist_code !== null && trim((string) $p->pricelist_code) !== '') {
+                $pricelistCodes->push(trim((string) $p->pricelist_code));
+            }
+            if ($p->priceCodes) {
+                foreach ($p->priceCodes as $pc) {
+                    if ($pc->price_code !== null && trim((string) $pc->price_code) !== '') {
+                        $pricelistCodes->push(trim((string) $pc->price_code));
+                    }
+                }
+            }
+        }
 
         $filters = [
             'descriptions' => $products->pluck('description')->filter()->unique()->sort()->values(),
             'brands' => $products->pluck('category')->filter()->unique()->sort()->values(),
             'applications' => $products->pluck('application')->filter()->unique()->sort()->values(),
             'years' => $products->pluck('created_at')->filter()->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y'))->unique()->sort()->values(),
+            'pricelist_codes' => $pricelistCodes->unique()->sort()->values(),
         ];
 
         return response()->json(['success' => true, 'filters' => $filters]);
@@ -7571,6 +7588,15 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
     if ($desc = $request->input('description')) {
         $query->where('description', 'like', '%' . $escapeLike($desc) . '%');
     }
+    if ($pricelistCode = $request->input('pricelist_code')) {
+        $safeCode = $escapeLike($pricelistCode);
+        $query->where(function ($q) use ($safeCode) {
+            $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
+              ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
+                  $sub->where('price_code', 'like', '%' . $safeCode . '%');
+              });
+        });
+    }
     if ($brand = $request->input('brand')) {
         $safe = $escapeLike($brand);
         // Strip spaces from both sides so 'AUTO STAR' also matches 'Autostar' (and vice versa)
@@ -7624,6 +7650,15 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
     // Apply optional filters
     if ($desc = $request->input('description')) {
         $query->where('description', 'like', '%' . $escapeLike($desc) . '%');
+    }
+    if ($pricelistCode = $request->input('pricelist_code')) {
+        $safeCode = $escapeLike($pricelistCode);
+        $query->where(function ($q) use ($safeCode) {
+            $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
+              ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
+                  $sub->where('price_code', 'like', '%' . $safeCode . '%');
+              });
+        });
     }
     if ($brand = $request->input('brand')) {
         $safe = $escapeLike($brand);
@@ -7682,7 +7717,7 @@ Route::get('/admin/masterlist/product/price-list/export-excel', function (Reques
     $filename = 'product-price-list-' . now('Asia/Manila')->format('Y-m-d') . '.xlsx';
 
     return \Maatwebsite\Excel\Facades\Excel::download(
-        new \App\Exports\ProductPriceListExport($request->only(['description', 'brand', 'application', 'year'])),
+        new \App\Exports\ProductPriceListExport($request->only(['description', 'brand', 'application', 'year', 'pricelist_code'])),
         $filename
     );
 })->name('admin.product-price-list.export-excel');
