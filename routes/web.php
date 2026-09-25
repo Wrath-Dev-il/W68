@@ -30214,65 +30214,65 @@ Route::get('/admin/chat/usage', [App\Http\Controllers\ChatController::class, 'us
 
 // ── Shared Slow Moving Products Generate Helper ──
 if (!function_exists('hatdogGenerateSlowMovingExportResponse')) {
-function hatdogGenerateSlowMovingExportResponse($downloadPrefix, $user, $startDate = null, $endDate = null, $dateRangeLabel = '') {
-    try {
-        set_time_limit(600);
-        ini_set('memory_limit', '1024M');
-        $labelSuffix = $dateRangeLabel ? '-' . preg_replace('/\s+/', '-', strtolower($dateRangeLabel)) : '';
-        $filename = 'slow-moving-products' . $labelSuffix . '-' . now()->format('Y-m-d') . '.xlsx';
-        $storagePath = \Illuminate\Support\Facades\Storage::path('exports');
-        if (!is_dir($storagePath)) mkdir($storagePath, 0755, true);
-        $filePath = $storagePath . '/' . $filename;
-        $i = 1;
-        while (file_exists($filePath)) {
-            $filePath = $storagePath . '/slow-moving-products' . $labelSuffix . '-' . now()->format('Y-m-d') . '-' . $i . '.xlsx';
-            $i++;
-        }
-        $export = new \App\Exports\SlowMovingProductsExport(5, $startDate, $endDate, $dateRangeLabel);
-        \Maatwebsite\Excel\Facades\Excel::store($export, 'exports/' . basename($filePath));
-        $count = $export->getProductCount();
-        $fileSize = filesize($filePath);
-        $token = bin2hex(random_bytes(32));
-        DB::table('ai_exports')->insert([
-            'user_id' => $user->login_ID ?? 0,
-            'token' => $token,
-            'file_name' => $filename,
-            'file_path' => $filePath,
-            'mime_type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'file_size' => $fileSize,
-            'record_count' => $count,
-        ]);
-        $msg = $dateRangeLabel
-            ? 'I found ' . $count . ' slow-moving products for the period ' . $dateRangeLabel . '. The highest-risk products are those with no outgoing movement and long inventory aging.'
-            : 'I found ' . $count . ' slow-moving products. The highest-risk products are those with no outgoing movement and long inventory aging.';
-        return response()->json([
-            'success' => true,
-            'message' => $msg,
-            'date_range_label' => $dateRangeLabel,
-            'attachments' => [[
-                'type' => 'excel',
+    function hatdogGenerateSlowMovingExportResponse($downloadPrefix, $user, $startDate = null, $endDate = null, $dateRangeLabel = '') {
+        try {
+            set_time_limit(600);
+            ini_set('memory_limit', '1024M');
+            $labelSuffix = $dateRangeLabel ? '-' . preg_replace('/\s+/', '-', strtolower($dateRangeLabel)) : '';
+            $filename = 'slow-moving-products' . $labelSuffix . '-' . now()->format('Y-m-d') . '.xlsx';
+            $storagePath = \Illuminate\Support\Facades\Storage::path('exports');
+            if (!is_dir($storagePath)) mkdir($storagePath, 0755, true);
+            $filePath = $storagePath . '/' . $filename;
+            $i = 1;
+            while (file_exists($filePath)) {
+                $filePath = $storagePath . '/slow-moving-products' . $labelSuffix . '-' . now()->format('Y-m-d') . '-' . $i . '.xlsx';
+                $i++;
+            }
+            $export = new \App\Exports\SlowMovingProductsExport(5, $startDate, $endDate, $dateRangeLabel);
+            \Maatwebsite\Excel\Facades\Excel::store($export, 'exports/' . basename($filePath));
+            $count = $export->getProductCount();
+            $fileSize = filesize($filePath);
+            $token = bin2hex(random_bytes(32));
+            DB::table('ai_exports')->insert([
+                'user_id' => $user->login_ID ?? 0,
+                'token' => $token,
                 'file_name' => $filename,
-                'download_url' => url($downloadPrefix . '/ai-chat/download/' . $token),
+                'file_path' => $filePath,
                 'mime_type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'file_size' => $fileSize,
                 'record_count' => $count,
-            ]],
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['success' => false, 'error' => 'Unable to generate the Excel report.', 'message' => $e->getMessage()], 500);
+            ]);
+            $msg = $dateRangeLabel
+                ? 'I found ' . $count . ' slow-moving products for the period ' . $dateRangeLabel . '. The highest-risk products are those with no outgoing movement and long inventory aging.'
+                : 'I found ' . $count . ' slow-moving products. The highest-risk products are those with no outgoing movement and long inventory aging.';
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'date_range_label' => $dateRangeLabel,
+                'attachments' => [[
+                    'type' => 'excel',
+                    'file_name' => $filename,
+                    'download_url' => url($downloadPrefix . '/ai-chat/download/' . $token),
+                    'mime_type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'file_size' => $fileSize,
+                    'record_count' => $count,
+                ]],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => 'Unable to generate the Excel report.', 'message' => $e->getMessage()], 500);
+        }
     }
-}
 }
 
 // ── Shared AI Chat Download Helper ──
 if (!function_exists('hatdogDownloadAIChatExport')) {
-function hatdogDownloadAIChatExport($token, $user) {
-    $export = DB::table('ai_exports')->where('token', $token)->first();
-    if (!$export) return response()->json(['error' => 'File not found'], 404);
-    if ((int)$export->user_id !== (int)($user->login_ID ?? 0)) return response()->json(['error' => 'Forbidden'], 403);
-    if (!file_exists($export->file_path)) return response()->json(['error' => 'File expired or missing'], 410);
-    return response()->download($export->file_path, $export->file_name, ['Content-Type' => $export->mime_type]);
-}
+    function hatdogDownloadAIChatExport($token, $user) {
+        $export = DB::table('ai_exports')->where('token', $token)->first();
+        if (!$export) return response()->json(['error' => 'File not found'], 404);
+        if ((int)$export->user_id !== (int)($user->login_ID ?? 0)) return response()->json(['error' => 'Forbidden'], 403);
+        if (!file_exists($export->file_path)) return response()->json(['error' => 'File expired or missing'], 410);
+        return response()->download($export->file_path, $export->file_name, ['Content-Type' => $export->mime_type]);
+    }
 }
 
 // Admin AI — Slow Moving Products Estimate (returns ETA before generation)
