@@ -27917,122 +27917,84 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         }
     }
 
-    // Batch-fetch GROSS sales per product per year from Product Ledger.
-    // Sales Returns are deducted below from sales_return_items.quantity so both
-    // legacy SALRTN imports and the current Sales Return module use the FULL
-    // returned quantity (not only the good quantity restored to inventory).
+    // W68_COST_REPORT_STRICT_SALES_REMARKS_20260926
+    // Cost Report Sales is intentionally driven by Product Ledger remarks.
+    // COUNT only customer-sale OUT rows matching the approved sales markers:
+    //   CHGINVC, Online Report Generation, NEW_SYSTEM_SALES,
+    //   Sales Order Processing, SO, and Sales Order...
+    // DEDUCT only return IN rows matching:
+    //   SALRTN, Sales Return..., and Sales Order Edit - Item Removed.
+    // Every other movement (PURRTN, CONSIGNMENT, XPNSEDIS, CNSMTRTN,
+    // ADJUSTENTRY, Inventory Adjustment, etc.) is ignored by design.
     $outColumn = hatdogSchemaHasColumnCached('ledger', 'product_ledgers', 'out') ? 'out' : 'quantity_out';
     $salesByYear = [];
     $years = array_values(array_unique([$year1, $year2, $year3]));
+
+    $applyCostReportSalesRemarkFilter = static function ($query) {
+        $query->where(function ($salesRemarkQuery) {
+            $salesRemarkQuery
+                ->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%chginvc%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%online report generation%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%new_system_sales%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%sales order processing%'")
+                ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) = 'so'")
+                ->orWhere(function ($salesOrderRemarkQuery) {
+                    $salesOrderRemarkQuery
+                        ->whereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales order%'")
+                        ->whereRaw("LOWER(TRIM(COALESCE(remarks,''))) NOT LIKE 'sales order edit - item removed%'");
+                });
+        });
+    };
+
     foreach ($years as $year) {
-        $yearSales = DB::connection('ledger')->table('product_ledgers')
+        $yearSalesQuery = DB::connection('ledger')->table('product_ledgers')
             ->whereIn('product_id', $allProductIds)
             ->whereYear('date', $year)
-            // W68_COST_REPORT_IGNORE_INVENTORY_ADJUSTMENTS_20260909
-            // Inventory Adjustment OUT rows change stock only. They are not
-            // customer sales and must never be included in Cost Report Sales.
-            ->where(function ($salesMovementQuery) {
-                $salesMovementQuery
-                    ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
-                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
-                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
-                    ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
-            })
+            ->whereRaw("UPPER(TRIM(COALESCE(transaction_type,''))) = 'OUT'")
+            ->whereRaw('COALESCE(' . $outColumn . ', 0) > 0');
+
+        $applyCostReportSalesRemarkFilter($yearSalesQuery);
+
+        $yearSales = $yearSalesQuery
             ->selectRaw('product_id, SUM(' . $outColumn . ') as total_out')
             ->groupBy('product_id')
             ->pluck('total_out', 'product_id');
+
         foreach ($yearSales as $pid => $total) {
             $salesByYear[(int) $pid][(int) $year] = (float) $total;
         }
     }
 
-    // Authoritative Sales Return quantities. sales_return_items contains both
-    // imported legacy SALRTN returns and returns created by the current screen.
-    $returnQtyByYear = [];
-    $coveredReturnNumbers = [];
-
+    // Deduct only approved Product Ledger IN return rows. This keeps the Cost
+    // Report formula fully remark-based and avoids subtracting unrelated INs.
     if ($allProductIds->isNotEmpty() && !empty($years)) {
         $yearPlaceholders = implode(',', array_fill(0, count($years), '?'));
 
-        $returnRows = DB::connection('sales')->table('sales_returns as sr')
-            ->join('sales_return_items as sri', 'sri.sales_return_id', '=', 'sr.id')
-            ->whereIn('sri.product_id', $allProductIds)
-            ->whereRaw("UPPER(TRIM(COALESCE(sr.status, 'COMPLETED'))) NOT IN ('CANCELLED', 'VOID')")
-            ->whereRaw(
-                "YEAR(COALESCE(sr.created_at, sri.created_at)) IN ($yearPlaceholders)",
-                $years
-            )
-            ->selectRaw(
-                'sri.product_id, sri.quantity, sr.return_number, ' .
-                'YEAR(COALESCE(sr.created_at, sri.created_at)) as return_year'
-            )
+        $returnRows = DB::connection('ledger')->table('product_ledgers')
+            ->whereIn('product_id', $allProductIds)
+            ->whereRaw('YEAR(date) IN (' . $yearPlaceholders . ')', $years)
+            ->whereRaw("UPPER(TRIM(COALESCE(transaction_type,''))) = 'IN'")
+            ->whereRaw('COALESCE(quantity_in, 0) > 0')
+            ->where(function ($returnQuery) {
+                $returnQuery
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%salrtn%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales return%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales order edit - item removed%'");
+            })
+            ->selectRaw('product_id, YEAR(date) as return_year, SUM(quantity_in) as return_qty')
+            ->groupBy('product_id')
+            ->groupByRaw('YEAR(date)')
             ->get();
 
         foreach ($returnRows as $returnRow) {
             $pid = (int) ($returnRow->product_id ?? 0);
             $year = (int) ($returnRow->return_year ?? 0);
-            $qty = (float) ($returnRow->quantity ?? 0);
+            $returnQty = (float) ($returnRow->return_qty ?? 0);
 
-            if ($pid <= 0 || $year <= 0 || $qty <= 0) {
+            if ($pid <= 0 || $year <= 0 || $returnQty <= 0) {
                 continue;
             }
 
-            $returnQtyByYear[$pid][$year] = ($returnQtyByYear[$pid][$year] ?? 0) + $qty;
-
-            $returnNumber = strtolower(trim((string) ($returnRow->return_number ?? '')));
-            if ($returnNumber !== '') {
-                $coveredReturnNumbers[$pid . '|' . $year . '|' . $returnNumber] = true;
-            }
-        }
-
-        // Fallback for historical ledger return rows that are not represented
-        // in sales_return_items. Matching return numbers are skipped to prevent
-        // the same legacy/current return from being deducted twice.
-        $ledgerReturnRows = DB::connection('ledger')->table('product_ledgers')
-            ->whereIn('product_id', $allProductIds)
-            ->where('transaction_type', 'IN')
-            ->whereRaw('YEAR(date) IN (' . $yearPlaceholders . ')', $years)
-            ->where(function ($returnQuery) {
-                $returnQuery
-                    ->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%salrtn%'")
-                    ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%sales return%'")
-                    ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%sales order edit - item removed%'")
-                    ->orWhereRaw("LOWER(COALESCE(transaction_number,'')) LIKE 'ret%'")
-                    ->orWhereRaw("LOWER(COALESCE(transaction_number,'')) LIKE 'saltrn%'");
-            })
-            ->selectRaw(
-                'product_id, quantity_in, transaction_number, reference_number, YEAR(date) as return_year'
-            )
-            ->get();
-
-        foreach ($ledgerReturnRows as $returnRow) {
-            $pid = (int) ($returnRow->product_id ?? 0);
-            $year = (int) ($returnRow->return_year ?? 0);
-            $qty = (float) ($returnRow->quantity_in ?? 0);
-
-            if ($pid <= 0 || $year <= 0 || $qty <= 0) {
-                continue;
-            }
-
-            $transactionNumber = strtolower(trim((string) ($returnRow->transaction_number ?? '')));
-            $referenceNumber = strtolower(trim((string) ($returnRow->reference_number ?? '')));
-
-            $alreadyCovered = ($transactionNumber !== ''
-                    && isset($coveredReturnNumbers[$pid . '|' . $year . '|' . $transactionNumber]))
-                || ($referenceNumber !== ''
-                    && isset($coveredReturnNumbers[$pid . '|' . $year . '|' . $referenceNumber]));
-
-            if ($alreadyCovered) {
-                continue;
-            }
-
-            $returnQtyByYear[$pid][$year] = ($returnQtyByYear[$pid][$year] ?? 0) + $qty;
-        }
-    }
-
-    // NET SALES = gross Product Ledger OUT - all valid Sales Return quantities.
-    foreach ($returnQtyByYear as $pid => $yearReturns) {
-        foreach ($yearReturns as $year => $returnQty) {
             $salesByYear[$pid][$year] = ($salesByYear[$pid][$year] ?? 0) - $returnQty;
         }
     }
@@ -28055,16 +28017,17 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         }
         if ($hasOumCol) {
             $inOutCol = $outColumn;
-            $raw = DB::connection('ledger')->table('product_ledgers')
+            $salesOumQuery = DB::connection('ledger')->table('product_ledgers')
                 ->whereIn('product_id', $allProductIds)
                 ->whereRaw("TRIM(COALESCE($hasOumCol,'')) <> ''")
-                ->where(function ($salesMovementQuery) {
-                    $salesMovementQuery
-                        ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
-                        ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
-                        ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
-                        ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
-                })
+                ->whereRaw("UPPER(TRIM(COALESCE(transaction_type,''))) = 'OUT'")
+                ->whereRaw('COALESCE(' . $inOutCol . ', 0) > 0');
+
+            // Pick the OUM only from the same approved sales rows used by the
+            // Cost Report Sales totals, never from returns/adjustments/other OUTs.
+            $applyCostReportSalesRemarkFilter($salesOumQuery);
+
+            $raw = $salesOumQuery
                 ->selectRaw("product_id, $hasOumCol as oum, SUM(COALESCE({$inOutCol}, 0)) as qty_weight")
                 ->groupBy('product_id')
                 ->groupBy($hasOumCol)
