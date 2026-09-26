@@ -316,9 +316,9 @@
                             <th>ON HAND</th>
                             <th>SERVED</th>
                             <th>UNSERVED</th>
-                            <th>SALES {{ $salesYears[0] }}</th>
-                            <th>SALES {{ $salesYears[1] }}</th>
-                            <th>SALES {{ $salesYears[2] }}</th>
+                            <th>{{ substr((string) $salesYears[0], -2) }}</th>
+                            <th>{{ substr((string) $salesYears[1], -2) }}</th>
+                            <th>{{ substr((string) $salesYears[2], -2) }}</th>
 </tr>
                     </thead>
                     <tbody>
@@ -361,9 +361,9 @@
                             <th>ON HAND</th>
                             <th>SERVED</th>
                             <th>UNSERVED</th>
-                            <th>SALES {{ $salesYears[0] }}</th>
-                            <th>SALES {{ $salesYears[1] }}</th>
-                            <th>SALES {{ $salesYears[2] }}</th>
+                            <th>{{ substr((string) $salesYears[0], -2) }}</th>
+                            <th>{{ substr((string) $salesYears[1], -2) }}</th>
+                            <th>{{ substr((string) $salesYears[2], -2) }}</th>
 </tr>
                     </thead>
                     <tbody>
