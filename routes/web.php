@@ -7619,12 +7619,12 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
             $q->whereYear('created_at', (int) $year);
         }
 
-        return $q->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
+        return $q->orderBy('pricelist_code', 'asc')->orderBy('description', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
     };
 
-    // 11 columns — intentionally EXCLUDE Product_Picture (BLOB) from bulk load.
+    // 12 columns — intentionally EXCLUDE Product_Picture (BLOB) from bulk load.
     // It will be fetched per-row inside Blade to avoid keeping N copies in memory.
-    $selectColumns = ['id', 'product_code', 'part_number', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
+    $selectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
     $ajaxSelectColumns = array_merge($selectColumns, ['Product_Picture']);
 
     if ($request->ajax() && $request->has('page_num')) {
@@ -7689,9 +7689,9 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
         $query->whereYear('created_at', (int) $year);
     }
 
-    $query->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
+    $query->orderBy('pricelist_code', 'asc')->orderBy('description', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
 
-    $plSelectColumns = ['id', 'product_code', 'part_number', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
+    $plSelectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
 
     // If it's an AJAX request for a specific page
     if ($request->ajax() && $request->has('page_num')) {
