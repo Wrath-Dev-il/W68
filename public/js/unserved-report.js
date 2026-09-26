@@ -122,7 +122,7 @@
     function searchableValue(row, key) {
         const raw = row?.[key] ?? '';
         if (key === 'so_no') return `${raw} ${row?.status ?? ''}`.toLowerCase();
-        if (['on_hand', 'served', 'unserved'].includes(key)) return `${raw} ${fmtQty(raw)}`.toLowerCase();
+        if (['on_hand', 'served', 'unserved', 'sales_1', 'sales_2', 'sales_3'].includes(key)) return `${raw} ${fmtQty(raw)}`.toLowerCase();
         if (['unit_price', 'total_amount'].includes(key)) return `${raw} ${fmtMoney(raw)}`.toLowerCase();
         return String(raw).toLowerCase();
     }
@@ -176,7 +176,7 @@
     function renderRows() {
         const rows = visibleRows();
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">No unserved items found for the selected filters/searches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="unserved-empty">No unserved items found for the selected filters/searches.</td></tr>';
         } else {
             tbody.innerHTML = rows.map(row => {
                 const status = String(row.status || '').trim();
@@ -201,6 +201,9 @@
                     <td class="num">${fmtQty(row.on_hand)}</td>
                     <td class="num">${fmtQty(row.served)}</td>
                     <td class="num unserved-value">${fmtQty(row.unserved)}</td>
+                    <td class="num">${fmtQty(row.sales_1)}</td>
+                    <td class="num">${fmtQty(row.sales_2)}</td>
+                    <td class="num">${fmtQty(row.sales_3)}</td>
                     <td class="num">${fmtMoney(row.unit_price)}</td>
                     <td class="num">${fmtMoney(row.total_amount)}</td>
                 </tr>`;
@@ -215,7 +218,7 @@
         if (previewAbort) previewAbort.abort();
         previewAbort = new AbortController();
         loadingLabel.textContent = 'Loading…';
-        tbody.innerHTML = '<tr><td colspan="11" class="unserved-empty">Loading Open / Partial unserved details…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="unserved-empty">Loading Open / Partial unserved details…</td></tr>';
 
         try {
             const response = await fetch(`${routes.data}?${collectParams().toString()}`, {
@@ -270,7 +273,7 @@
             if (error.name === 'AbortError') return;
             latestRows = [];
             loadingLabel.textContent = 'Error';
-            tbody.innerHTML = `<tr><td colspan="11" class="unserved-empty">${escapeHtml(error.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="14" class="unserved-empty">${escapeHtml(error.message)}</td></tr>`;
             showToast(error.message);
         }
     }
@@ -404,6 +407,8 @@
             stockFilter.value = 'with';
         } else if (mode === 'without-stock') {
             stockFilter.value = 'without';
+        } else if (mode === 'servable') {
+            stockFilter.value = 'servable';
         } else {
             stockFilter.value = 'all';
         }

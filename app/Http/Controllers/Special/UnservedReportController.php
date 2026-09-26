@@ -44,6 +44,7 @@ class UnservedReportController extends Controller
             'page_title' => 'Unserved Details',
             'unservedLayout' => $unservedLayout,
             'unservedRoutePrefix' => $unservedRoutePrefix,
+            'salesYears' => $this->rollingSalesYears(),
         ]);
     }
 
@@ -117,6 +118,7 @@ class UnservedReportController extends Controller
                 'generated_at' => $report['generated_at'],
                 'summary' => $report['summary'],
                 'customer_details' => $report['customer_details'],
+                'sales_years' => $report['sales_years'],
             ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -370,12 +372,14 @@ class UnservedReportController extends Controller
             'statusFilter' => strtolower(trim((string) $request->query('status_filter', 'all'))),
             'customerDetails' => $report['customer_details'],
             'customerGroups' => $report['customer_groups'],
+            'salesYears' => $report['sales_years'],
         ]);
     }
 
     private function buildReport(Request $request): array
     {
         [$dateFrom, $dateTo, $periodLabel] = $this->resolvePeriod($request);
+        $salesYears = $this->rollingSalesYears();
         $customer = trim((string) $request->input('customer', ''));
         $salesman = trim((string) $request->input('salesman', ''));
 
@@ -426,7 +430,7 @@ class UnservedReportController extends Controller
         $customerDetails = $this->resolveCustomerDetails($notes, $customer);
 
         if ($notes->isEmpty()) {
-            return $this->emptyReport($periodLabel, $customerDetails);
+            return $this->emptyReport($periodLabel, $customerDetails, $salesYears);
         }
 
         $noteIds = $notes->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
@@ -452,7 +456,7 @@ class UnservedReportController extends Controller
         ]);
 
         if ($noteItems->isEmpty()) {
-            return $this->emptyReport($periodLabel, $customerDetails);
+            return $this->emptyReport($periodLabel, $customerDetails, $salesYears);
         }
 
         // Served quantity comes only from Sales Order items tied to the same
@@ -511,6 +515,7 @@ class UnservedReportController extends Controller
                 ->keyBy('id');
 
         $onHandMap = $this->latestLedgerBalances($productIds);
+        $salesByProductYear = $this->annualSalesByProduct($productIds, $salesYears);
 
         $itemsByNote = [];
         foreach ($noteItems as $item) {
@@ -583,6 +588,9 @@ class UnservedReportController extends Controller
                     'on_hand' => (float) ($onHandMap[$productId] ?? 0),
                     'served' => $served,
                     'unserved' => $unserved,
+                    'sales_1' => (float) ($salesByProductYear[$productId][$salesYears[0]] ?? 0),
+                    'sales_2' => (float) ($salesByProductYear[$productId][$salesYears[1]] ?? 0),
+                    'sales_3' => (float) ($salesByProductYear[$productId][$salesYears[2]] ?? 0),
                     'unit_price' => $unitPrice,
                     'total_amount' => round($unserved * $unitPrice, 2),
                     'unit' => (string) ($item['unit'] ?? ''),
@@ -706,13 +714,22 @@ class UnservedReportController extends Controller
         $unservedWithStockQty = array_sum(array_column($withStockRows, 'unserved'));
 
         $stockFilter = strtolower(trim((string) $request->input('stock_filter', 'all')));
-        if (!in_array($stockFilter, ['all', 'with', 'without'], true)) {
+        if (!in_array($stockFilter, ['all', 'with', 'without', 'servable'], true)) {
             $stockFilter = 'all';
         }
         if ($stockFilter === 'with') {
             $rows = array_values(array_filter($rows, fn (array $row) => (float) ($row['on_hand'] ?? 0) > 0));
         } elseif ($stockFilter === 'without') {
             $rows = array_values(array_filter($rows, fn (array $row) => (float) ($row['on_hand'] ?? 0) <= 0));
+        } elseif ($stockFilter === 'servable') {
+            // W68_UNSERVED_SERVABLE_FILTER_GTE_20260926
+            // Servable means current ON HAND can fully cover the UNSERVED quantity.
+            $rows = array_values(array_filter(
+                $rows,
+                fn (array $row) =>
+                    (float) ($row['on_hand'] ?? 0) + 0.000001
+                    >= (float) ($row['unserved'] ?? 0)
+            ));
         }
         $totalUnserved = array_sum(array_column($rows, 'unserved'));
         $totalAmount = array_sum(array_column($rows, 'total_amount'));
@@ -728,6 +745,7 @@ class UnservedReportController extends Controller
             'rows' => $rows,
             'period_label' => $periodLabel,
             'generated_at' => Carbon::now('Asia/Manila')->format('F d, Y h:i A'),
+            'sales_years' => $salesYears,
             'customer_details' => $customerDetails,
             'customer_groups' => $customerGroups,
             'summary' => [
@@ -757,6 +775,125 @@ class UnservedReportController extends Controller
                 'total_amount' => $totalAmount,
             ],
         ];
+    }
+
+    /**
+     * Rolling annual Sales columns: current Manila year and the two years before it.
+     * Example: 2026 => [2024, 2025, 2026], 2027 => [2025, 2026, 2027].
+     */
+    private function rollingSalesYears(): array
+    {
+        $currentYear = (int) Carbon::now('Asia/Manila')->year;
+
+        return [$currentYear - 2, $currentYear - 1, $currentYear];
+    }
+
+    /**
+     * Cost Report-compatible Sales formula for the rolling annual columns.
+     *
+     * COUNT OUT only:
+     * - CHGINVC
+     * - Online Report Generation...
+     * - NEW_SYSTEM_SALES...
+     * - Sales Order Processing...
+     * - exact SO
+     * - Sales Order... (except Sales Order Edit - Item Removed...)
+     *
+     * DEDUCT IN only:
+     * - SALRTN...
+     * - Sales Return...
+     * - Sales Order Edit - Item Removed...
+     *
+     * Everything else is ignored (PURRTN, CONSIGNMENT, XPNSEDIS, CNSMTRTN,
+     * ADJUSTENTRY, Inventory adjustment, and all other non-approved remarks).
+     */
+    private function annualSalesByProduct(array $productIds, array $years): array
+    {
+        if (empty($productIds) || empty($years)) {
+            return [];
+        }
+
+        $years = array_values(array_unique(array_map('intval', $years)));
+        sort($years);
+
+        $dateFrom = min($years) . '-01-01';
+        $dateTo = max($years) . '-12-31';
+        $sales = [];
+        $outColumn = Schema::connection('ledger')->hasColumn('product_ledgers', 'out')
+            ? 'out'
+            : 'quantity_out';
+
+        $grossQuery = DB::connection('ledger')
+            ->table('product_ledgers')
+            ->whereIn('product_id', $productIds)
+            ->whereBetween('date', [$dateFrom, $dateTo])
+            ->whereRaw("UPPER(TRIM(COALESCE(transaction_type,''))) = 'OUT'")
+            ->whereRaw('COALESCE(' . $outColumn . ', 0) > 0');
+
+        $this->applyApprovedSalesRemarkFilter($grossQuery);
+
+        $grossRows = $grossQuery
+            ->selectRaw('product_id, YEAR(date) as sales_year, SUM(' . $outColumn . ') as sales_qty')
+            ->groupBy('product_id')
+            ->groupByRaw('YEAR(date)')
+            ->get();
+
+        foreach ($grossRows as $row) {
+            $productId = (int) ($row->product_id ?? 0);
+            $year = (int) ($row->sales_year ?? 0);
+
+            if ($productId > 0 && in_array($year, $years, true)) {
+                $sales[$productId][$year] = (float) ($row->sales_qty ?? 0);
+            }
+        }
+
+        $returnRows = DB::connection('ledger')
+            ->table('product_ledgers')
+            ->whereIn('product_id', $productIds)
+            ->whereBetween('date', [$dateFrom, $dateTo])
+            ->whereRaw("UPPER(TRIM(COALESCE(transaction_type,''))) = 'IN'")
+            ->whereRaw('COALESCE(quantity_in, 0) > 0')
+            ->where(function ($returnQuery) {
+                $returnQuery
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%salrtn%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales return%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales order edit - item removed%'");
+            })
+            ->selectRaw('product_id, YEAR(date) as sales_year, SUM(quantity_in) as return_qty')
+            ->groupBy('product_id')
+            ->groupByRaw('YEAR(date)')
+            ->get();
+
+        foreach ($returnRows as $row) {
+            $productId = (int) ($row->product_id ?? 0);
+            $year = (int) ($row->sales_year ?? 0);
+
+            if ($productId > 0 && in_array($year, $years, true)) {
+                $sales[$productId][$year] =
+                    (float) ($sales[$productId][$year] ?? 0)
+                    - (float) ($row->return_qty ?? 0);
+            }
+        }
+
+        return $sales;
+    }
+
+    private function applyApprovedSalesRemarkFilter($query): void
+    {
+        // W68_UNSERVED_STRICT_SALES_REMARKS_20260926
+        $query->where(function ($salesRemarkQuery) {
+            $salesRemarkQuery
+                ->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%chginvc%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%online report generation%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%new_system_sales%'")
+                ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%sales order processing%'")
+                ->orWhereRaw("LOWER(TRIM(COALESCE(remarks,''))) = 'so'")
+                ->orWhere(function ($salesOrderRemarkQuery) {
+                    $salesOrderRemarkQuery
+                        ->whereRaw("LOWER(TRIM(COALESCE(remarks,''))) LIKE 'sales order%'")
+                        ->whereRaw("LOWER(TRIM(COALESCE(remarks,''))) NOT LIKE 'sales order edit - item removed%'");
+                });
+        });
     }
 
     private function latestLedgerBalances(array $productIds): array
@@ -1050,12 +1187,14 @@ class UnservedReportController extends Controller
         ];
     }
 
-    private function emptyReport(string $periodLabel, ?array $customerDetails = null): array
+    private function emptyReport(string $periodLabel, ?array $customerDetails = null, ?array $salesYears = null): array
     {
+        $salesYears = $salesYears ?? $this->rollingSalesYears();
         return [
             'rows' => [],
             'period_label' => $periodLabel,
             'generated_at' => Carbon::now('Asia/Manila')->format('F d, Y h:i A'),
+            'sales_years' => $salesYears,
             'customer_details' => $customerDetails ?? [
                 'name' => 'ALL CUSTOMERS',
                 'tin' => '—',

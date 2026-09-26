@@ -258,6 +258,7 @@ class UnservedReportExport implements FromArray, WithEvents, WithTitle
         $stock = match (strtolower((string) ($this->filters['stock_filter'] ?? 'all'))) {
             'with' => 'WITH STOCK',
             'without' => 'WITHOUT STOCK',
+            'servable' => 'SERVABLE (ON HAND >= UNSERVED)',
             default => 'ALL',
         };
 

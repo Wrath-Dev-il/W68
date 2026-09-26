@@ -70,6 +70,7 @@
                         <option value="all">All</option>
                         <option value="without">Without Stock</option>
                         <option value="with">With Stock</option>
+                        <option value="servable">Servable (On Hand &gt;= Unserved)</option>
                     </select>
                 </div>
             </div>
@@ -255,7 +256,9 @@
                 <thead>
                     <tr class="unserved-main-head">
                         <th>S.O. No.</th><th>Name</th><th>Date</th><th>Product Code</th><th>Part No.</th><th>Description</th>
-                        <th class="num">On Hand</th><th class="num">Served</th><th class="num">Unserved</th><th class="num">Unit Price</th><th class="num">Total Amount</th>
+                        <th class="num">On Hand</th><th class="num">Served</th><th class="num">Unserved</th>
+                        <th class="num">Sales {{ $salesYears[0] }}</th><th class="num">Sales {{ $salesYears[1] }}</th><th class="num">Sales {{ $salesYears[2] }}</th>
+                        <th class="num">Unit Price</th><th class="num">Total Amount</th>
                     </tr>
                     <tr class="unserved-column-search-row">
                         <th><input data-column-search="so_no" type="text" placeholder="Search"></th>
@@ -267,12 +270,15 @@
                         <th><input data-column-search="on_hand" type="text" placeholder="Search"></th>
                         <th><input data-column-search="served" type="text" placeholder="Search"></th>
                         <th><input data-column-search="unserved" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="sales_1" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="sales_2" type="text" placeholder="Search"></th>
+                        <th><input data-column-search="sales_3" type="text" placeholder="Search"></th>
                         <th><input data-column-search="unit_price" type="text" placeholder="Search"></th>
                         <th><input data-column-search="total_amount" type="text" placeholder="Search"></th>
                     </tr>
                 </thead>
                 <tbody id="unserved-table-body">
-                    <tr><td colspan="11" class="unserved-empty">Loading unserved details…</td></tr>
+                    <tr><td colspan="14" class="unserved-empty">Loading unserved details…</td></tr>
                 </tbody>
             </table>
         </div>

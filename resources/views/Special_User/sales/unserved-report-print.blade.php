@@ -158,19 +158,21 @@
             }
 
             /*
-             * 10-column Letter portrait allocation.
-             * TOTAL AMOUNT removed and its width transferred to NAME.
+             * 12-column Letter portrait allocation.
+             * UNIT PRICE is replaced by rolling annual SALES columns.
              */
-            .unserved-print-table th:nth-child(1)  { width: 8% !important; }
-            .unserved-print-table th:nth-child(2)  { width: 19% !important; }
-            .unserved-print-table th:nth-child(3)  { width: 8% !important; }
-            .unserved-print-table th:nth-child(4)  { width: 16% !important; }
-            .unserved-print-table th:nth-child(5)  { width: 11% !important; }
+            .unserved-print-table th:nth-child(1)  { width: 7% !important; }
+            .unserved-print-table th:nth-child(2)  { width: 14% !important; }
+            .unserved-print-table th:nth-child(3)  { width: 7% !important; }
+            .unserved-print-table th:nth-child(4)  { width: 12% !important; }
+            .unserved-print-table th:nth-child(5)  { width: 9% !important; }
             .unserved-print-table th:nth-child(6)  { width: 15% !important; }
             .unserved-print-table th:nth-child(7)  { width: 5% !important; }
             .unserved-print-table th:nth-child(8)  { width: 5% !important; }
             .unserved-print-table th:nth-child(9)  { width: 5% !important; }
-            .unserved-print-table th:nth-child(10) { width: 8% !important; }
+            .unserved-print-table th:nth-child(10) { width: 7% !important; }
+            .unserved-print-table th:nth-child(11) { width: 7% !important; }
+            .unserved-print-table th:nth-child(12) { width: 7% !important; }
 .unserved-print-table .customer-total-row {
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
@@ -314,7 +316,9 @@
                             <th>ON HAND</th>
                             <th>SERVED</th>
                             <th>UNSERVED</th>
-                            <th>UNIT PRICE</th>
+                            <th>SALES {{ $salesYears[0] }}</th>
+                            <th>SALES {{ $salesYears[1] }}</th>
+                            <th>SALES {{ $salesYears[2] }}</th>
 </tr>
                     </thead>
                     <tbody>
@@ -329,7 +333,9 @@
                                 <td class="num">{{ rtrim(rtrim(number_format((float) $row['on_hand'], 2, '.', ','), '0'), '.') }}</td>
                                 <td class="num">{{ rtrim(rtrim(number_format((float) $row['served'], 2, '.', ','), '0'), '.') }}</td>
                                 <td class="num strong">{{ rtrim(rtrim(number_format((float) $row['unserved'], 2, '.', ','), '0'), '.') }}</td>
-                                <td class="num">{{ number_format((float) $row['unit_price'], 2) }}</td>
+                                <td class="num">{{ rtrim(rtrim(number_format((float) ($row['sales_1'] ?? 0), 2, '.', ','), '0'), '.') }}</td>
+                                <td class="num">{{ rtrim(rtrim(number_format((float) ($row['sales_2'] ?? 0), 2, '.', ','), '0'), '.') }}</td>
+                                <td class="num">{{ rtrim(rtrim(number_format((float) ($row['sales_3'] ?? 0), 2, '.', ','), '0'), '.') }}</td>
 </tr>
                         @endforeach
                     </tbody>
@@ -355,12 +361,14 @@
                             <th>ON HAND</th>
                             <th>SERVED</th>
                             <th>UNSERVED</th>
-                            <th>UNIT PRICE</th>
+                            <th>SALES {{ $salesYears[0] }}</th>
+                            <th>SALES {{ $salesYears[1] }}</th>
+                            <th>SALES {{ $salesYears[2] }}</th>
 </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td colspan="10" class="empty">No unserved items found for the selected filters.</td>
+                            <td colspan="12" class="empty">No unserved items found for the selected filters.</td>
                         </tr>
                     </tbody>
                 </table>
