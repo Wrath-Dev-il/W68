@@ -7640,7 +7640,7 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
     }
 
     $totalCount = $baseQuery()->count();
-    $safeLimit = 24;
+    $safeLimit = PHP_INT_MAX;
     $products = $baseQuery()->select($selectColumns)->limit($safeLimit)->get();
 
     return view('Admin.master_list.Product_Catalog', [
@@ -7719,7 +7719,7 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
     }
 
     $totalCount = $query->count();
-    $plSafeLimit = 200;
+    $plSafeLimit = PHP_INT_MAX;
     $products = $query->select($plSelectColumns)->limit($plSafeLimit)->get();
 
     return view('Admin.master_list.Product_PriceList', [
