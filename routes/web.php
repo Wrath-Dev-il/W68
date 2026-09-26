@@ -27801,6 +27801,20 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
 
     $query = \App\Models\Product::on('masterlist');
 
+    $hasUnitCol = Schema::connection('masterlist')->hasColumn('products', 'unit')
+        || Schema::connection('masterlist')->hasColumn('products', 'Unit')
+        || Schema::connection('masterlist')->hasColumn('products', 'UNIT');
+    if ($hasUnitCol) {
+        $query->addSelect('unit');
+    }
+
+    $productBaseColumns = ['id','product_code','product_code2','pricelist_code','part_number','category','specification','description','application','position','on_hand','Re_order_level','actual_qty','status','selling_price','cost','price_online','Product_Picture','is_selected_for_report','date_added','supplier'];
+    foreach ($productBaseColumns as $bc) {
+        if (Schema::connection('masterlist')->hasColumn('products', $bc)) {
+            $query->addSelect($bc);
+        }
+    }
+
     // Product Code / Part Number are searchable multi-select dropdowns. Apply
     // them before any ledger or Sales History work so only selected products
     // are calculated and printed.
@@ -28029,28 +28043,39 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
     // per product + oum and take the most frequent non-empty value.
     $salesOumByProduct = [];
     if ($allProductIds->isNotEmpty()) {
-        $inOutCol = $outColumn;
-        $raw = DB::connection('ledger')->table('product_ledgers')
-            ->whereIn('product_id', $allProductIds)
-            ->whereNotNull('oum')
-            ->whereRaw("TRIM(COALESCE(oum,'')) <> ''")
-            ->where(function ($salesMovementQuery) {
-                $salesMovementQuery
-                    ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
-                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
-                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
-                    ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
-            })
-            ->selectRaw("product_id, oum, SUM(COALESCE({$inOutCol}, 0)) as qty_weight")
-            ->groupBy('product_id')
-            ->groupBy('oum')
-            ->orderBy('qty_weight', 'desc')
-            ->get(['product_id', 'oum', 'qty_weight']);
-        foreach ($raw as $r) {
-            $pid = (int) ($r->product_id ?? 0);
-            if ($pid <= 0) continue;
-            if (!isset($salesOumByProduct[$pid])) {
-                $salesOumByProduct[$pid] = trim((string) ($r->oum ?? ''));
+        $oumColCandidates = ['oum','Oum','OUM'];
+        $hasOumCol = null;
+        $oumExpr = null;
+        foreach ($oumColCandidates as $c) {
+            if (Schema::connection('ledger')->hasColumn('product_ledgers', $c)) {
+                $hasOumCol = $c;
+                $oumExpr = "COALESCE(TRIM($c),'')";
+                break;
+            }
+        }
+        if ($hasOumCol) {
+            $inOutCol = $outColumn;
+            $raw = DB::connection('ledger')->table('product_ledgers')
+                ->whereIn('product_id', $allProductIds)
+                ->whereRaw("TRIM(COALESCE($hasOumCol,'')) <> ''")
+                ->where(function ($salesMovementQuery) {
+                    $salesMovementQuery
+                        ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
+                        ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
+                        ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
+                        ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
+                })
+                ->selectRaw("product_id, $hasOumCol as oum, SUM(COALESCE({$inOutCol}, 0)) as qty_weight")
+                ->groupBy('product_id')
+                ->groupBy($hasOumCol)
+                ->orderBy('qty_weight', 'desc')
+                ->get(['product_id', 'oum', 'qty_weight']);
+            foreach ($raw as $r) {
+                $pid = (int) ($r->product_id ?? 0);
+                if ($pid <= 0) continue;
+                if (!isset($salesOumByProduct[$pid])) {
+                    $salesOumByProduct[$pid] = trim((string) ($r->oum ?? ''));
+                }
             }
         }
     }
@@ -28109,11 +28134,17 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
             }
         }
 
-        $unit = trim((string) ($p->unit ?? ''));
-        if ($unit === '' && !empty($p->Unit)) {
-            $unit = trim((string) $p->Unit);
+        $unit = '';
+        foreach (['unit','Unit','UNIT','unit_measure','uom','UOM'] as $k) {
+            if (isset($p->$k) && trim((string) $p->$k) !== '') {
+                $unit = trim((string) $p->$k);
+                break;
+            }
         }
         $salesOum = trim((string) ($salesOumByProduct[(int) $pid] ?? ''));
+        if ($salesOum === '' && $unit !== '') {
+            $salesOum = $unit;
+        }
 
         return [
             'product_code' => $p->product_code ?? '',

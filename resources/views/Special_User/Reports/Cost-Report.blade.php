@@ -282,27 +282,19 @@
             <table class="cr-table w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 text-slate-700 font-bold uppercase">
-                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:14%">Item Code</th>
-                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:12%">Part No#</th>
-                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:22%">Application</th>
-                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="2" style="width:12%">PRICE</th>
-                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="2" style="width:14.5%"><div>DATE</div><div>SUPPLIER</div><div>COST</div></th>
-                        <th class="border border-slate-300 px-3 py-2 text-center" colspan="2" style="width:9%">INV</th>
-                        <th class="border border-slate-300 px-3 py-2 text-center" colspan="6" style="width:16.5%">SALES</th>
-                    </tr>
-                    <tr class="bg-slate-50 text-slate-700 font-bold uppercase">
-                        <th class="border border-slate-300 px-3 py-2" style="width:5%">QTY</th>
-                        <th class="border border-slate-300 px-3 py-2" style="width:4%">UNIT</th>
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year1" style="width:4%">'21</th>
-                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year2" style="width:4%">'22</th>
-                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year3" style="width:4%">'23</th>
-                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
+                        <th class="border border-slate-300 px-3 py-2" rowspan="1" style="width:14%">Item Code</th>
+                        <th class="border border-slate-300 px-3 py-2" rowspan="1" style="width:12%">Part No#</th>
+                        <th class="border border-slate-300 px-3 py-2" rowspan="1" style="width:22%">Application</th>
+                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="1" style="width:12%">PRICE</th>
+                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="1" style="width:14.5%"><div>DATE</div><div>SUPPLIER</div><div>COST</div></th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" style="width:5.5%">INV</th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" id="cr-th-year1" style="width:4.5%">'21</th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" id="cr-th-year2" style="width:4.5%">'22</th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" id="cr-th-year3" style="width:4.5%">'23</th>
                     </tr>
                 </thead>
                 <tbody id="cr-report-tbody" class="text-slate-600">
-                    <tr><td colspan="11" class="py-10 text-center text-slate-400">Click Generate to load cost, sales, inventory report data.</td></tr>
+                    <tr><td colspan="9" class="py-10 text-center text-slate-400">Click Generate to load cost, sales, inventory report data.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -533,12 +525,22 @@
                                 '<div title="' + crEscapeHtml(item.cost_supplier || '') + '" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + crEscapeHtml(crDisplaySupplierName(item.cost_supplier)) + '</div>' +
                                 '<div style="font-weight:800;color:#334155">COST: ' + crFormatCurrency(item.supplier_cost) + '</div>' +
                             '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-right font-bold text-slate-700 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.on_hand || 0) + '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-center font-bold text-slate-700" style="font-size:10px;white-space:normal">' + unit + '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_1 || 0) + '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-500" style="font-size:9px;white-space:normal;overflow-wrap:anywhere">' + oumHtml + '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_2 || 0) + '</td>' +
-                            '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_3 || 0) + '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-bold text-slate-700" style="line-height:1.25;white-space:normal">' +
+                                '<div>' + (item.on_hand || 0) + '</div>' +
+                                '<div style="font-size:10px;color:#4a5568;font-weight:600;margin-top:1px">' + unit + '</div>' +
+                            '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
+                                '<div>' + (item.sales_1 || 0) + '</div>' +
+                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
+                                '<div>' + (item.sales_2 || 0) + '</div>' +
+                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
+                                '<div>' + (item.sales_3 || 0) + '</div>' +
+                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
                             '</tr>';
                     }
                 }
@@ -582,38 +584,28 @@
                         '<col style="width:22%">' +
                         '<col style="width:12%">' +
                         '<col style="width:14.5%">' +
-                        '<col style="width:5%">' +
-                        '<col style="width:4%">' +
-                        '<col style="width:4%">' +
-                        '<col style="width:1.5%">' +
-                        '<col style="width:4%">' +
-                        '<col style="width:3%">' +
+                        '<col style="width:5.5%">' +
+                        '<col style="width:6.5%">' +
+                        '<col style="width:6.5%">' +
+                        '<col style="width:6.5%">' +
                         '</colgroup>' +
                         '<thead>' +
                         '<tr style="background:#dde3ec;font-size:10px;font-weight:700;text-align:center">' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">ITEM CODE</th>' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">PART NO#</th>' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">APPLICATION</th>' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">PRICE</th>' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">DATE/SUPPLIER</th>' +
-                        '<th colspan="2" style="border:1px solid #000;padding:2px 1px;text-align:center">INV</th>' +
-                        '<th colspan="6" style="border:1px solid #000;padding:2px 1px;text-align:center">SALES</th>' +
-                        '</tr>' +
-                        '<tr style="background:#eef1f6;font-size:10px;font-weight:700;text-align:center">' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">QTY</th>' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">UNIT</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">ITEM CODE</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">PART NO#</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">APPLICATION</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">PRICE</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">DATE/SUPPLIER</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">INV</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y1s + '</th>' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y2s + '</th>' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y3s + '</th>' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '</tr>' +
                         '</thead><tbody>';
                     for (var j = 0; j < groupItems.length; j++) {
                         var item = groupItems[j];
                         var unit = crEscapeHtml(item.unit || '---');
-                        var oumHtml = crEscapeHtml(item.oum || '');
+                        var oumHtml = crEscapeHtml(item.oum || '---');
                         html += '<tr>' +
                             '<td style="border:1px solid #000;padding:2px 2px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;font-weight:700;vertical-align:top">' + (item.product_code || '---') + '</td>' +
                             '<td style="border:1px solid #000;padding:2px 2px;word-break:break-word;overflow-wrap:anywhere;white-space:normal;vertical-align:top">' + (item.part_number || '---') + '</td>' +
@@ -627,14 +619,22 @@
                                 '<div title="' + crEscapeHtml(item.cost_supplier || '') + '" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + crEscapeHtml(crDisplaySupplierName(item.cost_supplier)) + '</div>' +
                                 '<div style="font-weight:900">COST: ' + crFormatCurrency(item.supplier_cost) + '</div>' +
                             '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:right;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.on_hand || 0) + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;font-weight:700;white-space:normal;overflow-wrap:anywhere;font-size:10px">' + unit + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_1 || 0) + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_2 || 0) + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_3 || 0) + '</td>' +
-                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
+                            '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
+                                '<div style="font-weight:700">' + (item.on_hand || 0) + '</div>' +
+                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + unit + '</div>' +
+                            '</td>' +
+                            '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
+                                '<div>' + (item.sales_1 || 0) + '</div>' +
+                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
+                            '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
+                                '<div>' + (item.sales_2 || 0) + '</div>' +
+                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
+                            '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
+                                '<div>' + (item.sales_3 || 0) + '</div>' +
+                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                            '</td>' +
                             '</tr>';
                     }
                     html += '</tbody></table>';
