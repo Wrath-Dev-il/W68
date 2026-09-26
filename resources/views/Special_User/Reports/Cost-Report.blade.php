@@ -597,14 +597,15 @@
                         '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">PRICE</th>' +
                         '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">DATE/SUPPLIER</th>' +
                         '<th colspan="2" style="border:1px solid #000;padding:2px 1px;text-align:center">INV</th>' +
-                        '<th colspan="5" style="border:1px solid #000;padding:2px 1px;text-align:center">SALES</th>' +
+                        '<th colspan="6" style="border:1px solid #000;padding:2px 1px;text-align:center">SALES</th>' +
                         '</tr>' +
                         '<tr style="background:#eef1f6;font-size:10px;font-weight:700;text-align:center">' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">QTY</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">UNIT</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y1s + '</th>' +
-                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OU</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y2s + '</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y3s + '</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '</tr>' +
@@ -631,6 +632,7 @@
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_1 || 0) + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_2 || 0) + '</td>' +
+                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_3 || 0) + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
                             '</tr>';
