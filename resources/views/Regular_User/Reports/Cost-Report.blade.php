@@ -531,15 +531,15 @@
                             '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
                                 '<div>' + (item.sales_1 || 0) + '</div>' +
-                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_1 && Number(item.sales_1) !== 0) ? '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
                                 '<div>' + (item.sales_2 || 0) + '</div>' +
-                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_2 && Number(item.sales_2) !== 0) ? '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-600" style="line-height:1.25;white-space:normal">' +
                                 '<div>' + (item.sales_3 || 0) + '</div>' +
-                                '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_3 && Number(item.sales_3) !== 0) ? '<div style="font-size:9px;color:#4a5568;font-weight:600;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '</tr>';
                     }
@@ -625,15 +625,15 @@
                             '</td>' +
                             '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
                                 '<div>' + (item.sales_1 || 0) + '</div>' +
-                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_1 && Number(item.sales_1) !== 0) ? '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
                                 '<div>' + (item.sales_2 || 0) + '</div>' +
-                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_2 && Number(item.sales_2) !== 0) ? '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '<td style="border:1px solid #000;padding:1px 1px;text-align:center;line-height:1.2;vertical-align:top">' +
                                 '<div>' + (item.sales_3 || 0) + '</div>' +
-                                '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' +
+                                ((item.sales_3 && Number(item.sales_3) !== 0) ? '<div style="font-weight:600;font-size:10px;margin-top:1px">' + oumHtml + '</div>' : '') +
                             '</td>' +
                             '</tr>';
                     }
