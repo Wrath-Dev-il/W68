@@ -22,21 +22,50 @@
                     <div class="item-image-container">
                         @php
                             $firstImg = null;
-                            if ($product->Product_Picture) {
+                            $pic = $product->Product_Picture ?? null;
+                            if (!empty($pic)) {
                                 try {
-                                    $imgs = is_string($product->Product_Picture) ? json_decode($product->Product_Picture, true) : $product->Product_Picture;
-                                    $firstImg = is_array($imgs) && count($imgs) > 0 ? $imgs[0] : (is_string($imgs) ? $imgs : null);
-                                } catch(\Exception $e) { $firstImg = null; }
+                                    if (is_array($pic)) {
+                                        $firstImg = count($pic) > 0 ? $pic[0] : null;
+                                    } elseif (is_string($pic)) {
+                                        $trimmed = trim($pic);
+                                        if (str_starts_with($trimmed, 'data:image/') || preg_match('#^https?://#i', $trimmed)) {
+                                            $firstImg = $trimmed;
+                                        } elseif (str_starts_with($trimmed, '/') || preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $trimmed)) {
+                                            $firstImg = url('/' . ltrim($trimmed, '/'));
+                                        } elseif ($trimmed !== '' && ($trimmed[0] === '[' || $trimmed[0] === '{')) {
+                                            $decoded = json_decode($trimmed, true);
+                                            if (is_array($decoded) && count($decoded) > 0) {
+                                                $first = $decoded[0];
+                                                if (is_string($first)) {
+                                                    if (str_starts_with($first, 'data:image/') || preg_match('#^https?://#i', $first)) {
+                                                        $firstImg = $first;
+                                                    } elseif (preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $first)) {
+                                                        $firstImg = url('/' . ltrim($first, '/'));
+                                                    }
+                                                }
+                                                unset($first, $decoded);
+                                            }
+                                        } elseif (strlen($pic) >= 8 && substr($pic, 0, 8) === "\x89PNG\r\n\x1a\n") {
+                                            $firstImg = 'data:image/png;base64,' . base64_encode($pic);
+                                        } elseif (strlen($pic) >= 3 && substr($pic, 0, 3) === "\xFF\xD8\xFF") {
+                                            $firstImg = 'data:image/jpeg;base64,' . base64_encode($pic);
+                                        }
+                                        unset($trimmed);
+                                    }
+                                } catch(\Throwable $e) { $firstImg = null; }
                             }
+                            unset($pic);
                         @endphp
                         @if($firstImg)
-                            <img src="{{ $firstImg }}" class="max-w-full max-h-full object-contain">
+                            <img src="{!! $firstImg !!}" class="max-w-full max-h-full object-contain">
                         @else
                             <div class="text-slate-200 flex flex-col items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                                 <span class="text-[7px] font-bold uppercase mt-1">No Image</span>
                             </div>
                         @endif
+                        @php unset($firstImg); @endphp
                     </div>
                     <div class="item-details">
                         <div class="detail-row">
@@ -67,6 +96,12 @@
                     </div>
                 </div>
             @endforeach
+            @php
+                $products = null;
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
+            @endphp
         </div>
 
         <!-- Footer -->

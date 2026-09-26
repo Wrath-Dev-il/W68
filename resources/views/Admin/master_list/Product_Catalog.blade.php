@@ -231,6 +231,64 @@
     @php
         $catalogChunks = $products->chunk(12);
         $totalPages = $catalogChunks->count();
+
+        $_getProductPicture = function ($productId) {
+            static $cachedId = null;
+            static $cachedPic = null;
+            if ($cachedId === $productId) {
+                return $cachedPic;
+            }
+            $row = \Illuminate\Support\Facades\DB::connection('masterlist')
+                ->table('products')
+                ->select('Product_Picture')
+                ->where('id', (int)$productId)
+                ->limit(1)
+                ->first();
+            $cachedId = $productId;
+            $cachedPic = $row ? ($row->Product_Picture ?? null) : null;
+            unset($row);
+            return $cachedPic;
+        };
+
+        $_firstImageFromPic = function ($pic) {
+            $firstImg = null;
+            if (empty($pic)) {
+                return $firstImg;
+            }
+            try {
+                if (is_array($pic)) {
+                    $firstImg = count($pic) > 0 ? $pic[0] : null;
+                } elseif (is_string($pic)) {
+                    $trimmed = trim($pic);
+                    if (str_starts_with($trimmed, 'data:image/') || preg_match('#^https?://#i', $trimmed)) {
+                        $firstImg = $trimmed;
+                    } elseif (str_starts_with($trimmed, '/') || preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $trimmed)) {
+                        $firstImg = url('/' . ltrim($trimmed, '/'));
+                    } elseif ($trimmed !== '' && ($trimmed[0] === '[' || $trimmed[0] === '{')) {
+                        $decoded = json_decode($trimmed, true);
+                        if (is_array($decoded) && count($decoded) > 0) {
+                            $first = $decoded[0];
+                            if (is_string($first)) {
+                                if (str_starts_with($first, 'data:image/') || preg_match('#^https?://#i', $first)) {
+                                    $firstImg = $first;
+                                } elseif (preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $first)) {
+                                    $firstImg = url('/' . ltrim($first, '/'));
+                                }
+                            }
+                            unset($first, $decoded);
+                        }
+                    } elseif (strlen($pic) >= 8 && substr($pic, 0, 8) === "\x89PNG\r\n\x1a\n") {
+                        $firstImg = 'data:image/png;base64,' . base64_encode($pic);
+                    } elseif (strlen($pic) >= 3 && substr($pic, 0, 3) === "\xFF\xD8\xFF") {
+                        $firstImg = 'data:image/jpeg;base64,' . base64_encode($pic);
+                    }
+                    unset($trimmed);
+                }
+            } catch (\Throwable $e) {
+                $firstImg = null;
+            }
+            return $firstImg;
+        };
     @endphp
 
     @if($totalCount > $products->count())
@@ -268,40 +326,9 @@
                         <div class="item-card">
                             <div class="item-image-container">
                                 @php
-                                    $firstImg = null;
-                                    $pic = $product->Product_Picture;
-                                    if (!empty($pic)) {
-                                        try {
-                                            if (is_array($pic)) {
-                                                $firstImg = count($pic) > 0 ? $pic[0] : null;
-                                            } elseif (is_string($pic)) {
-                                                $trimmed = trim($pic);
-                                                if (str_starts_with($trimmed, 'data:image/') || preg_match('#^https?://#i', $trimmed)) {
-                                                    $firstImg = $trimmed;
-                                                } elseif (str_starts_with($trimmed, '/') || preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $trimmed)) {
-                                                    $firstImg = url('/' . ltrim($trimmed, '/'));
-                                                } elseif ($trimmed !== '' && ($trimmed[0] === '[' || $trimmed[0] === '{')) {
-                                                    $decoded = json_decode($trimmed, true);
-                                                    if (is_array($decoded) && count($decoded) > 0) {
-                                                        $first = $decoded[0];
-                                                        if (is_string($first)) {
-                                                            if (str_starts_with($first, 'data:image/') || preg_match('#^https?://#i', $first)) {
-                                                                $firstImg = $first;
-                                                            } elseif (preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $first)) {
-                                                                $firstImg = url('/' . ltrim($first, '/'));
-                                                            }
-                                                        }
-                                                    }
-                                                } elseif (strlen($pic) >= 8 && substr($pic, 0, 8) === "\x89PNG\r\n\x1a\n") {
-                                                    $firstImg = 'data:image/png;base64,' . base64_encode($pic);
-                                                } elseif (strlen($pic) >= 3 && substr($pic, 0, 3) === "\xFF\xD8\xFF") {
-                                                    $firstImg = 'data:image/jpeg;base64,' . base64_encode($pic);
-                                                }
-                                            }
-                                        } catch (\Throwable $e) {
-                                            $firstImg = null;
-                                        }
-                                    }
+                                    $pic = $_getProductPicture($product->id ?? 0);
+                                    $firstImg = $_firstImageFromPic($pic);
+                                    unset($pic);
                                 @endphp
                                 @if($firstImg)
                                     <img src="{!! $firstImg !!}" class="max-w-full max-h-full object-contain" alt="">
@@ -311,6 +338,7 @@
                                         <span class="text-[7px] font-bold uppercase mt-1">No Image</span>
                                     </div>
                                 @endif
+                                @php unset($firstImg); @endphp
                             </div>
                             <div class="item-details">
                                 <div class="detail-row">
@@ -341,6 +369,12 @@
                             </div>
                         </div>
                     @endforeach
+                    @php
+                        $productChunk = null;
+                        if (function_exists('gc_collect_cycles')) {
+                            gc_collect_cycles();
+                        }
+                    @endphp
                 </div>
 
                 <!-- Footer -->

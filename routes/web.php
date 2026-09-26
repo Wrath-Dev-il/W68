@@ -7578,56 +7578,70 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
     $user = session('user');
     if (!$user) return redirect('/login');
 
+    @ini_set('memory_limit', '512M');
+
     $escapeLike = function ($value) {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value);
     };
 
-    $query = \App\Models\Product::where('is_selected_for_report', true);
+    $masterlistConn = 'masterlist';
+    $productsTable = 'products';
 
-    // Apply optional filters
-    if ($desc = $request->input('description')) {
-        $query->where('description', 'like', '%' . $escapeLike($desc) . '%');
-    }
-    if ($pricelistCode = $request->input('pricelist_code')) {
-        $safeCode = $escapeLike($pricelistCode);
-        $query->where(function ($q) use ($safeCode) {
-            $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
-              ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
-                  $sub->where('price_code', 'like', '%' . $safeCode . '%');
-              });
-        });
-    }
-    if ($brand = $request->input('brand')) {
-        $safe = $escapeLike($brand);
-        // Strip spaces from both sides so 'AUTO STAR' also matches 'Autostar' (and vice versa)
-        $noSpace = str_replace(' ', '', $safe);
-        $query->whereRaw('REPLACE(category, " ", "") LIKE ?', ['%' . $noSpace . '%']);
-    }
-    if ($app = $request->input('application')) {
-        $query->where('application', 'like', '%' . $escapeLike($app) . '%');
-    }
-    if ($year = $request->input('year')) {
-        $query->whereYear('created_at', (int) $year);
-    }
+    $baseQuery = function () use ($masterlistConn, $productsTable, $request, $escapeLike) {
+        $q = \Illuminate\Support\Facades\DB::connection($masterlistConn)->table($productsTable)->where('is_selected_for_report', true);
 
-    $query->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
+        if ($desc = $request->input('description')) {
+            $q->where('description', 'like', '%' . $escapeLike($desc) . '%');
+        }
+        if ($pricelistCode = $request->input('pricelist_code')) {
+            $safeCode = $escapeLike($pricelistCode);
+            $idsWithPriceCode = \Illuminate\Support\Facades\DB::connection($masterlistConn)
+                ->table('product_price_codes')
+                ->where('price_code', 'like', '%' . $safeCode . '%')
+                ->pluck('product_id')
+                ->all();
+            $q->where(function ($sub) use ($safeCode, $idsWithPriceCode) {
+                $sub->where('pricelist_code', 'like', '%' . $safeCode . '%');
+                if (!empty($idsWithPriceCode)) {
+                    $sub->orWhereIn('id', $idsWithPriceCode);
+                }
+            });
+        }
+        if ($brand = $request->input('brand')) {
+            $safe = $escapeLike($brand);
+            $noSpace = str_replace(' ', '', $safe);
+            $q->whereRaw('REPLACE(category, " ", "") LIKE ?', ['%' . $noSpace . '%']);
+        }
+        if ($app = $request->input('application')) {
+            $q->where('application', 'like', '%' . $escapeLike($app) . '%');
+        }
+        if ($year = $request->input('year')) {
+            $q->whereYear('created_at', (int) $year);
+        }
 
-    // If it's an AJAX request for a specific page, return just that chunk
+        return $q->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
+    };
+
+    // 11 columns — intentionally EXCLUDE Product_Picture (BLOB) from bulk load.
+    // It will be fetched per-row inside Blade to avoid keeping N copies in memory.
+    $selectColumns = ['id', 'product_code', 'part_number', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
+    $ajaxSelectColumns = array_merge($selectColumns, ['Product_Picture']);
+
     if ($request->ajax() && $request->has('page_num')) {
         $pageNum = (int) $request->input('page_num');
         $perPage = 12;
-        $products = $query->offset(($pageNum - 1) * $perPage)->limit($perPage)->get();
+        $products = $baseQuery()->select($ajaxSelectColumns)->offset(($pageNum - 1) * $perPage)->limit($perPage)->get();
 
         return view('Admin.master_list.partials.catalog_chunk', [
             'products' => $products,
             'pageIndex' => $pageNum - 1,
-            'totalPages' => ceil($query->count() / $perPage)
+            'totalPages' => ceil($baseQuery()->count() / $perPage)
         ]);
     }
 
-    // Otherwise return the shell (or the full dataset)
-    $totalCount = $query->count();
-    $products = $query->get();
+    $totalCount = $baseQuery()->count();
+    $safeLimit = 24;
+    $products = $baseQuery()->select($selectColumns)->limit($safeLimit)->get();
 
     return view('Admin.master_list.Product_Catalog', [
         'user' => $user,
@@ -7641,6 +7655,8 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
     $user = session('user');
     if (!$user) return redirect('/login');
 
+    @ini_set('memory_limit', '512M');
+
     $escapeLike = function ($value) {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value);
     };
@@ -7674,6 +7690,8 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
     }
 
     $query->orderBy('description', 'asc')->orderBy('category', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
+
+    $plSelectColumns = ['id', 'product_code', 'part_number', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
 
     // If it's an AJAX request for a specific page
     if ($request->ajax() && $request->has('page_num')) {
@@ -7690,7 +7708,7 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
 
         $totalQuery = clone $query;
         $totalCount = $totalQuery->count();
-        $products = (clone $query)->offset($offset)->limit($perPage)->get();
+        $products = (clone $query)->select($plSelectColumns)->offset($offset)->limit($perPage)->get();
 
         return view('Admin.master_list.partials.pricelist_chunk', [
             'products' => $products,
@@ -7701,7 +7719,8 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
     }
 
     $totalCount = $query->count();
-    $products = $query->get(); // Full dataset — view limits preview to 180 via take(180)
+    $plSafeLimit = 200;
+    $products = $query->select($plSelectColumns)->limit($plSafeLimit)->get();
 
     return view('Admin.master_list.Product_PriceList', [
         'user' => $user,

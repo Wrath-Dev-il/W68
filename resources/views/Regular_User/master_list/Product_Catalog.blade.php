@@ -42,22 +42,17 @@
                 padding: 0 !important;
             }
             .no-print,
-            #catalog-container,
             #pdf-worker-container,
             #pdf-progress-modal {
                 display: none !important;
             }
-            #print-catalog {
+            #catalog-container {
                 display: block !important;
             }
             .page-break {
                 page-break-after: always;
                 break-after: page;
             }
-        }
-        
-        #print-catalog {
-            display: none;
         }
 
         .catalog-page {
@@ -212,8 +207,14 @@
     @include('partials.global.w68-loader')
 
     
+    @php
+        $backUrl = route('admin.prod-master');
+        if (session('user') && (session('user')['role'] ?? '') !== 'Admin' && Route::has('regular.prod-master')) {
+            $backUrl = route('regular.prod-master');
+        }
+    @endphp
     <div class="fixed top-5 left-5 z-[250] no-print">
-        <a href="{{ route('regular.prod-master') }}" class="px-6 py-3 bg-gold text-maroon-900 font-black rounded-2xl shadow-2xl hover:bg-goldlining-500 transition-all flex items-center gap-3 border border-goldlining-500">
+        <a href="{{ $backUrl }}" class="px-6 py-3 bg-gold text-maroon-900 font-black rounded-2xl shadow-2xl hover:bg-goldlining-500 transition-all flex items-center gap-3 border border-goldlining-500">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             BACK TO MASTERLIST
         </a>
@@ -228,31 +229,82 @@
 
     <div id="catalog-container">
     @php
-        // Limit preview to first 120 items
-        $previewProducts = $products->take(120);
-        $previewChunks = $previewProducts->chunk(12);
-        $previewTotalPages = ceil($previewProducts->count() / 12);
-        
-        // Full catalog for printing
-        $allChunks = $products->chunk(12);
-        $totalPrintPages = count($allChunks);
-        $totalPages = $totalPrintPages; // Added for JS compatibility
+        $catalogChunks = $products->chunk(12);
+        $totalPages = $catalogChunks->count();
+
+        $_getProductPicture = function ($productId) {
+            static $cachedId = null;
+            static $cachedPic = null;
+            if ($cachedId === $productId) {
+                return $cachedPic;
+            }
+            $row = \Illuminate\Support\Facades\DB::connection('masterlist')
+                ->table('products')
+                ->select('Product_Picture')
+                ->where('id', (int)$productId)
+                ->limit(1)
+                ->first();
+            $cachedId = $productId;
+            $cachedPic = $row ? ($row->Product_Picture ?? null) : null;
+            unset($row);
+            return $cachedPic;
+        };
+
+        $_firstImageFromPic = function ($pic) {
+            $firstImg = null;
+            if (empty($pic)) {
+                return $firstImg;
+            }
+            try {
+                if (is_array($pic)) {
+                    $firstImg = count($pic) > 0 ? $pic[0] : null;
+                } elseif (is_string($pic)) {
+                    $trimmed = trim($pic);
+                    if (str_starts_with($trimmed, 'data:image/') || preg_match('#^https?://#i', $trimmed)) {
+                        $firstImg = $trimmed;
+                    } elseif (str_starts_with($trimmed, '/') || preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $trimmed)) {
+                        $firstImg = url('/' . ltrim($trimmed, '/'));
+                    } elseif ($trimmed !== '' && ($trimmed[0] === '[' || $trimmed[0] === '{')) {
+                        $decoded = json_decode($trimmed, true);
+                        if (is_array($decoded) && count($decoded) > 0) {
+                            $first = $decoded[0];
+                            if (is_string($first)) {
+                                if (str_starts_with($first, 'data:image/') || preg_match('#^https?://#i', $first)) {
+                                    $firstImg = $first;
+                                } elseif (preg_match('/\.(png|jpg|jpeg|webp|gif|bmp|svg)(\?.*)?$/i', $first)) {
+                                    $firstImg = url('/' . ltrim($first, '/'));
+                                }
+                            }
+                            unset($first, $decoded);
+                        }
+                    } elseif (strlen($pic) >= 8 && substr($pic, 0, 8) === "\x89PNG\r\n\x1a\n") {
+                        $firstImg = 'data:image/png;base64,' . base64_encode($pic);
+                    } elseif (strlen($pic) >= 3 && substr($pic, 0, 3) === "\xFF\xD8\xFF") {
+                        $firstImg = 'data:image/jpeg;base64,' . base64_encode($pic);
+                    }
+                    unset($trimmed);
+                }
+            } catch (\Throwable $e) {
+                $firstImg = null;
+            }
+            return $firstImg;
+        };
     @endphp
 
-    @if($totalCount > 120)
+    @if($totalCount > $products->count())
         <div class="no-print bg-amber-50 border-l-4 border-amber-400 p-4 mb-6 rounded-r-xl shadow-sm mx-auto max-w-[215.9mm]">
             <div class="flex items-center">
                 <i data-lucide="alert-circle" class="w-5 h-5 text-amber-500 mr-3"></i>
                 <div>
-                    <p class="text-sm text-amber-800 font-bold uppercase tracking-tight">Large Catalog Detected</p>
-                    <p class="text-xs text-amber-700">Showing first 120 items for preview. Use the <b>PRINT CATALOG</b> button to generate the full report for all {{ number_format($totalCount) }} items.</p>
+                    <p class="text-sm text-amber-800 font-bold uppercase tracking-tight">Large Catalog (Showing First {{ $products->count() }} of {{ number_format($totalCount) }} items)</p>
+                    <p class="text-xs text-amber-700">Displaying {{ $totalPages }} pages for preview and print. Filter by Description, Brand, or Pricelist Code to generate a specific catalog section.</p>
                 </div>
             </div>
         </div>
     @endif
 
-    @foreach($previewChunks as $pageIndex => $productChunk)
-        <div class="catalog-page catalog-page-item">
+    @foreach($catalogChunks as $pageIndex => $productChunk)
+        <div class="catalog-page catalog-page-item {{ !$loop->last ? 'page-break' : '' }}">
             <!-- Tiled Watermark Background Overlay -->
             <div class="watermark-container"></div>
 
@@ -274,22 +326,19 @@
                         <div class="item-card">
                             <div class="item-image-container">
                                 @php
-                                    $firstImg = null;
-                                    if ($product->Product_Picture) {
-                                        try {
-                                            $imgs = is_string($product->Product_Picture) ? json_decode($product->Product_Picture, true) : $product->Product_Picture;
-                                            $firstImg = is_array($imgs) && count($imgs) > 0 ? $imgs[0] : (is_string($imgs) ? $imgs : null);
-                                        } catch(\Exception $e) { $firstImg = null; }
-                                    }
+                                    $pic = $_getProductPicture($product->id ?? 0);
+                                    $firstImg = $_firstImageFromPic($pic);
+                                    unset($pic);
                                 @endphp
                                 @if($firstImg)
-                                    <img src="{{ $firstImg }}" class="max-w-full max-h-full object-contain">
+                                    <img src="{!! $firstImg !!}" class="max-w-full max-h-full object-contain" alt="">
                                 @else
                                     <div class="text-slate-200 flex flex-col items-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                                         <span class="text-[7px] font-bold uppercase mt-1">No Image</span>
                                     </div>
                                 @endif
+                                @php unset($firstImg); @endphp
                             </div>
                             <div class="item-details">
                                 <div class="detail-row">
@@ -320,96 +369,22 @@
                             </div>
                         </div>
                     @endforeach
+                    @php
+                        $productChunk = null;
+                        if (function_exists('gc_collect_cycles')) {
+                            gc_collect_cycles();
+                        }
+                    @endphp
                 </div>
 
                 <!-- Footer -->
                 <div class="mt-auto pt-4 border-t-2 border-slate-300 flex justify-between items-center">
-                    <p class="text-[12px] text-black font-bold uppercase tracking-widest">PRODUCT CATALOG PREVIEW</p>
-                    <p class="text-[12px] text-black font-bold uppercase">PAGE {{ $pageIndex + 1 }} OF {{ $previewTotalPages }}</p>
+                    <p class="text-[12px] text-black font-bold uppercase tracking-widest">PRODUCT CATALOG</p>
+                    <p class="text-[12px] text-black font-bold uppercase">PAGE {{ $pageIndex + 1 }} OF {{ $totalPages }}</p>
                 </div>
             </div>
         </div>
     @endforeach
-    </div>
-
-    <!-- Print-Only Catalog (Hidden on Screen, Visible on Print) -->
-    <div id="print-catalog">
-        @foreach($allChunks as $pageIndex => $productChunk)
-            <div class="catalog-page {{ !$loop->last ? 'page-break' : '' }}">
-                <div class="catalog-content">
-                    <!-- Header -->
-                    <div class="flex justify-between items-end border-b-4 border-maroon pb-2 mb-4">
-                        <div>
-                            <h1 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">W68 AUTO PARTS</h1>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">Premium Parts Catalog</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-[14px] text-black font-bold uppercase tracking-widest">{{ date('M d, Y') }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Catalog Grid (12 items) -->
-                    <div class="catalog-grid">
-                        @foreach($productChunk as $product)
-                            <div class="item-card">
-                                <div class="item-image-container">
-                                    @php
-                                        $firstImg = null;
-                                        if ($product->Product_Picture) {
-                                            try {
-                                                $imgs = is_string($product->Product_Picture) ? json_decode($product->Product_Picture, true) : $product->Product_Picture;
-                                                $firstImg = is_array($imgs) && count($imgs) > 0 ? $imgs[0] : (is_string($imgs) ? $imgs : null);
-                                            } catch(\Exception $e) { $firstImg = null; }
-                                        }
-                                    @endphp
-                                    @if($firstImg)
-                                        <img src="{{ $firstImg }}" class="max-w-full max-h-full object-contain">
-                                    @else
-                                        <div class="text-slate-200 flex flex-col items-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                            <span class="text-[7px] font-bold uppercase mt-1">No Image</span>
-                                        </div>
-                                    @endif
-                                </div>
-                                <div class="item-details">
-                                    <div class="detail-row">
-                                        <span class="detail-label">Item Name:</span>
-                                        <span class="font-black text-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Part No#:</span>
-                                        <span class="font-mono text-black font-bold text-[9px]">{{ $product->part_number }}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Application:</span>
-                                        <span class="text-black font-bold text-[9px] truncate-text leading-tight">
-                                            {{ $product->application ?: $product->Application ?: '---' }}
-                                            @if($product->position ?: $product->Position)
-                                                <span class="text-[8px] text-slate-500 ml-1">({{ $product->position ?: $product->Position }})</span>
-                                            @endif
-                                        </span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="detail-label">Brand:</span>
-                                        <span class="text-black uppercase font-bold text-[9px]">{{ $product->category }}</span>
-                                    </div>
-                                    <div class="mt-1 pt-1 border-t border-dashed border-slate-300 flex justify-between items-center">
-                                        <span class="detail-label">Price:</span>
-                                        <span class="price-text">₱{{ number_format($product->selling_price, 2) }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-
-                    <!-- Footer -->
-                    <div class="mt-auto pt-4 border-t-2 border-slate-300 flex justify-between items-center">
-                        <p class="text-[12px] text-black font-bold uppercase tracking-widest">PRODUCT CATALOG</p>
-                        <p class="text-[12px] text-black font-bold uppercase">PAGE {{ $pageIndex + 1 }} OF {{ $totalPrintPages }}</p>
-                    </div>
-                </div>
-            </div>
-        @endforeach
     </div>
 
     <!-- Background Worker Container (Hidden) -->
