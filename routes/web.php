@@ -28023,6 +28023,38 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         }
     }
 
+    // Batch-fetch most common SALES OUM (per product) from core4_ledger.product_ledgers.
+    // A single product can appear with different oum values per transaction. To pick one
+    // stable unit for reporting we count sales-typed rows (out movements, non-adjustment)
+    // per product + oum and take the most frequent non-empty value.
+    $salesOumByProduct = [];
+    if ($allProductIds->isNotEmpty()) {
+        $inOutCol = $outColumn;
+        $raw = DB::connection('ledger')->table('product_ledgers')
+            ->whereIn('product_id', $allProductIds)
+            ->whereNotNull('oum')
+            ->whereRaw("TRIM(COALESCE(oum,'')) <> ''")
+            ->where(function ($salesMovementQuery) {
+                $salesMovementQuery
+                    ->whereRaw("UPPER(TRIM(COALESCE(reference_number,''))) <> 'INVENTORY-ADJUSTMENT'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%inventory adjustment%'")
+                    ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjustentry%'")
+                    ->whereRaw("LOWER(COALESCE(transaction_number,'')) NOT LIKE 'adj-%'");
+            })
+            ->selectRaw("product_id, oum, SUM(COALESCE({$inOutCol}, 0)) as qty_weight")
+            ->groupBy('product_id')
+            ->groupBy('oum')
+            ->orderBy('qty_weight', 'desc')
+            ->get(['product_id', 'oum', 'qty_weight']);
+        foreach ($raw as $r) {
+            $pid = (int) ($r->product_id ?? 0);
+            if ($pid <= 0) continue;
+            if (!isset($salesOumByProduct[$pid])) {
+                $salesOumByProduct[$pid] = trim((string) ($r->oum ?? ''));
+            }
+        }
+    }
+
     // Fetch total counts for stats (unpaginated)
     $allItemsForStats = $query->get();
     $totalItems = $allItemsForStats->count();
@@ -28052,7 +28084,7 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
         true // Cost Report: supplier/cost/date must match this exact product identity.
     );
 
-    $items = $productCollection->map(function ($p) use ($latestBalances, $latestPrices, $latestSuppliers, $salesByYear, $year1, $year2, $year3, $purchaseTransByProduct, $supplierDateByProduct, $purchaseCostService, $purchaseCostLookup) {
+    $items = $productCollection->map(function ($p) use ($latestBalances, $latestPrices, $latestSuppliers, $salesByYear, $year1, $year2, $year3, $purchaseTransByProduct, $supplierDateByProduct, $purchaseCostService, $purchaseCostLookup, $salesOumByProduct) {
         $pid = $p->id;
         $slTransNo = $purchaseTransByProduct[$pid] ?? null;
         $amountDate = '';
@@ -28077,12 +28109,21 @@ Route::get('/admin/reports/cost-report/data', function (\Illuminate\Http\Request
             }
         }
 
+        $unit = trim((string) ($p->unit ?? ''));
+        if ($unit === '' && !empty($p->Unit)) {
+            $unit = trim((string) $p->Unit);
+        }
+        $salesOum = trim((string) ($salesOumByProduct[(int) $pid] ?? ''));
+
         return [
             'product_code' => $p->product_code ?? '',
             'part_number' => $p->part_number ?? '',
             'description' => $p->description ?? '',
             'application' => $p->application ?? '',
             'category' => $p->category ?? '',
+            // NEW columns for printed report layout
+            'unit' => $unit,
+            'oum'  => $salesOum,
             // Preserve the legacy fields used by Admin/Regular Cost Report.
             'supplier' => $costInfo['supplier_name'] ?? '',
             'last_cost' => (float) ($p->cost ?? 0),

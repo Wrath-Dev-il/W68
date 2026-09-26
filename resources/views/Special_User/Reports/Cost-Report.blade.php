@@ -274,7 +274,7 @@
     </div>
 
     <div id="cr-print-area" style="display:none;">
-        <div class="cr-print-header">W68 AUTOPARTS &amp; SERVICE CENTER</div>
+        <div class="cr-print-header">C.S.I  REPORT</div>
         <div class="cr-print-meta">
             <span id="cr-print-generated-label"></span>
         </div>
@@ -284,20 +284,25 @@
                     <tr class="bg-slate-50 text-slate-700 font-bold uppercase">
                         <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:14%">Item Code</th>
                         <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:12%">Part No#</th>
-                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:28%">Application</th>
+                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:22%">Application</th>
                         <th class="border border-slate-300 px-3 py-2 text-left" rowspan="2" style="width:12%">PRICE</th>
-                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="2" style="width:16%"><div>DATE</div><div>SUPPLIER</div><div>COST</div></th>
-                        <th class="border border-slate-300 px-3 py-2" rowspan="2" style="width:6%">INV</th>
-                        <th class="border border-slate-300 px-3 py-2 text-center" colspan="3" style="width:12%">SALES</th>
+                        <th class="border border-slate-300 px-3 py-2 text-left" rowspan="2" style="width:14.5%"><div>DATE</div><div>SUPPLIER</div><div>COST</div></th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" colspan="2" style="width:9%">INV</th>
+                        <th class="border border-slate-300 px-3 py-2 text-center" colspan="6" style="width:16.5%">SALES</th>
                     </tr>
                     <tr class="bg-slate-50 text-slate-700 font-bold uppercase">
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year1" style="width:4%">21</th>
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year2" style="width:4%">22</th>
-                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year3" style="width:4%">23</th>
+                        <th class="border border-slate-300 px-3 py-2" style="width:5%">QTY</th>
+                        <th class="border border-slate-300 px-3 py-2" style="width:4%">UNIT</th>
+                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year1" style="width:4%">'21</th>
+                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
+                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year2" style="width:4%">'22</th>
+                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
+                        <th class="border border-slate-300 px-3 py-2" id="cr-th-year3" style="width:4%">'23</th>
+                        <th class="border border-slate-300 px-3 py-2" style="width:1.5%">OU</th>
                     </tr>
                 </thead>
                 <tbody id="cr-report-tbody" class="text-slate-600">
-                    <tr><td colspan="9" class="py-10 text-center text-slate-400">Click Generate to load cost, sales, inventory report data.</td></tr>
+                    <tr><td colspan="11" class="py-10 text-center text-slate-400">Click Generate to load cost, sales, inventory report data.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -417,7 +422,7 @@
 
             function crGenerate() {
                 var tbody = document.getElementById('cr-report-tbody');
-                tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm font-medium">Loading...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm font-medium">Loading...</td></tr>';
 
                 var params = new URLSearchParams();
                 params.set('page', crPage);
@@ -443,9 +448,9 @@
                 var y1s = String(crGetYear1()).slice(-2);
                 var y2s = String(crGetYear2()).slice(-2);
                 var y3s = String(crGetYear3()).slice(-2);
-                document.getElementById('cr-th-year1').textContent = y1s;
-                document.getElementById('cr-th-year2').textContent = y2s;
-                document.getElementById('cr-th-year3').textContent = y3s;
+                document.getElementById('cr-th-year1').textContent = "'" + y1s;
+                document.getElementById('cr-th-year2').textContent = "'" + y2s;
+                document.getElementById('cr-th-year3').textContent = "'" + y3s;
                 var crNow = new Date();
                 var crGenLabel = 'Generated: ' + crNow.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) + ' ' + crNow.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 var genEl = document.getElementById('cr-print-generated-label');
@@ -455,7 +460,7 @@
                     .then(function (r) { return r.text().then(function (t) { return JSON.parse(t); }); })
                     .then(function (res) {
                         if (!res.success) {
-                            tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm">' + (res.error || 'Failed to load.') + '</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">' + (res.error || 'Failed to load.') + '</td></tr>';
                             return;
                         }
                         crData = res.items || [];
@@ -471,14 +476,14 @@
                         if (res.stats) info.textContent = 'Items: ' + (res.stats.total_items || 0);
                     })
                     .catch(function () {
-                        tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm">Error loading data.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">Error loading data.</td></tr>';
                     });
             }
 
             function crRenderTable(items) {
                 var tbody = document.getElementById('cr-report-tbody');
                 if (!items || items.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm font-medium">No cost data found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm font-medium">No cost data found.</td></tr>';
                     return;
                 }
                 var groups = {};
@@ -496,7 +501,7 @@
                     var descName = descKeys[g];
                     var groupItems = groups[descName];
                     html += '<tr class="cr-desc-head">' +
-                        '<td colspan="9" class="border px-3 py-2" style="border-color:#ddd;color:#cc0000;font-size:14px;font-weight:900;font-family:\'Gill Sans Ultra Bold\',\'Gill Sans MT\',sans-serif">DESCRIPTION: ' + descName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td>' +
+                        '<td colspan="11" class="border px-3 py-2" style="border-color:#ddd;color:#cc0000;font-size:14px;font-weight:900;font-family:\'Gill Sans Ultra Bold\',\'Gill Sans MT\',sans-serif">DESCRIPTION: ' + descName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td>' +
                         '</tr>' +
                         '<tr class="cr-sub-head bg-slate-100 text-slate-700 font-bold uppercase" style="font-size:11px">' +
                         '<td class="border border-slate-300 px-3 py-1.5">Item Code</td>' +
@@ -505,12 +510,16 @@
                         '<td class="border border-slate-300 px-3 py-1.5 text-left">PRICE</td>' +
                         '<td class="border border-slate-300 px-3 py-1.5 text-left">Date/Supplier/Cost</td>' +
                         '<td class="border border-slate-300 px-3 py-1.5 text-center">ON HAND</td>' +
+                        '<td class="border border-slate-300 px-3 py-1.5 text-center">UNIT</td>' +
                         '<td class="border border-slate-300 px-3 py-1.5 text-right">' + y1s + '</td>' +
+                        '<td class="border border-slate-300 px-3 py-1.5 text-right">OUM</td>' +
                         '<td class="border border-slate-300 px-3 py-1.5 text-right">' + y2s + '</td>' +
                         '<td class="border border-slate-300 px-3 py-1.5 text-right">' + y3s + '</td>' +
                         '</tr>';
                     for (var j = 0; j < groupItems.length; j++) {
                         var item = groupItems[j];
+                        var unit = crEscapeHtml(item.unit || '---');
+                        var oumHtml = crEscapeHtml(item.oum || '');
                         html += '<tr class="hover:bg-slate-50/50 transition-colors">' +
                             '<td class="border border-slate-200 px-3 py-2 font-bold text-slate-700" style="white-space:normal;overflow-wrap:anywhere;word-break:break-word">' + (item.product_code || '---') + '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-slate-600" style="word-break:break-word;white-space:normal">' + (item.part_number || '---') + '</td>' +
@@ -525,7 +534,9 @@
                                 '<div style="font-weight:800;color:#334155">COST: ' + crFormatCurrency(item.supplier_cost) + '</div>' +
                             '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-right font-bold text-slate-700 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.on_hand || 0) + '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-bold text-slate-700" style="font-size:10px;white-space:normal">' + unit + '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_1 || 0) + '</td>' +
+                            '<td class="border border-slate-200 px-3 py-2 text-center font-semibold text-slate-500" style="font-size:9px;white-space:normal;overflow-wrap:anywhere">' + oumHtml + '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_2 || 0) + '</td>' +
                             '<td class="border border-slate-200 px-3 py-2 text-right font-semibold text-slate-600 truncate" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_3 || 0) + '</td>' +
                             '</tr>';
@@ -568,13 +579,15 @@
                         '<colgroup>' +
                         '<col style="width:14%">' +
                         '<col style="width:12%">' +
-                        '<col style="width:28%">' +
+                        '<col style="width:22%">' +
                         '<col style="width:12%">' +
-                        '<col style="width:16%">' +
-                        '<col style="width:6%">' +
+                        '<col style="width:14.5%">' +
+                        '<col style="width:5%">' +
                         '<col style="width:4%">' +
                         '<col style="width:4%">' +
+                        '<col style="width:1.5%">' +
                         '<col style="width:4%">' +
+                        '<col style="width:3%">' +
                         '</colgroup>' +
                         '<thead>' +
                         '<tr style="background:#dde3ec;font-size:10px;font-weight:700;text-align:center">' +
@@ -583,17 +596,23 @@
                         '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">APPLICATION</th>' +
                         '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">PRICE</th>' +
                         '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:left">DATE/SUPPLIER</th>' +
-                        '<th rowspan="2" style="border:1px solid #000;padding:2px 1px;vertical-align:middle;text-align:center">INV</th>' +
-                        '<th colspan="3" style="border:1px solid #000;padding:2px 1px;text-align:center">SALES</th>' +
+                        '<th colspan="2" style="border:1px solid #000;padding:2px 1px;text-align:center">INV</th>' +
+                        '<th colspan="5" style="border:1px solid #000;padding:2px 1px;text-align:center">SALES</th>' +
                         '</tr>' +
                         '<tr style="background:#eef1f6;font-size:10px;font-weight:700;text-align:center">' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">QTY</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">UNIT</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y1s + '</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OU</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y2s + '</th>' +
                         '<th style="border:1px solid #000;padding:2px 1px;text-align:center">' + y3s + '</th>' +
+                        '<th style="border:1px solid #000;padding:2px 1px;text-align:center">OUM</th>' +
                         '</tr>' +
                         '</thead><tbody>';
                     for (var j = 0; j < groupItems.length; j++) {
                         var item = groupItems[j];
+                        var unit = crEscapeHtml(item.unit || '---');
+                        var oumHtml = crEscapeHtml(item.oum || '');
                         html += '<tr>' +
                             '<td style="border:1px solid #000;padding:2px 2px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;font-weight:700;vertical-align:top">' + (item.product_code || '---') + '</td>' +
                             '<td style="border:1px solid #000;padding:2px 2px;word-break:break-word;overflow-wrap:anywhere;white-space:normal;vertical-align:top">' + (item.part_number || '---') + '</td>' +
@@ -608,9 +627,12 @@
                                 '<div style="font-weight:900">COST: ' + crFormatCurrency(item.supplier_cost) + '</div>' +
                             '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.on_hand || 0) + '</td>' +
+                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;font-weight:700;white-space:normal;overflow-wrap:anywhere;font-size:10px">' + unit + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_1 || 0) + '</td>' +
+                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_2 || 0) + '</td>' +
                             '<td style="border:1px solid #000;padding:0 1px;text-align:right;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (item.sales_3 || 0) + '</td>' +
+                            '<td style="border:1px solid #000;padding:0 1px;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:9px">' + oumHtml + '</td>' +
                             '</tr>';
                     }
                     html += '</tbody></table>';
@@ -642,7 +664,7 @@
                     '.meta { text-align: center; font-size: 12px; font-weight: 700; margin: 0 0 8px 0; }' +
                     '@page { size: portrait; margin: 1cm 0.4cm; }' +
                     '</style></head><body>' +
-                    '<div class="hdr">W68 AUTOPARTS &amp; SERVICE CENTER</div>' +
+                    '<div class="hdr">C.S.I  REPORT</div>' +
                     '<div class="meta"><span>' + genLabel + '</span></div>' +
                     printHtml +
                     '</body></html>');
@@ -667,7 +689,7 @@
                     return;
                 }
 
-                tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm font-medium">Loading all data for print...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm font-medium">Loading all data for print...</td></tr>';
 
                 var params = new URLSearchParams();
                 params.set('all', '1');
@@ -691,7 +713,7 @@
                     .then(function (r) { return r.text().then(function (t) { return JSON.parse(t); }); })
                     .then(function (res) {
                         if (!res.success || !res.items) {
-                            tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm">' + (res.error || 'Failed to load.') + '</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">' + (res.error || 'Failed to load.') + '</td></tr>';
                             return;
                         }
                         crRenderTable(res.items);
@@ -700,7 +722,7 @@
                         crDoPrint(res.items);
                     })
                     .catch(function () {
-                        tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-slate-400 text-sm">Error loading data.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">Error loading data.</td></tr>';
                     });
             }
 
