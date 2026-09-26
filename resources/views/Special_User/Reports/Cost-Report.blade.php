@@ -139,7 +139,7 @@
     <div class="flex items-center gap-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm no-print">
         <label class="radio-card">
             <input type="radio" name="report_type" value="cost_report" checked>
-            Cost Report
+            C.S.I
         </label>
     </div>
 
@@ -297,7 +297,7 @@
                     </tr>
                 </thead>
                 <tbody id="cr-report-tbody" class="text-slate-600">
-                    <tr><td colspan="9" class="py-10 text-center text-slate-400">Click Generate to load cost report data.</td></tr>
+                    <tr><td colspan="9" class="py-10 text-center text-slate-400">Click Generate to load cost, sales, inventory report data.</td></tr>
                 </tbody>
             </table>
         </div>

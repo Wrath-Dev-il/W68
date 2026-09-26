@@ -391,7 +391,7 @@
                         </a>
                         <a href="{{ route('admin.cost-report') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'admin.cost-report' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-cost">
                             <i data-lucide="receipt" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'admin.cost-report' ? 'text-maroon-950' : '' }}"></i>
-                            <span>Cost Report</span>
+                            <span>C.S.I REPORT</span>
                         </a>
                         <a href="{{ route('admin.top-products') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'admin.top-products' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="rep-top-products">
                             <i data-lucide="trophy" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'admin.top-products' ? 'text-maroon-950' : '' }}"></i>
@@ -561,7 +561,7 @@
                                 @elseif(Route::currentRouteName() === 'admin.item-convert')
                                     Inventory / Convert Items
                                 @elseif(Route::currentRouteName() === 'admin.cost-report')
-                                    Reports / Cost Report
+                                    Reports / C.S.I REPORT
                                 @elseif(Route::currentRouteName() === 'admin.top-products')
                                     Reports / Top Products
                                 @else
@@ -607,7 +607,7 @@
                             @elseif(Route::currentRouteName() === 'admin.accounts-receivable')
                                 Accounts Receivable
                             @elseif(Route::currentRouteName() === 'admin.cost-report')
-                                Cost Report
+                                C.S.I REPORT
                             @elseif(Route::currentRouteName() === 'admin.datasync')
                                 Data Sync
                             @elseif(Route::currentRouteName() === 'admin.audit-trail')
