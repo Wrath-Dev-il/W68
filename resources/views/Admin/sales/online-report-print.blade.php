@@ -102,7 +102,7 @@ $colCount = count($years) > 0 ? count($years) : 1;
 @else
 @foreach($notes as $noteIdx => $note)
 <div class="note-section"@if(!$loop->first) style="page-break-before:always;"@endif>
-<div class="company-name">W68 AUTOPARTS &amp; SERVICE CENTER</div>
+<div class="company-name">SHARP CHOICE PARTS</div>
 <div class="report-title">{{ $note['customer_name'] }}</div>
 
 <table class="info-table">
