@@ -301,6 +301,54 @@ document.addEventListener('keyup', function(event) {
     }
 }, true);
 
+// W68_PRODUCT_MASTER_VIEW_ESCAPE_CLOSE_CANCEL_EDIT_20260928
+// Escape is a direct exit for Product View. If inline Edit Mode is active,
+// restore the original unsaved values first, then close Product View without
+// opening the Discard Changes confirmation. Modals layered above Product View
+// keep ownership of Escape so the view is never closed behind another dialog.
+document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Escape' || event.isComposing || event.repeat) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!isProductMasterModalVisible('view-product-modal')) return;
+
+    const blockingModalIds = [
+        'confirm-discard-modal',
+        'view-edit-success-modal',
+        'success-add-modal',
+        'success-edit-modal',
+        'confirm-add-modal',
+        'confirm-update-modal',
+        'add-product-modal',
+        'edit-product-modal',
+        'image-preview-modal',
+        'view-gallery-modal',
+        'full-gallery-modal',
+        'product-gallery-modal',
+        'view-picture-manager-modal',
+        'view-price-code-modal',
+        'view-price-code-success-modal',
+        'confirm-delete-modal',
+        'success-delete-modal'
+    ];
+    if (blockingModalIds.some(isProductMasterModalVisible)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (window.viewProductEditMode && typeof window.cancelProductViewEditMode === 'function') {
+        window.cancelProductViewEditMode();
+    }
+
+    if (window._pendingCloseModal === 'view-product-modal') {
+        window._pendingCloseModal = null;
+    }
+
+    const previousSkipUnsavedCheck = !!window._skipUnsavedCheck;
+    window._skipUnsavedCheck = true;
+    toggleModal('view-product-modal', false);
+    window._skipUnsavedCheck = previousSkipUnsavedCheck;
+}, true);
+
 document.addEventListener('keydown', function(event) {
     if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
     if (event.ctrlKey || event.altKey || event.metaKey) return;
