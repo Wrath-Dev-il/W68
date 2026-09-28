@@ -98,7 +98,20 @@
                     @endif
                 </td>
                 <td class="r">{{ number_format($item['unit_price'], 2) }}</td>
-                <td class="r">{{ isset($latestCostByProductId[$item['product_id']]) ? number_format($latestCostByProductId[$item['product_id']], 2) : 'N/A' }}</td>
+                @php
+                    $latestCost = $latestCostByProductId[$item['product_id']] ?? null;
+                    $latestPurchaseDate = trim((string) ($latestPurchaseDateByProductId[$item['product_id']] ?? ''));
+                    $latestSupplierShort = trim((string) ($latestSupplierShortByProductId[$item['product_id']] ?? ''));
+                @endphp
+                <td class="r">
+                    <div>{{ $latestCost !== null ? number_format($latestCost, 2) : 'N/A' }}</div>
+                    @if($latestCost !== null && $latestPurchaseDate !== '')
+                    <div style="font-size:8px;margin-top:2px;text-align:center;white-space:nowrap;">{{ \Carbon\Carbon::parse($latestPurchaseDate)->format('Y-d-m') }}</div>
+                    @endif
+                    @if($latestCost !== null && $latestSupplierShort !== '')
+                    <div style="font-size:8px;margin-top:1px;text-align:center;white-space:nowrap;">{{ $latestSupplierShort }}</div>
+                    @endif
+                </td>
                 <td class="r">{{ number_format($item['price_online'] ?? 0, 2) }}</td>
                 @foreach($yearRange as $yr)
                 @php

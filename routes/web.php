@@ -15462,8 +15462,15 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
     }
     $allProductIds = array_keys($allProductIds);
 
-    // Get latest purchased unit price from supplier_ledger_items per product (Latest Cost)
+    // Get latest purchase details from supplier ledger for each product (Latest Cost).
+    // W68_SALES_NOTE_PRINT_LATEST_COST_DATE_SUPPLIER_20260928
+    // Latest cost/date come from core4_ledger supplier_ledger_items + supplier_ledgers.
+    // Supplier display name comes from core4_masterlist.suppliers and is intentionally
+    // shortened to the first word/token so it fits below Latest Cost (e.g. 1CHASE STEERING -> 1CHASE).
     $latestCostByProductId = [];
+    $latestPurchaseDateByProductId = [];
+    $latestSupplierIdByProductId = [];
+    $latestSupplierShortByProductId = [];
     if (!empty($allProductIds)) {
         $costRows = DB::connection('ledger')
             ->table('supplier_ledger_items as sli')
@@ -15475,11 +15482,31 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
             ->orderByDesc('sl.created_at')
             ->orderByDesc('sl.id')
             ->orderByDesc('sli.id')
-            ->select('sli.product_id', 'sli.unit_price')
+            ->select('sli.product_id', 'sli.unit_price', 'sl.date as purchase_date', 'sl.supplier_id')
             ->get()
             ->unique('product_id');
+
         foreach ($costRows as $row) {
-            $latestCostByProductId[(int)$row->product_id] = (float)$row->unit_price;
+            $productId = (int) $row->product_id;
+            $latestCostByProductId[$productId] = (float) $row->unit_price;
+            $latestPurchaseDateByProductId[$productId] = (string) ($row->purchase_date ?? '');
+            $latestSupplierIdByProductId[$productId] = (int) ($row->supplier_id ?? 0);
+        }
+
+        $supplierIds = array_values(array_unique(array_filter($latestSupplierIdByProductId)));
+        $supplierNamesById = !empty($supplierIds)
+            ? DB::connection('masterlist')->table('suppliers')->whereIn('id', $supplierIds)->pluck('name', 'id')
+            : collect();
+
+        foreach ($latestSupplierIdByProductId as $productId => $supplierId) {
+            $fullSupplierName = trim(preg_replace('/\s+/', ' ', (string) ($supplierNamesById[$supplierId] ?? '')));
+            if ($fullSupplierName === '') {
+                $latestSupplierShortByProductId[$productId] = '';
+                continue;
+            }
+
+            $firstSupplierWord = preg_split('/[\s,\(\/]+/', $fullSupplierName, 2)[0] ?? $fullSupplierName;
+            $latestSupplierShortByProductId[$productId] = rtrim($firstSupplierWord, '.,-');
         }
     }
 
@@ -15720,6 +15747,8 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
         'yearRange' => $yearRange,
         'paymentType' => $paymentType,
         'latestCostByProductId' => $latestCostByProductId,
+        'latestPurchaseDateByProductId' => $latestPurchaseDateByProductId,
+        'latestSupplierShortByProductId' => $latestSupplierShortByProductId,
     ]);
 })->name('admin.sales-note.print');
 
