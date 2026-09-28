@@ -301,6 +301,23 @@ document.addEventListener('keydown', function(event) {
         return;
     }
 
+    // W68_PRODUCT_MASTER_VIEW_EDIT_ENTER_SAVE_20260928
+    // Product View -> Edit Mode has its own Save Changes workflow.
+    // Enter calls that exact workflow and opens view-edit-success-modal on success.
+    if (isProductMasterModalVisible('view-product-modal') && window.viewProductEditMode) {
+        consumeProductMasterEnter(event);
+        if (
+            typeof window.saveProductViewChanges === 'function' &&
+            !window.__productMasterViewEditEnterSaving
+        ) {
+            window.__productMasterViewEditEnterSaving = true;
+            Promise.resolve(window.saveProductViewChanges()).finally(() => {
+                window.__productMasterViewEditEnterSaving = false;
+            });
+        }
+        return;
+    }
+
     // Add Product form: Enter = Save Product (same validation as the button).
     if (isProductMasterModalVisible('add-product-modal')) {
         consumeProductMasterEnter(event);
