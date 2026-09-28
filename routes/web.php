@@ -15500,8 +15500,12 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
         }
     }
 
-    // Fetch actual yearly OUT sales from product_ledgers for all products in yearRange
+    // Fetch actual yearly OUT sales from product_ledgers for all products in yearRange.
+    // W68_SALES_NOTE_PRINT_ONHAND_UNIT_AND_YEAR_OUM_20260928
+    // Keep the existing yearly quantity calculation intact, and separately capture
+    // the latest nonblank ledger OUM that participates in that year's sales activity.
     $yearlyOutMap = [];
+    $yearlyOumMap = [];
     if (!empty($yearRange) && !empty($allProductIds)) {
         foreach ($yearRange as $yr) {
             $ledgerRows = DB::connection('ledger')
@@ -15523,6 +15527,34 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
             foreach ($ledgerRows as $pid => $total) {
                 $yearlyOutMap[$pid][$yr] = (int)$total;
             }
+
+            $ledgerOumRows = DB::connection('ledger')
+                ->table('product_ledgers')
+                ->whereIn('product_id', $allProductIds)
+                ->whereYear('date', (int)$yr)
+                ->whereRaw("TRIM(COALESCE(oum, '')) <> ''")
+                ->whereNotIn('transaction_type', ['ADJUST', 'ADJUSTENTRY'])
+                ->whereRaw("LOWER(COALESCE(reference_number,'')) NOT LIKE '%adj%'")
+                ->whereRaw("LOWER(COALESCE(remarks,'')) NOT LIKE '%adjust%'")
+                ->where(function ($query) {
+                    $query->whereIn('transaction_type', ['OUT', 'CHGINVC'])
+                        ->orWhere(function ($returnQuery) {
+                            $returnQuery->where('transaction_type', 'IN')
+                                ->where(function ($remarkQuery) {
+                                    $remarkQuery->whereRaw("LOWER(COALESCE(remarks,'')) LIKE '%salrtn%'")
+                                        ->orWhereRaw("LOWER(COALESCE(remarks,'')) LIKE '%sales return%'");
+                                });
+                        });
+                })
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->select('product_id', 'oum')
+                ->get()
+                ->unique('product_id');
+
+            foreach ($ledgerOumRows as $row) {
+                $yearlyOumMap[(int)$row->product_id][$yr] = trim((string)$row->oum);
+            }
         }
     }
 
@@ -15531,7 +15563,7 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
         ->where('sales_number', 'NOT LIKE', 'PURRTN%')
         ->orderBy('created_at', 'desc')
         ->get()
-        ->map(function ($note) use ($isNoteUnserved, $yearlyOutMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
+        ->map(function ($note) use ($isNoteUnserved, $yearlyOutMap, $yearlyOumMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
             $customer = \App\Models\Customer::on('masterlist')->find($note->customer_id);
             $servedRemaining = [];
 
@@ -15558,7 +15590,7 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
             }
 
             $items = $note->items
-                ->map(function ($item) use (&$servedRemaining, $isNoteUnserved, $yearlyOutMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
+                ->map(function ($item) use (&$servedRemaining, $isNoteUnserved, $yearlyOutMap, $yearlyOumMap, $yearRange, $onHandMap, $codeToIdMap, $latestCostByProductId) {
                     // Resolve product_id: use direct product_id if available, fallback to product_code lookup
                     $resolvedProductId = (int)$item->product_id;
                     if (!$resolvedProductId && $item->product_code && isset($codeToIdMap[strtoupper(trim($item->product_code))])) {
@@ -15601,10 +15633,13 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
                     $addQty  = (int) ($item->additional_qty ?? 0);
                     $displayQty = $addQty > 0 ? "{$mainQty} (+{$addQty})" : (string) $mainQty;
 
-                    // Build per-year OUT sales from product_ledgers
+                    // Build per-year OUT sales from product_ledgers, plus the
+                    // ledger OUM to print directly beneath each non-zero sales quantity.
                     $yearlySales = [];
+                    $yearlySalesOum = [];
                     foreach ($yearRange as $yr) {
                         $yearlySales[$yr] = (int) ($yearlyOutMap[$resolvedProductId][$yr] ?? 0);
+                        $yearlySalesOum[$yr] = trim((string) ($yearlyOumMap[$resolvedProductId][$yr] ?? ''));
                     }
 
                     return [
@@ -15626,10 +15661,12 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
                         'print_qty' => $printQty,
                         'oum' => $item->oum,
                         'unit_price' => $item->unit_price,
-                        'on_hand' => $onHandMap[(int)$item->product_id] ?? 0,
+                        'on_hand' => $onHandMap[$resolvedProductId] ?? 0,
+                        'on_hand_unit' => $product ? trim((string) ($product->unit ?? '')) : '',
                         'cost' => $latestCost,
                         'price_online' => $product ? $product->price_online : 0,
                         'yearly_sales' => $yearlySales,
+                        'yearly_sales_oum' => $yearlySalesOum,
                     ];
                 });
 
@@ -15649,8 +15686,11 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
                             'oum' => '',
                             'unit_price' => 0,
                             'on_hand' => 0,
+                            'on_hand_unit' => '',
                             'cost' => 0,
                             'price_online' => 0,
+                            'yearly_sales' => [],
+                            'yearly_sales_oum' => [],
                         ],
                     ]);
                 }

@@ -82,6 +82,8 @@
                 $totalOut = (int) ($item['print_qty'] ?? ($item['quantity'] + ($item['additional_qty'] ?? 0)));
                 $displayQty = $item['display_qty'] ?? ($qtyLabel ? $qtyLabel : $totalOut);
                 $yearlySales = $item['yearly_sales'] ?? [];
+                $yearlySalesOum = $item['yearly_sales_oum'] ?? [];
+                $onHandUnit = trim((string) ($item['on_hand_unit'] ?? ''));
             @endphp
             <tr>
                 <td class="c">{{ $qtyLabel ? $qtyLabel : $displayQty }}</td>
@@ -89,12 +91,26 @@
                 <td>{{ $item['product_code'] }}</td>
                 <td>{{ $item['part_number'] }}</td>
                 <td>{{ $item['description'] }}</td>
-                <td class="c">{{ $item['on_hand'] ?? 0 }}</td>
+                <td class="c">
+                    <div>{{ $item['on_hand'] ?? 0 }}</div>
+                    @if($onHandUnit !== '')
+                    <div style="font-size:9px;margin-top:2px;">{{ strtoupper($onHandUnit) }}</div>
+                    @endif
+                </td>
                 <td class="r">{{ number_format($item['unit_price'], 2) }}</td>
                 <td class="r">{{ isset($latestCostByProductId[$item['product_id']]) ? number_format($latestCostByProductId[$item['product_id']], 2) : 'N/A' }}</td>
                 <td class="r">{{ number_format($item['price_online'] ?? 0, 2) }}</td>
                 @foreach($yearRange as $yr)
-                <td class="c">{{ $yearlySales[$yr] ?? 0 }}</td>
+                @php
+                    $salesQty = (int) ($yearlySales[$yr] ?? 0);
+                    $salesOum = trim((string) ($yearlySalesOum[$yr] ?? ''));
+                @endphp
+                <td class="c">
+                    <div>{{ $salesQty }}</div>
+                    @if($salesQty !== 0 && $salesOum !== '')
+                    <div style="font-size:9px;margin-top:2px;">{{ strtoupper($salesOum) }}</div>
+                    @endif
+                </td>
                 @endforeach
             </tr>
             @endforeach
