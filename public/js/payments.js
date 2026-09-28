@@ -621,7 +621,7 @@ window.loadPaymentsHistoryTable = async function() {
     const tbody = document.getElementById('payments-history-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
 
     try {
         const url = new URL(routes().historyData, window.location.origin);
@@ -660,6 +660,11 @@ window.loadPaymentsHistoryTable = async function() {
                 </div>` : '';
             const pid = Number(row.id || 0);
             const payno = escapeAttr(row.payment_no || '');
+            const paymentStatus = String(row.payment_status || 'Partial');
+            const isFullyPaid = paymentStatus.toLowerCase() === 'fully paid';
+            const statusClass = isFullyPaid
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200';
             return `
             <tr class="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                 <td class="py-4 px-5 font-black text-slate-800">${escapeHtml(row.customer_name || '---')}</td>
@@ -671,6 +676,9 @@ window.loadPaymentsHistoryTable = async function() {
                 </td>
                 <td class="py-4 px-5 font-bold text-slate-500">${escapeHtml(row.payment_date || '---')}</td>
                 <td class="py-4 px-5 text-right font-black text-emerald-700">${money.format(Number(row.total_paid || 0))}</td>
+                <td class="py-4 px-5 text-center">
+                    <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
+                </td>
                 <td class="py-4 px-5">
                     <div class="flex items-center justify-center gap-1.5">
                         <button onclick="window.openPaymentsHistoryView(${pid})" class="payments-history-action" style="background:#00FFFF;color:#4A0E0E;width:30px;height:30px;padding:0;justify-content:center;gap:0;border-radius:8px;" title="View" aria-label="View"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>
@@ -680,12 +688,12 @@ window.loadPaymentsHistoryTable = async function() {
                     </div>
                 </td>
             </tr>`;
-        }).join('') : `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
+        }).join('') : `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
 
         updatePaymentsHistoryPagination(data);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
     }
 };
 
@@ -3136,7 +3144,7 @@ function renderPaymentsHistoryLoading(paymentId) {
     const invoiceBody = document.getElementById('payments-history-view-invoices-tbody');
     if (invoiceBody) invoiceBody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold">Loading invoices...</td></tr>`;
     const bankBody = document.getElementById('payments-history-view-bank-tbody');
-    if (bankBody) bankBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400 font-bold">Loading bank details...</td></tr>`;
+    if (bankBody) bankBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">Loading bank details...</td></tr>`;
     const ledgerBody = document.getElementById('payments-history-view-ledger-tbody');
     if (ledgerBody) ledgerBody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-400 font-bold">Ledger loads after the modal opens...</td></tr>`;
     document.getElementById('history-detail-tab-items')?.classList.add('hidden');
@@ -3287,9 +3295,11 @@ function renderPaymentsHistoryView(detail) {
 
     const bankBody = document.getElementById('payments-history-view-bank-tbody');
     if (bankBody) {
-        const total = checks.reduce((sum, c) => sum + Number(c.credit_amount || 0), 0);
+        // W68_PAYMENT_HISTORY_BANK_NO_TOTAL_20260928
+        // Bank Details shows each check amount only; the repeated payment Total
+        // column was removed from this tab for all user roles.
         bankBody.innerHTML = (checks.length ? checks.map(c => `
-            <tr><td class="p-3 font-black text-maroon">${escapeHtml(c.bank_name || '---')}</td><td class="p-3 font-bold">${escapeHtml(c.account_number || '---')}</td><td class="p-3 font-bold">${escapeHtml(c.check_no || '---')}</td><td class="p-3 font-bold whitespace-nowrap">${escapeHtml(c.check_date || '---')}</td><td class="p-3 text-right font-black text-emerald-700">${money.format(Number(c.credit_amount || 0))}</td><td class="p-3 text-right font-black text-maroon">${money.format(total)}</td></tr>`).join('') : `<tr><td colspan="6" class="p-8 text-center text-slate-400 font-bold">No bank/check details found.</td></tr>`);
+            <tr><td class="p-3 font-black text-maroon">${escapeHtml(c.bank_name || '---')}</td><td class="p-3 font-bold">${escapeHtml(c.account_number || '---')}</td><td class="p-3 font-bold">${escapeHtml(c.check_no || '---')}</td><td class="p-3 font-bold whitespace-nowrap">${escapeHtml(c.check_date || '---')}</td><td class="p-3 text-right font-black text-emerald-700">${money.format(Number(c.credit_amount || 0))}</td></tr>`).join('') : `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">No bank/check details found.</td></tr>`);
     }
 
     renderPaymentHistoryLedgerRows(detail.ledger || []);

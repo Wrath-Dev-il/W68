@@ -25413,6 +25413,16 @@ Route::get('/admin/payments/history/data', function (Request $request) {
             $invoiceRows = $invoiceGroups->get($payment->id, collect());
             $invoiceNumbers = $invoiceRows->pluck('invoice_no')->filter()->unique()->values();
 
+            // W68_PAYMENT_HISTORY_SETTLEMENT_STATUS_20260928
+            // A Payment No. is Fully Paid only when its saved Total Payment equals
+            // the total Due Amount of the invoice rows attached to that payment.
+            // Use a one-cent tolerance because both values are stored as decimals.
+            $totalPayment = round((float) ($payment->total_paid ?? 0), 2);
+            $totalAmount = round((float) $invoiceRows->sum(fn ($row) => (float) ($row->due_amount ?? 0)), 2);
+            $settlementStatus = abs($totalPayment - $totalAmount) <= 0.01
+                ? 'Fully Paid'
+                : 'Partial';
+
             return [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
@@ -25421,7 +25431,9 @@ Route::get('/admin/payments/history/data', function (Request $request) {
                 'invoice_numbers' => $invoiceNumbers->all(),
                 'invoice_count' => $invoiceRows->count(),
                 'payment_date' => $payment->payment_date ? \Carbon\Carbon::parse($payment->payment_date)->format('Y-m-d') : '---',
-                'total_paid' => (float) $payment->total_paid,
+                'total_paid' => $totalPayment,
+                'total_amount' => $totalAmount,
+                'payment_status' => $settlementStatus,
                 'status' => (string) ($payment->status ?? 'Posted'),
             ];
         })->values();
