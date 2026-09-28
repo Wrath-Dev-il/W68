@@ -311,12 +311,24 @@ document.addEventListener('keydown', function(event) {
         return;
     }
 
-    // Edit Product form: Enter = Save Changes (same validation as the button).
+    // W68_PRODUCT_MASTER_EDIT_ENTER_DIRECT_SAVE_20260928
+    // Edit Product form: one Enter = Save Changes immediately.
+    // This reuses the normal update request; on success it closes Edit and opens
+    // the existing success-edit-modal. The Save Changes button can still use its
+    // normal confirmation-modal flow when clicked with the mouse.
     if (isProductMasterModalVisible('edit-product-modal')) {
         consumeProductMasterEnter(event);
         const form = document.getElementById('edit-product-form');
-        if (form && form.reportValidity()) {
-            toggleModal('confirm-update-modal', true);
+        if (
+            form &&
+            form.reportValidity() &&
+            typeof window.confirmUpdateProduct === 'function' &&
+            !window.__productMasterEditEnterSaving
+        ) {
+            window.__productMasterEditEnterSaving = true;
+            Promise.resolve(window.confirmUpdateProduct()).finally(() => {
+                window.__productMasterEditEnterSaving = false;
+            });
         }
     }
 }, true);
