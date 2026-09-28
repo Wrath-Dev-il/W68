@@ -228,6 +228,99 @@ async function fetchProducts(page = 1) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// W68_PRODUCT_MASTER_ENTER_PRIMARY_ACTIONS_20260928
+// Enter follows the primary Product Master modal action for Add/Edit workflows:
+// Save Product/Save Changes -> confirm save -> confirm discard -> close success.
+// Shift+Enter is intentionally preserved for multi-line textarea input.
+function isProductMasterModalVisible(id) {
+    const modal = document.getElementById(id);
+    return !!(modal && !modal.classList.contains('hidden'));
+}
+
+function consumeProductMasterEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+    const target = event.target;
+    if (target && target.isContentEditable) return;
+    if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
+
+    // Success after Add Product: Enter = Confirm/OK.
+    if (isProductMasterModalVisible('success-add-modal')) {
+        consumeProductMasterEnter(event);
+        toggleModal('success-add-modal', false);
+        return;
+    }
+
+    // Success after Edit Product: Enter = Confirm/OK.
+    if (isProductMasterModalVisible('success-edit-modal')) {
+        consumeProductMasterEnter(event);
+        toggleModal('success-edit-modal', false);
+        window._skipUnsavedCheck = true;
+        toggleModal('edit-product-modal', false);
+        window._skipUnsavedCheck = false;
+        return;
+    }
+
+    // Product Ledger inline-edit success uses its existing close helper.
+    if (isProductMasterModalVisible('view-edit-success-modal')) {
+        consumeProductMasterEnter(event);
+        if (typeof window.closeViewEditSuccess === 'function') {
+            window.closeViewEditSuccess();
+        } else {
+            toggleModal('view-edit-success-modal', false);
+        }
+        return;
+    }
+
+    // Discard Changes confirmation: Enter = Yes, Discard.
+    if (isProductMasterModalVisible('confirm-discard-modal')) {
+        consumeProductMasterEnter(event);
+        document.getElementById('btn-confirm-discard')?.click();
+        return;
+    }
+
+    // Add Product confirmation: Enter = Yes, Add.
+    if (isProductMasterModalVisible('confirm-add-modal')) {
+        consumeProductMasterEnter(event);
+        if (typeof window.confirmAddProduct === 'function') {
+            window.confirmAddProduct();
+        }
+        return;
+    }
+
+    // Edit Product confirmation: Enter = Yes, Update.
+    if (isProductMasterModalVisible('confirm-update-modal')) {
+        consumeProductMasterEnter(event);
+        document.getElementById('btn-confirm-update')?.click();
+        return;
+    }
+
+    // Add Product form: Enter = Save Product (same validation as the button).
+    if (isProductMasterModalVisible('add-product-modal')) {
+        consumeProductMasterEnter(event);
+        const form = document.getElementById('add-product-form');
+        if (form && form.reportValidity()) {
+            toggleModal('confirm-add-modal', true);
+        }
+        return;
+    }
+
+    // Edit Product form: Enter = Save Changes (same validation as the button).
+    if (isProductMasterModalVisible('edit-product-modal')) {
+        consumeProductMasterEnter(event);
+        const form = document.getElementById('edit-product-form');
+        if (form && form.reportValidity()) {
+            toggleModal('confirm-update-modal', true);
+        }
+    }
+}, true);
+
 // Keyboard navigation: arrow keys scroll table horizontally, Ctrl+Arrow navigates form fields in modals
 if (!window.__productMasterKeyboardNavBound) {
     window.__productMasterKeyboardNavBound = true;
