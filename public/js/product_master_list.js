@@ -242,6 +242,65 @@ function consumeProductMasterEnter(event) {
     event.stopPropagation();
 }
 
+// W68_PRODUCT_MASTER_VIEW_CTRL_EDIT_MODE_20260928
+// A standalone Ctrl press while a Product View is open switches that specific
+// product into Edit Mode. Ctrl combinations (Ctrl+C/V/F/etc.) and Ctrl+click
+// are intentionally ignored so normal browser/keyboard shortcuts keep working.
+let productMasterViewCtrlArmed = false;
+let productMasterViewCtrlUsedAsModifier = false;
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Control') {
+        if (!event.repeat) {
+            productMasterViewCtrlArmed = true;
+            productMasterViewCtrlUsedAsModifier = false;
+        }
+        return;
+    }
+
+    if (productMasterViewCtrlArmed && event.ctrlKey) {
+        productMasterViewCtrlUsedAsModifier = true;
+    }
+}, true);
+
+document.addEventListener('pointerdown', function(event) {
+    if (productMasterViewCtrlArmed && event.ctrlKey) {
+        productMasterViewCtrlUsedAsModifier = true;
+    }
+}, true);
+
+document.addEventListener('keyup', function(event) {
+    if (event.key !== 'Control' || !productMasterViewCtrlArmed) return;
+
+    const wasStandaloneCtrl = !productMasterViewCtrlUsedAsModifier;
+    productMasterViewCtrlArmed = false;
+    productMasterViewCtrlUsedAsModifier = false;
+
+    if (!wasStandaloneCtrl || event.isComposing) return;
+    if (!window.productMasterViewEditor || !window.currentViewProduct || window.viewProductEditMode) return;
+    if (!isProductMasterModalVisible('view-product-modal')) return;
+
+    // Do not switch modes behind another Product Master modal layered above
+    // Product View (discard confirmation, success message, add/edit dialogs).
+    const blockingModalIds = [
+        'confirm-discard-modal',
+        'view-edit-success-modal',
+        'success-add-modal',
+        'success-edit-modal',
+        'confirm-add-modal',
+        'confirm-update-modal',
+        'add-product-modal',
+        'edit-product-modal'
+    ];
+    if (blockingModalIds.some(isProductMasterModalVisible)) return;
+
+    if (typeof window.activateProductViewEditMode === 'function') {
+        event.preventDefault();
+        event.stopPropagation();
+        window.activateProductViewEditMode();
+    }
+}, true);
+
 document.addEventListener('keydown', function(event) {
     if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
     if (event.ctrlKey || event.altKey || event.metaKey) return;
