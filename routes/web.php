@@ -15565,7 +15565,15 @@ Route::get('/admin/sales/sales-note/report/print', function (Request $request) {
                         $resolvedProductId = $codeToIdMap[strtoupper(trim($item->product_code))];
                     }
                     $product = $resolvedProductId ? \App\Models\Product::on('masterlist')->find($resolvedProductId) : null;
-                    $descParts = array_filter([$item->description, $product ? $product->application : '', $product ? $product->Position : '']);
+                    // W68_SALES_NOTE_PRINT_DESCRIPTION_CATEGORY_20260928
+                    // Product Master category is the brand shown at the end of the printed description.
+                    // Shared by NOTE and NOTE-UNSERVED for Admin, Regular, and Special users.
+                    $descParts = array_filter([
+                        $item->description,
+                        $product ? $product->application : '',
+                        $product ? $product->Position : '',
+                        $product ? $product->category : '',
+                    ], static fn ($part) => trim((string) $part) !== '');
                     $latestCost = $latestCostByProductId[$resolvedProductId] ?? 0;
 
                     if ($isNoteUnserved) {
