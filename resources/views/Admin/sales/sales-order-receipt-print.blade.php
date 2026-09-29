@@ -369,6 +369,144 @@
                 outline: none !important;
             }
         }
+
+        /* W68_SALES_ORDER_EXACT_HEADER_SIGNOFF_ALIGNMENT_20260929 */
+
+        /*
+         * Keep ERW centered using the existing 30 / 40 / 30 top row.
+         * Expand only the NO. contents leftward so its label/value grid
+         * occupies the same right-side 40% area as the metadata below.
+         */
+        .sales-order-topline .invoice-heading {
+            overflow: visible !important;
+            text-align: left !important;
+        }
+
+        .sales-order-topline .invoice-align-row {
+            display: grid !important;
+            grid-template-columns: 44% 56%;
+            align-items: baseline;
+            width: 133.333333%;
+            margin-left: -33.333333%;
+        }
+
+        .sales-order-topline .invoice-align-row .invoice-label {
+            display: block;
+            text-align: left !important;
+            padding-left: 10px !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-topline .invoice-align-row .invoice-value {
+            display: block;
+            text-align: left !important;
+            padding-left: 7px !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /*
+         * SN NO / DATE / TIN / TERMS / SALESMAN:
+         *
+         * SN NO.:   value
+         * DATE:     value
+         * TIN:      value
+         * TERMS:    value
+         * SALESMAN: value
+         */
+        .sales-order-meta {
+            width: 100% !important;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .sales-order-meta td {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            vertical-align: baseline !important;
+            line-height: 1.35 !important;
+        }
+
+        .sales-order-meta .meta-label {
+            width: 44% !important;
+            text-align: left !important;
+            padding-left: 10px !important;
+            padding-right: 0 !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-meta .meta-value {
+            width: 56% !important;
+            text-align: left !important;
+            padding-left: 7px !important;
+            padding-right: 0 !important;
+            font-size: 11px !important;
+            font-weight: 400 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-meta .terms-value {
+            font-size: 11.5px !important;
+        }
+
+        /*
+         * PREPARED / PACKED / CHECKED / RECEIVED:
+         * all values begin at exactly the same horizontal position.
+         */
+        .sales-order-footer .signoff-cell {
+            text-align: left !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-footer .signoff-line {
+            display: grid !important;
+            grid-template-columns: 100px minmax(0, 1fr);
+            align-items: baseline;
+            width: 100%;
+        }
+
+        .sales-order-footer .signoff-label {
+            display: block;
+            padding: 0 !important;
+            margin: 0 !important;
+            text-align: left !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-footer .signoff-editable,
+        .sales-order-footer .signoff-value {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 0 0 5px !important;
+            min-width: 0 !important;
+            text-align: left !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+        }
+
+        .sales-order-footer .signoff-editable {
+            min-height: 15px;
+            border-bottom: 1px dotted #777;
+            outline: none;
+        }
+
+        @media print {
+            .sales-order-footer .signoff-editable {
+                border-bottom: 0 !important;
+                background: transparent !important;
+                outline: none !important;
+            }
+        }
 </style>
 </head>
 <body>
@@ -421,7 +559,12 @@
             <tr>
                 <td class="top-left"></td>
                 <td class="erw-heading">ERW</td>
-                <td class="invoice-heading"><span class="invoice-label">NO.</span> <span class="invoice-value">{{ $printInvoiceNumber }}</span></td>
+                <td class="invoice-heading">
+                    <div class="invoice-align-row">
+                        <span class="invoice-label">NO.</span>
+                        <span class="invoice-value">{{ $printInvoiceNumber }}</span>
+                    </div>
+                </td>
             </tr>
         </table>
 
@@ -438,7 +581,7 @@
                         <span class="header-value">{{ $customerAddress }}</span>
                     </td>
 
-                                        <td style="width:40%; padding-left:10px;">
+                                        <td style="width:40%; padding-left:0;">
                         <table class="sales-order-meta">
                             <tr>
                                 <td class="meta-label">SN NO.:</td>
@@ -567,7 +710,12 @@
             </colgroup>
 
             <tr>
-                <td colspan="4" class="signoff-cell">PREPARED BY: <span class="signoff-editable" contenteditable="true" data-field="prepared_by">{{ $preparedBy }}</span></td>
+                <td colspan="4" class="signoff-cell">
+                    <span class="signoff-line">
+                        <span class="signoff-label">PREPARED BY:</span>
+                        <span class="signoff-editable" contenteditable="true" data-field="prepared_by">{{ $preparedBy }}</span>
+                    </span>
+                </td>
                 <td class="financial-label">INVOICE AMOUNT:</td>
 
                 @if($showDiscountColumn)
@@ -578,7 +726,12 @@
             </tr>
 
             <tr>
-                <td colspan="4" class="signoff-cell">PACKED BY: <span class="signoff-editable" contenteditable="true" data-field="packed_by">{{ $packedBy }}</span></td>
+                <td colspan="4" class="signoff-cell">
+                    <span class="signoff-line">
+                        <span class="signoff-label">PACKED BY:</span>
+                        <span class="signoff-editable" contenteditable="true" data-field="packed_by">{{ $packedBy }}</span>
+                    </span>
+                </td>
                 <td class="financial-label">NET AMOUNT:</td>
 
                 @if($showDiscountColumn)
@@ -589,7 +742,12 @@
             </tr>
 
             <tr>
-                <td colspan="4" class="signoff-cell">CHECKED BY: <span class="signoff-editable" contenteditable="true" data-field="checked_by">{{ $checkedBy }}</span></td>
+                <td colspan="4" class="signoff-cell">
+                    <span class="signoff-line">
+                        <span class="signoff-label">CHECKED BY:</span>
+                        <span class="signoff-editable" contenteditable="true" data-field="checked_by">{{ $checkedBy }}</span>
+                    </span>
+                </td>
                 <td></td>
 
                 @if($showDiscountColumn)
@@ -600,7 +758,12 @@
             </tr>
 
             <tr>
-                <td colspan="4" class="signoff-cell">RECEIVED BY:</td>
+                <td colspan="4" class="signoff-cell">
+                    <span class="signoff-line">
+                        <span class="signoff-label">RECEIVED BY:</span>
+                        <span class="signoff-value">&nbsp;</span>
+                    </span>
+                </td>
                 <td></td>
 
                 @if($showDiscountColumn)
