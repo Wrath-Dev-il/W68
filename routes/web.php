@@ -26967,7 +26967,7 @@ Route::post('/admin/sales/consignment-invoice/receipt-print', function (Request 
                 $customerTin = $row->tin ?? '';
             }
         }
-        return view('Admin.sales.receipt-print', [
+        return view('Admin.sales.sales-order-receipt-print', [
             'customerName' => $req['customer_name'] ?? '',
             'customerAddress' => $customerAddress,
             'customerTin' => $customerTin,
