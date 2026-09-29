@@ -14,97 +14,11 @@
             line-height: 1.3;
         }
         @media print {
-            @page { size: A4 portrait; margin-top: 1cm; margin-bottom: 1cm; margin-left: 1cm; margin-right: 1cm; }
+            @page { margin-top: 5.5cm; margin-bottom: 5cm; margin-left: 1cm; margin-right: 1cm; }
             body { padding: 0; }
             .no-print { display: none !important; }
         }
         .receipt { width: 100%; }
-        /* W68_SALES_ORDER_PRINT_LAYOUT_A4_20260929 */
-        .sales-order-topline {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-            margin: 0;
-        }
-
-        .sales-order-topline td {
-            padding: 0;
-            vertical-align: middle;
-        }
-
-        .sales-order-topline .top-left {
-            width: 30%;
-        }
-
-        .sales-order-topline .erw-heading {
-            width: 40%;
-            text-align: center;
-            font-size: 13px;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-
-        .sales-order-topline .invoice-heading {
-            width: 30%;
-            text-align: right;
-            font-size: 13px;
-            font-weight: bold;
-            white-space: nowrap;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .sales-order-customer-info {
-            margin-bottom: 0;
-        }
-
-        .sales-order-customer-info td {
-            font-size: 14px;
-        }
-
-        .sales-order-customer-info .label {
-            font-size: 14px;
-        }
-
-        .sales-order-customer-info .header-value {
-            font-size: 14px;
-        }
-
-        .header-separator {
-            margin: 5px 0 7px 0;
-        }
-
-        .sales-order-footer {
-            width: 100%;
-            table-layout: fixed;
-            border-collapse: collapse;
-            margin-top: 3px;
-        }
-
-        .sales-order-footer td {
-            padding: 1px 4px;
-            font-size: 14px;
-            vertical-align: top;
-        }
-
-        .sales-order-footer .signoff-cell {
-            width: 55%;
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        .sales-order-footer .financial-label {
-            width: 25%;
-            text-align: left;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-
-        .sales-order-footer .financial-value {
-            width: 20%;
-            text-align: right;
-            font-weight: bold;
-            white-space: nowrap;
-        }
         .header-info { width: 100%; margin-bottom: 15px; }
         .header-info table { width: 100%; border-collapse: collapse; }
         .header-info td { vertical-align: top; padding: 0; font-size: 16px; font-weight: bold; }
@@ -180,66 +94,28 @@
                 }
             }
         @endphp
-        @if($printType !== 'invoice')
-        <table class="sales-order-topline">
-            <tr>
-                <td class="top-left"></td>
-                <td class="erw-heading">ERW</td>
-                <td class="invoice-heading">NO. {{ $printInvoiceNumber }}</td>
-            </tr>
-        </table>
-
-        <div class="sep-dash header-separator"></div>
-
-        <div class="header-info sales-order-customer-info">
-            <table>
-                <tr>
-                    <td style="width:60%">
-                        <span class="label">CUSTOMER:</span>
-                        <span class="header-value">{{ $customerName }}</span><br>
-
-                        <span class="label">ADDRESS:</span>
-                        <span class="header-value">{{ $customerAddress }}</span>
-                    </td>
-
-                    <td style="width:40%;text-align:right">
-                        <span class="label">SN NO.:</span>
-                        <span class="header-value">{{ $salesNumber }}</span><br>
-
-                        <span class="label">DATE:</span>
-                        <span class="header-value">{{ $displayPrintDate }}</span><br>
-
-                        <span class="label">TIN:</span>
-                        <span class="header-value">{{ $customerTin }}</span>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="sep-dash header-separator"></div>
-        @else
         <div class="header-info">
             <table>
                 <tr>
                     <td style="width:60%">
-                        <span class="label">CUSTOMER:</span>
-                        <span class="header-value">{{ $customerName }}</span><br>
-                        <span class="label">ADDRESS:</span>
-                        <span class="header-value">{{ $customerAddress }}</span>
+                        <span class="label">CUSTOMER:</span> <span class="header-value">{{ $customerName }}</span><br>
+                        <span class="label">ADDRESS:</span> <span class="header-value">{{ $customerAddress }}</span>
                     </td>
-
                     <td style="width:40%;text-align:right">
-                        <span class="label">DATE:</span>
-                        <span class="header-value">{{ $displayPrintDate }}</span><br>
-                        <span class="label">TERMS:</span>
-                        <span class="header-value">{{ $terms ?? '' }}</span><br>
-                        <span class="label">TIN:</span>
-                        {{ $customerTin }}
+                        @if($printType === 'invoice')
+                            <span class="label">DATE:</span> <span class="header-value">{{ $displayPrintDate }}</span><br>
+                            <span class="label">TERMS:</span> <span class="header-value">{{ $terms }}</span><br>
+                            <span class="label">TIN:</span> {{ $customerTin }}
+                        @else
+                            <span class="label">SN NO.:</span> <span class="header-value">{{ $salesNumber }}</span><br>
+                            <span class="label">DATE:</span> <span class="header-value">{{ $displayPrintDate }}</span><br>
+                            <span class="label">TERMS:</span> <span class="header-value">{{ $terms }}</span><br>
+                            <span class="label">SALESMAN:</span> <span class="header-value">{{ $salesMan }}</span>
+                        @endif
                     </td>
                 </tr>
             </table>
         </div>
-        @endif
 
         <table class="items-table">
             <tbody>
@@ -335,80 +211,26 @@
         <div class="rush-text">{{ $rushText }}</div>
         @endif
 
-        @if($printType === 'invoice')
         <table class="summary">
             @if($totalAddlDiscount > 0)
-            <tr>
-                <td class="lb">Additional Discount ({{ number_format($addlDiscountRate, 2) }}%):</td>
-                <td class="vl">{{ number_format($totalAddlDiscount, 2) }}</td>
-            </tr>
+            <tr><td class="lb">Additional Discount ({{ number_format($addlDiscountRate, 2) }}%):</td><td class="vl">{{ number_format($totalAddlDiscount, 2) }}</td></tr>
             @endif
-
-            <tr class="invoice-reference-row">
-                <td class="print-invoice-reference">{{ $printInvoiceNumber }}</td>
-                <td class="print-financial-label bd">NET OF VAT:</td>
-                <td class="print-financial-value bd">{{ number_format($grandTotal, 2) }}</td>
-            </tr>
-
-            <tr>
-                <td class="lb">VAT({{ number_format($vatRate, 2) }}%):</td>
-                <td class="vl">{{ number_format($vatAmount, 2) }}</td>
-            </tr>
-
-            <tr>
-                <td class="lb bd">TOTAL AMOUNT DUE:</td>
-                <td class="vl bd">{{ number_format($netAfterAddl, 2) }}</td>
-            </tr>
-        </table>
-        @else
-            @if($totalAddlDiscount > 0)
-            <table class="summary">
-                <tr>
-                    <td class="lb">
-                        Additional Discount ({{ number_format($addlDiscountRate, 2) }}%):
-                    </td>
-                    <td class="vl">
-                        {{ number_format($totalAddlDiscount, 2) }}
-                    </td>
-                </tr>
-            </table>
+            @if($printType === 'invoice')
+            <tr class="invoice-reference-row"><td class="print-invoice-reference">{{ $printInvoiceNumber }}</td><td class="print-financial-label bd">NET OF VAT:</td><td class="print-financial-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
+            <tr><td class="lb">VAT({{ number_format($vatRate, 2) }}%):</td><td class="vl">{{ number_format($vatAmount, 2) }}</td></tr>
+            <tr><td class="lb bd">TOTAL AMOUNT DUE:</td><td class="vl bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            @else
+            <tr class="invoice-reference-row"><td class="print-invoice-reference">{{ $printInvoiceNumber }}</td><td class="print-financial-label bd">INVOICE AMOUNT:</td><td class="print-financial-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            <tr><td class="lb bd">NET AMOUNT:</td><td class="vl bd">{{ number_format($grandTotal, 2) }}</td></tr>
             @endif
-
-        <table class="sales-order-footer">
-            <tr>
-                <td class="signoff-cell">
-                    PREPARED BY: {{ $salesMan ?? '' }}
-                </td>
-                <td class="financial-label">INVOICE AMOUNT:</td>
-                <td class="financial-value">{{ number_format($netAfterAddl, 2) }}</td>
-            </tr>
-
-            <tr>
-                <td class="signoff-cell">PACKED BY:</td>
-                <td class="financial-label">NET AMOUNT:</td>
-                <td class="financial-value">{{ number_format($grandTotal, 2) }}</td>
-            </tr>
-
-            <tr>
-                <td class="signoff-cell">CHECKED BY:</td>
-                <td></td>
-                <td></td>
-            </tr>
-
-            <tr>
-                <td class="signoff-cell">RECEIVED BY:</td>
-                <td></td>
-                <td></td>
-            </tr>
         </table>
-        @endif
     </div>
 
     <div class="no-print" style="position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #800000;padding:8px 20px;display:flex;align-items:center;gap:10px;z-index:999;font-family:Arial,sans-serif;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:bold;">
             <span>Margins (cm):</span>
-            <label>T<input type="number" id="margin-top" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
-            <label>B<input type="number" id="margin-bottom" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
+            <label>T<input type="number" id="margin-top" value="5.5" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
+            <label>B<input type="number" id="margin-bottom" value="5" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
             <label>L<input type="number" id="margin-left" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
             <label>R<input type="number" id="margin-right" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
         </div>
