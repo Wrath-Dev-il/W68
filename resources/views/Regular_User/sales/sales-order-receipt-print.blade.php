@@ -499,6 +499,158 @@
                 outline: none !important;
             }
         }
+
+        /* W68_SALES_ORDER_MATCH_WORD_REFERENCE_20260929 */
+
+        /*
+         * FINAL HEADER POSITION FROM PRINT SALES.DOCX
+         *
+         *                         NO.66015
+         * CUSTOMER: ...          SN NO:   SN-0030005
+         * ADDRESS: ...           DATE:    29-09-2026
+         *                        TIN:     103-310-823
+         *                        TERMS:   150
+         *                        SALESMAN:YUNJIN
+         */
+
+        .sales-order-customer-info {
+            margin-bottom: 15px !important;
+        }
+
+        /*
+         * Reference document uses approximately:
+         * 70% left/customer area
+         * 30% right metadata area
+         */
+        .sales-order-customer-info > table > tbody > tr > td:first-child,
+        .sales-order-customer-info > table > tr > td:first-child {
+            width: 70% !important;
+        }
+
+        .sales-order-customer-info > table > tbody > tr > td:last-child,
+        .sales-order-customer-info > table > tr > td:last-child {
+            width: 30% !important;
+            padding-left: 0 !important;
+            text-align: left !important;
+        }
+
+        /*
+         * Undo any previous movement of the metadata block.
+         */
+        .sales-order-customer-info .sales-order-meta {
+            position: static !important;
+            left: auto !important;
+            right: auto !important;
+            top: auto !important;
+
+            width: max-content !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+
+            table-layout: auto !important;
+            border-collapse: collapse !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta td {
+            line-height: 1.35 !important;
+            vertical-align: baseline !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        /*
+         * Fixed short label column.
+         * This removes the giant gap from the previous 34%/66% layout.
+         */
+        .sales-order-customer-info .sales-order-meta .meta-label {
+            width: 80px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
+
+            text-align: left !important;
+
+            padding-left: 0 !important;
+            padding-right: 3px !important;
+
+            margin: 0 !important;
+
+            font-size: 12px !important;
+            font-weight: 400 !important;
+
+            white-space: nowrap !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta .meta-value {
+            width: auto !important;
+            min-width: 0 !important;
+
+            text-align: left !important;
+
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+
+            margin: 0 !important;
+
+            font-size: 11px !important;
+            font-weight: 400 !important;
+
+            white-space: nowrap !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta .terms-value {
+            font-size: 11.5px !important;
+        }
+
+        /*
+         * NO.66015
+         *
+         * NO. starts at the same approximate horizontal point
+         * where metadata VALUES begin below it.
+         */
+        .sales-order-topline .invoice-heading {
+            overflow: visible !important;
+            text-align: left !important;
+        }
+
+        .sales-order-topline .invoice-align-row {
+            display: flex !important;
+            align-items: baseline !important;
+            justify-content: flex-start !important;
+
+            width: max-content !important;
+
+            margin-left: 80px !important;
+            margin-right: 0 !important;
+
+            gap: 0 !important;
+        }
+
+        .sales-order-topline .invoice-align-row .invoice-label {
+            display: inline !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+
+            white-space: nowrap !important;
+        }
+
+        .sales-order-topline .invoice-align-row .invoice-value {
+            display: inline !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+
+            white-space: nowrap !important;
+            font-variant-numeric: tabular-nums;
+        }
 </style>
 </head>
 <body>
