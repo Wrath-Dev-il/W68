@@ -288,6 +288,13 @@
         .items-table.no-discount .desc-col  { width: 35.333333% !important; }
         .items-table.no-discount .price-col { width: 13.333333% !important; }
         .items-table.no-discount .total-col { width: 13.333333% !important; }
+
+        /* W68_SALES_ORDER_NO_DISCOUNT_CENTER_VALUES_20260929 */
+        .items-table.no-discount tbody td.code-col,
+        .items-table.no-discount tbody td.price-col,
+        .items-table.no-discount tbody td.total-col {
+            text-align: center !important;
+        }
 </style>
 </head>
 <body>
