@@ -2891,7 +2891,16 @@ Route::prefix('special')->name('special.')->group(function () {
                     $salesMan = $note->salesman ?? '';
                 }
             }
-            return view('Special_User.sales.sales-order-receipt-print', [
+            $w68ReceiptPrintType = strtolower(trim((string) ($req['print_type'] ?? $req['printType'] ?? 'order')));
+
+            // W68_SALES_ORDER_ONLY_PRINT_ROUTE_20260929
+            // Invoice MUST continue using the original receipt-print template.
+            // Only Sales Order uses the dedicated Sales Order template.
+            $w68SalesOrderPrintView = $w68ReceiptPrintType === 'invoice'
+                ? 'Special_User.sales.receipt-print'
+                : 'Special_User.sales.sales-order-receipt-print';
+
+            return view($w68SalesOrderPrintView, [
                 'customerName' => $req['customer_name'] ?? '',
                 'customerAddress' => $customerAddress,
                 'customerTin' => $customerTin,
@@ -17743,7 +17752,16 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
                 $salesMan = $note->salesman ?? '';
             }
         }
-        return view('Admin.sales.sales-order-receipt-print', [
+        $w68ReceiptPrintType = strtolower(trim((string) ($req['print_type'] ?? $req['printType'] ?? 'order')));
+
+        // W68_SALES_ORDER_ONLY_PRINT_ROUTE_20260929
+        // Invoice MUST continue using the original receipt-print template.
+        // Only Sales Order uses the dedicated Sales Order template.
+        $w68SalesOrderPrintView = $w68ReceiptPrintType === 'invoice'
+            ? 'Admin.sales.receipt-print'
+            : 'Admin.sales.sales-order-receipt-print';
+
+        return view($w68SalesOrderPrintView, [
             'customerName' => $req['customer_name'] ?? '',
             'customerAddress' => $customerAddress,
             'customerTin' => $customerTin,
@@ -26967,7 +26985,7 @@ Route::post('/admin/sales/consignment-invoice/receipt-print', function (Request 
                 $customerTin = $row->tin ?? '';
             }
         }
-        return view('Admin.sales.sales-order-receipt-print', [
+        return view('Admin.sales.receipt-print', [
             'customerName' => $req['customer_name'] ?? '',
             'customerAddress' => $customerAddress,
             'customerTin' => $customerTin,

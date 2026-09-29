@@ -19,7 +19,13 @@
             .no-print { display: none !important; }
         }
         .receipt { width: 100%; }
-        /* W68_SALES_ORDER_PRINT_ONLY_LAYOUT_20260929 */
+
+        /* W68_SALES_ORDER_ONLY_PRINT_LAYOUT_20260929 */
+
+        body {
+            font-weight: 400 !important;
+        }
+
         .sales-order-topline {
             width: 100%;
             border-collapse: collapse;
@@ -30,6 +36,7 @@
         .sales-order-topline td {
             padding: 0;
             vertical-align: middle;
+            font-weight: 400;
         }
 
         .sales-order-topline .top-left {
@@ -40,37 +47,77 @@
             width: 40%;
             text-align: center;
             font-size: 13px;
-            font-weight: bold;
+            line-height: 1.2;
+            font-weight: 700 !important;
+            color: #000;
             white-space: nowrap;
         }
 
         .sales-order-topline .invoice-heading {
             width: 30%;
             text-align: right;
-            font-size: 13px;
-            font-weight: bold;
+            font-size: 12px;
+            line-height: 1.2;
+            font-weight: 700 !important;
+            color: #d00000 !important;
             white-space: nowrap;
             font-variant-numeric: tabular-nums;
         }
 
         .sales-order-customer-info {
+            width: 100%;
             margin-bottom: 0;
         }
 
+        .sales-order-customer-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
         .sales-order-customer-info td {
-            font-size: 14px;
+            vertical-align: top;
+            padding: 0;
+            font-size: 10px !important;
+            line-height: 1.35;
+            font-weight: 400 !important;
         }
 
         .sales-order-customer-info .label {
-            font-size: 14px;
+            font-size: 10px !important;
+            font-weight: 400 !important;
         }
 
         .sales-order-customer-info .header-value {
-            font-size: 14px;
+            font-size: 10px !important;
+            font-weight: 400 !important;
         }
 
-        .header-separator {
-            margin: 5px 0 7px 0;
+        .sales-order-customer-info .customer-value {
+            font-weight: 700 !important;
+        }
+
+        .sales-order-header-separator {
+            margin: 5px 0 6px 0;
+        }
+
+        /* Item/body values must not be bold. */
+        .items-table,
+        .items-table tbody,
+        .items-table tr,
+        .items-table td {
+            font-weight: 400 !important;
+        }
+
+        .summary,
+        .summary td,
+        .summary .lb,
+        .summary .vl,
+        .summary .bd {
+            font-weight: 400 !important;
+        }
+
+        .rush-text {
+            font-weight: 400 !important;
         }
 
         .sales-order-footer {
@@ -83,7 +130,9 @@
         .sales-order-footer td {
             padding: 1px 4px;
             font-size: 14px;
+            line-height: 1.3;
             vertical-align: top;
+            font-weight: 400 !important;
         }
 
         .sales-order-footer .signoff-cell {
@@ -95,14 +144,12 @@
         .sales-order-footer .financial-label {
             width: 25%;
             text-align: left;
-            font-weight: bold;
             white-space: nowrap;
         }
 
         .sales-order-footer .financial-value {
             width: 20%;
             text-align: right;
-            font-weight: bold;
             white-space: nowrap;
         }
         .header-info { width: 100%; margin-bottom: 15px; }
@@ -188,31 +235,37 @@
             </tr>
         </table>
 
-        <div class="sep-dash header-separator"></div>
+        <div class="sep-dash sales-order-header-separator"></div>
 
         <div class="header-info sales-order-customer-info">
             <table>
                 <tr>
                     <td style="width:60%">
                         <span class="label">CUSTOMER:</span>
-                        <span class="header-value">{{ $customerName }}</span><br>
+                        <span class="header-value customer-value">{{ $customerName }}</span><br>
+
                         <span class="label">ADDRESS:</span>
                         <span class="header-value">{{ $customerAddress }}</span>
                     </td>
 
-                    <td style="width:40%;text-align:right">
+                    <td style="width:40%; text-align:right">
                         <span class="label">SN NO.:</span>
                         <span class="header-value">{{ $salesNumber }}</span><br>
+
                         <span class="label">DATE:</span>
                         <span class="header-value">{{ $displayPrintDate }}</span><br>
+
                         <span class="label">TIN:</span>
-                        <span class="header-value">{{ $customerTin }}</span>
+                        <span class="header-value">{{ $customerTin }}</span><br>
+
+                        <span class="label">SALESMAN:</span>
+                        <span class="header-value">{{ $salesMan ?? '' }}</span>
                     </td>
                 </tr>
             </table>
         </div>
 
-        <div class="sep-dash header-separator"></div>
+        <div class="sep-dash sales-order-header-separator"></div>
 
         <table class="items-table">
             <tbody>
@@ -323,9 +376,7 @@
 
         <table class="sales-order-footer">
             <tr>
-                <td class="signoff-cell">
-                    PREPARED BY: {{ $salesMan ?? '' }}
-                </td>
+                <td class="signoff-cell">PREPARED BY:</td>
                 <td class="financial-label">INVOICE AMOUNT:</td>
                 <td class="financial-value">{{ number_format($netAfterAddl, 2) }}</td>
             </tr>
