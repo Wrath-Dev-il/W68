@@ -302,6 +302,12 @@
         .items-table tbody td.total-col {
             text-align: center !important;
         }
+
+        /* W68_SALES_ORDER_TERMS_20260929 */
+        .sales-order-customer-info .terms-value {
+            font-size: 11.5px !important;
+            font-weight: 400 !important;
+        }
 </style>
 </head>
 <body>
@@ -370,6 +376,9 @@
 
                         <span class="label">TIN:</span>
                         <span class="header-value">{{ $customerTin }}</span><br>
+
+                        <span class="label">TERMS:</span>
+                        <span class="header-value terms-value">{{ $terms ?? '' }}</span><br>
 
                         <span class="label">SALESMAN:</span>
                         <span class="header-value">{{ $salesMan ?? '' }}</span>
