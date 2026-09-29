@@ -1070,8 +1070,20 @@
                     </div>
                     <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
                         <span class="text-[10px] text-slate-400 font-bold uppercase">Edit the items as needed</span>
-                        <div class="flex items-center space-x-3">
-                            <p class="text-[10px] text-slate-400 font-bold uppercase">Total Amount:</p>
+                        <div class="flex items-center space-x-4">
+                                                        {{-- W68_EDIT_SO_ADDL_DISCOUNT_UI_20260929 --}}
+                            <div class="flex items-center space-x-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                                <i data-lucide="percent" class="w-4 h-4 text-amber-600"></i>
+                                <label class="text-[9px] font-bold text-amber-700 uppercase tracking-widest">Addl Disc (%)</label>
+                                <input type="number"
+                                       id="edit-so-addl-discount"
+                                       value="0"
+                                       min="0"
+                                       max="100"
+                                       step="0.01"
+                                       class="w-16 px-2 py-1 border border-amber-300 rounded-lg text-xs text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                            </div>
+<p class="text-[10px] text-slate-400 font-bold uppercase">Total Amount:</p>
                             <h3 id="edit-so-total-amount" class="text-lg font-extrabold text-maroon">₱ 0.00</h3>
                         </div>
                     </div>
