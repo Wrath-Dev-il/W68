@@ -651,6 +651,77 @@
             white-space: nowrap !important;
             font-variant-numeric: tabular-nums;
         }
+
+        /* W68_SALES_ORDER_REFERENCE_NOLESS_FINAL_20260929 */
+
+        /*
+         * Match PRINT SALES.docx:
+         * SALESMAN begins just slightly left of UNIT PRICE.
+         */
+        .sales-order-customer-info > table > tbody > tr > td:last-child,
+        .sales-order-customer-info > table > tr > td:last-child {
+            padding-left: 19px !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta {
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            width: max-content !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            table-layout: auto !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta .meta-label {
+            width: 80px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
+
+            padding-left: 0 !important;
+            padding-right: 3px !important;
+
+            text-align: left !important;
+            white-space: nowrap !important;
+        }
+
+        .sales-order-customer-info .sales-order-meta .meta-value {
+            width: auto !important;
+            min-width: 0 !important;
+
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+
+            text-align: left !important;
+            white-space: nowrap !important;
+        }
+
+        /*
+         * NO DISCOUNT ONLY:
+         *
+         * Make the BODY TOTAL amounts use the same RIGHT EDGE
+         * as INVOICE AMOUNT / NET AMOUNT below.
+         *
+         * The WITH-LESS layout is deliberately untouched.
+         */
+        .items-table.no-discount tbody td.total-col {
+            text-align: right !important;
+            padding-right: 4px !important;
+        }
+
+        .sales-order-footer.no-discount .financial-label {
+            width: 13.333333% !important;
+        }
+
+        .sales-order-footer.no-discount .financial-value {
+            width: 13.333333% !important;
+            text-align: right !important;
+            padding-right: 4px !important;
+        }
+
+        .sales-order-footer.no-discount .signoff-cell {
+            text-align: left !important;
+        }
 </style>
 </head>
 <body>
@@ -879,7 +950,7 @@
         </table>
         @endif
 
-                        <table class="sales-order-footer">
+                        <table class="sales-order-footer {{ $showDiscountColumn ? 'with-discount' : 'no-discount' }}">
             <colgroup>
                 @if($showDiscountColumn)
                     <col style="width:7%">
