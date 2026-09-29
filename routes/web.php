@@ -2891,7 +2891,7 @@ Route::prefix('special')->name('special.')->group(function () {
                     $salesMan = $note->salesman ?? '';
                 }
             }
-            return view('Special_User.sales.receipt-print', [
+            return view('Special_User.sales.sales-order-receipt-print', [
                 'customerName' => $req['customer_name'] ?? '',
                 'customerAddress' => $customerAddress,
                 'customerTin' => $customerTin,
@@ -17743,7 +17743,7 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
                 $salesMan = $note->salesman ?? '';
             }
         }
-        return view('Admin.sales.receipt-print', [
+        return view('Admin.sales.sales-order-receipt-print', [
             'customerName' => $req['customer_name'] ?? '',
             'customerAddress' => $customerAddress,
             'customerTin' => $customerTin,
