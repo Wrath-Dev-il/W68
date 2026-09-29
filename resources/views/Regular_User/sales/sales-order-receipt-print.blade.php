@@ -370,30 +370,31 @@
             }
         }
 
-        /* W68_SALES_ORDER_EXACT_HEADER_SIGNOFF_ALIGNMENT_20260929 */
+        
+        /* W68_SALES_ORDER_TIGHT_HEADER_ALIGNMENT_20260929 */
 
-        /*
-         * Keep ERW centered using the existing 30 / 40 / 30 top row.
-         * Expand only the NO. contents leftward so its label/value grid
-         * occupies the same right-side 40% area as the metadata below.
-         */
         .sales-order-topline .invoice-heading {
             overflow: visible !important;
             text-align: left !important;
+            white-space: nowrap;
         }
 
+        /* NO.66015 */
         .sales-order-topline .invoice-align-row {
-            display: grid !important;
-            grid-template-columns: 44% 56%;
+            display: inline-flex !important;
             align-items: baseline;
-            width: 133.333333%;
-            margin-left: -33.333333%;
+            justify-content: flex-start;
+            gap: 0 !important;
+            width: auto !important;
+            margin-left: 0 !important;
         }
 
         .sales-order-topline .invoice-align-row .invoice-label {
-            display: block;
+            display: inline !important;
             text-align: left !important;
-            padding-left: 10px !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            margin: 0 !important;
             font-size: 12px !important;
             font-weight: 700 !important;
             color: #d00000 !important;
@@ -401,9 +402,11 @@
         }
 
         .sales-order-topline .invoice-align-row .invoice-value {
-            display: block;
+            display: inline !important;
             text-align: left !important;
-            padding-left: 7px !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            margin: 0 !important;
             font-size: 14px !important;
             font-weight: 700 !important;
             color: #d00000 !important;
@@ -411,15 +414,7 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /*
-         * SN NO / DATE / TIN / TERMS / SALESMAN:
-         *
-         * SN NO.:   value
-         * DATE:     value
-         * TIN:      value
-         * TERMS:    value
-         * SALESMAN: value
-         */
+        /* SN NO.: value / DATE: value / TIN: value / TERMS: value / SALESMAN: value */
         .sales-order-meta {
             width: 100% !important;
             border-collapse: collapse;
@@ -434,19 +429,19 @@
         }
 
         .sales-order-meta .meta-label {
-            width: 44% !important;
+            width: 34% !important;
             text-align: left !important;
-            padding-left: 10px !important;
-            padding-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 2px !important;
             font-size: 12px !important;
             font-weight: 400 !important;
             white-space: nowrap;
         }
 
         .sales-order-meta .meta-value {
-            width: 56% !important;
+            width: 66% !important;
             text-align: left !important;
-            padding-left: 7px !important;
+            padding-left: 0 !important;
             padding-right: 0 !important;
             font-size: 11px !important;
             font-weight: 400 !important;
@@ -457,10 +452,7 @@
             font-size: 11.5px !important;
         }
 
-        /*
-         * PREPARED / PACKED / CHECKED / RECEIVED:
-         * all values begin at exactly the same horizontal position.
-         */
+        /* keep footer alignment */
         .sales-order-footer .signoff-cell {
             text-align: left !important;
             white-space: nowrap;
