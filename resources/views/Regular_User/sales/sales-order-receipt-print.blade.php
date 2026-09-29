@@ -64,6 +64,18 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .sales-order-topline .invoice-heading .invoice-label {
+            font-size: 12px;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+        }
+
+        .sales-order-topline .invoice-heading .invoice-value {
+            font-size: 13px;
+            font-weight: 700 !important;
+            color: #d00000 !important;
+        }
+
         .sales-order-customer-info {
             width: 100%;
             margin-bottom: 0;
@@ -77,22 +89,23 @@
         .sales-order-customer-info td {
             vertical-align: top;
             padding: 0;
-            font-size: 10px !important;
+            font-size: 12px !important;
             line-height: 1.35;
             font-weight: 400 !important;
         }
 
         .sales-order-customer-info .label {
-            font-size: 10px !important;
+            font-size: 12px !important;
             font-weight: 400 !important;
         }
 
         .sales-order-customer-info .header-value {
-            font-size: 10px !important;
+            font-size: 11px !important;
             font-weight: 400 !important;
         }
 
         .sales-order-customer-info .customer-value {
+            font-size: 11.5px !important;
             font-weight: 700 !important;
         }
 
@@ -105,6 +118,7 @@
         .items-table tbody,
         .items-table tr,
         .items-table td {
+            font-size: 12px !important;
             font-weight: 400 !important;
         }
 
@@ -113,6 +127,7 @@
         .summary .lb,
         .summary .vl,
         .summary .bd {
+            font-size: 12px !important;
             font-weight: 400 !important;
         }
 
@@ -129,7 +144,7 @@
 
         .sales-order-footer td {
             padding: 1px 4px;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.3;
             vertical-align: top;
             font-weight: 400 !important;
@@ -231,7 +246,7 @@
             <tr>
                 <td class="top-left"></td>
                 <td class="erw-heading">ERW</td>
-                <td class="invoice-heading">NO. {{ $printInvoiceNumber }}</td>
+                <td class="invoice-heading"><span class="invoice-label">NO.</span> <span class="invoice-value">{{ $printInvoiceNumber }}</span></td>
             </tr>
         </table>
 
@@ -254,6 +269,9 @@
 
                         <span class="label">DATE:</span>
                         <span class="header-value">{{ $displayPrintDate }}</span><br>
+
+                        <span class="label">TERMS:</span>
+                        <span class="header-value">{{ $terms ?? '' }}</span><br>
 
                         <span class="label">TIN:</span>
                         <span class="header-value">{{ $customerTin }}</span><br>
