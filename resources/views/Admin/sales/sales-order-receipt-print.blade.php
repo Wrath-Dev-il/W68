@@ -46,7 +46,7 @@
         .sales-order-topline .erw-heading {
             width: 40%;
             text-align: center;
-            font-size: 13px;
+            font-size: 15px;
             line-height: 1.2;
             font-weight: 700 !important;
             color: #000;
@@ -224,6 +224,33 @@
         .sales-order-footer .financial-value {
             width: auto !important;
         }
+
+        /* W68_SALES_ORDER_BODY_HEADING_20260929 */
+        .items-table thead th {
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            line-height: 1.2;
+            padding: 1px 2px 3px 2px;
+            vertical-align: bottom;
+            border-bottom: 1px dashed #000;
+            white-space: nowrap;
+        }
+
+        .items-table thead .qty-col,
+        .items-table thead .unit-col,
+        .items-table thead .disc-col {
+            text-align: center;
+        }
+
+        .items-table thead .code-col,
+        .items-table thead .desc-col {
+            text-align: left;
+        }
+
+        .items-table thead .price-col,
+        .items-table thead .total-col {
+            text-align: right;
+        }
 </style>
 </head>
 <body>
@@ -290,7 +317,18 @@
 
         <div class="sep-dash sales-order-header-separator"></div>
 
-        <table class="items-table">
+                <table class="items-table">
+            <thead>
+                <tr class="sales-order-items-heading">
+                    <th class="qty-col">QTY</th>
+                    <th class="unit-col">UNIT</th>
+                    <th class="code-col">PRODUCT CODE</th>
+                    <th class="desc-col">ITEM</th>
+                    <th class="price-col">UNIT PRICE</th>
+                    <th class="disc-col">LESS</th>
+                    <th class="total-col">TOTAL</th>
+                </tr>
+            </thead>
             <tbody>
                 @foreach($items as $item)
                 @php
