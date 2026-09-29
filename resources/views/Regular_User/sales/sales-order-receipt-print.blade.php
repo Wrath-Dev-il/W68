@@ -251,6 +251,35 @@
         .items-table thead .total-col {
             text-align: right;
         }
+
+        /* W68_SALES_ORDER_CENTERED_HEADING_SEPARATOR_20260929 */
+        .items-table thead th {
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+            white-space: nowrap;
+            border-bottom: 0 !important;
+        }
+
+        .items-table thead .qty-col,
+        .items-table thead .unit-col,
+        .items-table thead .code-col,
+        .items-table thead .desc-col,
+        .items-table thead .price-col,
+        .items-table thead .disc-col,
+        .items-table thead .total-col {
+            text-align: center !important;
+        }
+
+        .items-table thead .sales-order-heading-bottom th {
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 0 !important;
+            line-height: 0 !important;
+            font-size: 0 !important;
+            border-top: 1px dashed #000 !important;
+        }
 </style>
 </head>
 <body>
@@ -327,6 +356,9 @@
                     <th class="price-col">UNIT PRICE</th>
                     <th class="disc-col">LESS</th>
                     <th class="total-col">TOTAL</th>
+                </tr>
+                <tr class="sales-order-heading-bottom">
+                    <th colspan="7"></th>
                 </tr>
             </thead>
             <tbody>
