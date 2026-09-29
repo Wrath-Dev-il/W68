@@ -704,23 +704,43 @@
          *
          * The WITH-LESS layout is deliberately untouched.
          */
+        /* W68_SALES_ORDER_NOLESS_SHARED_TOTAL_EDGE_20260930 */
+
+        /*
+         * NO LESS:
+         * Do NOT give footer cells their own percentage widths.
+         * The existing footer colgroup is the source of truth.
+         * This makes the last footer column and the body TOTAL column
+         * terminate on exactly the same right edge.
+         */
+        .items-table.no-discount {
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
         .items-table.no-discount tbody td.total-col {
             text-align: right !important;
             padding-right: 4px !important;
         }
 
-        .sales-order-footer.no-discount .financial-label {
-            width: 13.333333% !important;
+        .sales-order-footer.no-discount {
+            width: 100% !important;
+            table-layout: fixed !important;
         }
 
+        .sales-order-footer.no-discount .signoff-cell,
+        .sales-order-footer.no-discount .financial-label,
         .sales-order-footer.no-discount .financial-value {
-            width: 13.333333% !important;
-            text-align: right !important;
-            padding-right: 4px !important;
+            width: auto !important;
         }
 
         .sales-order-footer.no-discount .signoff-cell {
             text-align: left !important;
+        }
+
+        .sales-order-footer.no-discount .financial-value {
+            text-align: right !important;
+            padding-right: 4px !important;
         }
 </style>
 </head>
