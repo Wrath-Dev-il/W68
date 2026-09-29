@@ -280,6 +280,14 @@
             font-size: 0 !important;
             border-top: 1px dashed #000 !important;
         }
+
+        /* W68_SALES_ORDER_DYNAMIC_DISCOUNT_WIDTHS_20260929 */
+        .items-table.no-discount .qty-col   { width: 8.333333% !important; }
+        .items-table.no-discount .unit-col  { width: 10.333333% !important; }
+        .items-table.no-discount .code-col  { width: 19.333333% !important; }
+        .items-table.no-discount .desc-col  { width: 35.333333% !important; }
+        .items-table.no-discount .price-col { width: 13.333333% !important; }
+        .items-table.no-discount .total-col { width: 13.333333% !important; }
 </style>
 </head>
 <body>
@@ -305,7 +313,19 @@
                 }
             }
         @endphp
-        <table class="sales-order-topline">
+                @php
+            // W68_SALES_ORDER_DYNAMIC_DISCOUNT_COLUMN_20260929
+            // Hide LESS only when every printed item's discount is zero/blank.
+            $showDiscountColumn = false;
+
+            foreach ($items as $discountColumnItem) {
+                if (abs((float) ($discountColumnItem['discount'] ?? 0)) > 0.000001) {
+                    $showDiscountColumn = true;
+                    break;
+                }
+            }
+        @endphp
+<table class="sales-order-topline">
             <tr>
                 <td class="top-left"></td>
                 <td class="erw-heading">ERW</td>
@@ -346,7 +366,7 @@
 
         <div class="sep-dash sales-order-header-separator"></div>
 
-                <table class="items-table">
+                <table class="items-table {{ $showDiscountColumn ? '' : 'no-discount' }}">
             <thead>
                 <tr class="sales-order-items-heading">
                     <th class="qty-col">QTY</th>
@@ -354,11 +374,13 @@
                     <th class="code-col">PRODUCT CODE</th>
                     <th class="desc-col">ITEM</th>
                     <th class="price-col">UNIT PRICE</th>
+                                        @if($showDiscountColumn)
                     <th class="disc-col">LESS</th>
+                    @endif
                     <th class="total-col">TOTAL</th>
                 </tr>
                 <tr class="sales-order-heading-bottom">
-                    <th colspan="7"></th>
+                    <th colspan="{{ $showDiscountColumn ? 7 : 6 }}"></th>
                 </tr>
             </thead>
             <tbody>
@@ -385,11 +407,12 @@
                     <td class="code-col">{{ !empty($item['price_code']) ? $item['price_code'] : $item['product_code'] }}</td>
                     <td class="desc-col">{{ $printDescription }}</td>
                     <td class="price-col r">{{ number_format($item['unit_price'], 2) }}</td>
-                    <td class="disc-col c">
+                    @if($showDiscountColumn)                    <td class="disc-col c">
                         @if(!empty($item['discount']) && (float)$item['discount'] > 0)
                             {{ $item['discount'] }}%
                         @endif
                     </td>
+                    @endif
                     <td class="total-col r">{{ number_format($item['subtotal'], 2) }}</td>
                 </tr>
                 @endforeach
@@ -421,42 +444,67 @@
         </table>
         @endif
 
-                <table class="sales-order-footer">
+                        <table class="sales-order-footer">
             <colgroup>
-                <col style="width:7%">
-                <col style="width:9%">
-                <col style="width:18%">
-                <col style="width:34%">
-                <col style="width:12%">
-                <col style="width:8%">
-                <col style="width:12%">
+                @if($showDiscountColumn)
+                    <col style="width:7%">
+                    <col style="width:9%">
+                    <col style="width:18%">
+                    <col style="width:34%">
+                    <col style="width:12%">
+                    <col style="width:8%">
+                    <col style="width:12%">
+                @else
+                    <col style="width:8.333333%">
+                    <col style="width:10.333333%">
+                    <col style="width:19.333333%">
+                    <col style="width:35.333333%">
+                    <col style="width:13.333333%">
+                    <col style="width:13.333333%">
+                @endif
             </colgroup>
 
             <tr>
                 <td colspan="4" class="signoff-cell">PREPARED BY:</td>
                 <td class="financial-label">INVOICE AMOUNT:</td>
-                <td></td>
+
+                @if($showDiscountColumn)
+                    <td></td>
+                @endif
+
                 <td class="financial-value">{{ number_format($netAfterAddl, 2) }}</td>
             </tr>
 
             <tr>
                 <td colspan="4" class="signoff-cell">PACKED BY:</td>
                 <td class="financial-label">NET AMOUNT:</td>
-                <td></td>
+
+                @if($showDiscountColumn)
+                    <td></td>
+                @endif
+
                 <td class="financial-value">{{ number_format($grandTotal, 2) }}</td>
             </tr>
 
             <tr>
                 <td colspan="4" class="signoff-cell">CHECKED BY:</td>
                 <td></td>
-                <td></td>
+
+                @if($showDiscountColumn)
+                    <td></td>
+                @endif
+
                 <td></td>
             </tr>
 
             <tr>
                 <td colspan="4" class="signoff-cell">RECEIVED BY:</td>
                 <td></td>
-                <td></td>
+
+                @if($showDiscountColumn)
+                    <td></td>
+                @endif
+
                 <td></td>
             </tr>
         </table>
