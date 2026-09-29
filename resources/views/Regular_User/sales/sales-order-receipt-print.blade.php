@@ -295,6 +295,13 @@
         .items-table.no-discount tbody td.total-col {
             text-align: center !important;
         }
+
+        /* W68_SALES_ORDER_CENTER_BODY_COLUMNS_ALWAYS_20260929 */
+        .items-table tbody td.code-col,
+        .items-table tbody td.price-col,
+        .items-table tbody td.total-col {
+            text-align: center !important;
+        }
 </style>
 </head>
 <body>
