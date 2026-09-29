@@ -30628,3 +30628,57 @@ foreach (['admin', 'regular', 'special'] as $w68UnservedPrefix) {
         ->name($w68UnservedPrefix . '.')
         ->group(base_path('routes/unserved-report.php'));
 }
+
+/*
+|--------------------------------------------------------------------------
+| W68_SALES_ORDER_PRINT_SIGNOFF_SAVE_20260929
+|--------------------------------------------------------------------------
+| Sales Order print preview signoff editor.
+| Saves directly to the parent Sales Note.
+*/
+Route::post('/w68/sales-order/print-signoff', function (Request $request) {
+    $user = session('user');
+
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized',
+        ], 403);
+    }
+
+    $data = $request->validate([
+        'sales_number' => 'required|string|max:100',
+        'prepared_by' => 'nullable|string|max:255',
+        'packed_by' => 'nullable|string|max:255',
+        'checked_by' => 'nullable|string|max:255',
+    ]);
+
+    $salesNumber = trim((string) $data['sales_number']);
+
+    $note = DB::connection('sales')
+        ->table('sales_notes')
+        ->where('sales_number', $salesNumber)
+        ->first();
+
+    if (!$note) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Sales Note not found.',
+        ], 404);
+    }
+
+    DB::connection('sales')
+        ->table('sales_notes')
+        ->where('id', $note->id)
+        ->update([
+            'prepared_by' => trim((string) ($data['prepared_by'] ?? '')),
+            'packed_by' => trim((string) ($data['packed_by'] ?? '')),
+            'checked_by' => trim((string) ($data['checked_by'] ?? '')),
+            'updated_at' => now(),
+        ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Sales Order signoff saved.',
+    ]);
+})->name('w68.sales-order.print-signoff');

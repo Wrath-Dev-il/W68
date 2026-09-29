@@ -308,6 +308,67 @@
             font-size: 11.5px !important;
             font-weight: 400 !important;
         }
+
+        /* W68_SALES_ORDER_META_SIGNOFF_20260929 */
+
+        .sales-order-meta {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .sales-order-meta td {
+            padding: 0 !important;
+            vertical-align: top;
+            line-height: 1.35;
+        }
+
+        .sales-order-meta .meta-label {
+            width: 44%;
+            text-align: right !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-meta .meta-value {
+            width: 56%;
+            text-align: left !important;
+            padding-left: 7px !important;
+            font-size: 11px !important;
+            font-weight: 400 !important;
+            white-space: nowrap;
+        }
+
+        .sales-order-meta .terms-value {
+            font-size: 11.5px !important;
+        }
+
+        .signoff-editable {
+            display: inline-block;
+            min-width: 165px;
+            min-height: 15px;
+            margin-left: 5px;
+            padding: 0 3px;
+            border-bottom: 1px dotted #777;
+            outline: none;
+            font-size: 12px;
+            font-weight: 400 !important;
+            cursor: text;
+        }
+
+        .signoff-editable:focus {
+            background: #fff8dc;
+            border-bottom-color: #800000;
+        }
+
+        @media print {
+            .signoff-editable {
+                border-bottom: 0 !important;
+                background: transparent !important;
+                outline: none !important;
+            }
+        }
 </style>
 </head>
 <body>
@@ -345,6 +406,17 @@
                 }
             }
         @endphp
+        @php
+            // W68_SALES_ORDER_SIGNOFF_FROM_SALES_NOTE_20260929
+            $w68SignoffNote = DB::connection('sales')
+                ->table('sales_notes')
+                ->where('sales_number', $salesNumber)
+                ->first();
+
+            $preparedBy = trim((string) ($w68SignoffNote->prepared_by ?? ''));
+            $packedBy = trim((string) ($w68SignoffNote->packed_by ?? ''));
+            $checkedBy = trim((string) ($w68SignoffNote->checked_by ?? ''));
+        @endphp
 <table class="sales-order-topline">
             <tr>
                 <td class="top-left"></td>
@@ -366,22 +438,29 @@
                         <span class="header-value">{{ $customerAddress }}</span>
                     </td>
 
-                    <td style="width:40%; text-align:right">
-                        <span class="label">SN NO.:</span>
-                        <span class="header-value">{{ $salesNumber }}</span><br>
-
-                        <span class="label">DATE:</span>
-                        <span class="header-value">{{ $displayPrintDate }}</span><br>
-
-
-                        <span class="label">TIN:</span>
-                        <span class="header-value">{{ $customerTin }}</span><br>
-
-                        <span class="label">TERMS:</span>
-                        <span class="header-value terms-value">{{ $terms ?? '' }}</span><br>
-
-                        <span class="label">SALESMAN:</span>
-                        <span class="header-value">{{ $salesMan ?? '' }}</span>
+                                        <td style="width:40%; padding-left:10px;">
+                        <table class="sales-order-meta">
+                            <tr>
+                                <td class="meta-label">SN NO.:</td>
+                                <td class="meta-value">{{ $salesNumber }}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">DATE:</td>
+                                <td class="meta-value">{{ $displayPrintDate }}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">TIN:</td>
+                                <td class="meta-value">{{ $customerTin }}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">TERMS:</td>
+                                <td class="meta-value terms-value">{{ $terms ?? '' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">SALESMAN:</td>
+                                <td class="meta-value">{{ $salesMan ?? '' }}</td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
             </table>
@@ -488,7 +567,7 @@
             </colgroup>
 
             <tr>
-                <td colspan="4" class="signoff-cell">PREPARED BY:</td>
+                <td colspan="4" class="signoff-cell">PREPARED BY: <span class="signoff-editable" contenteditable="true" data-field="prepared_by">{{ $preparedBy }}</span></td>
                 <td class="financial-label">INVOICE AMOUNT:</td>
 
                 @if($showDiscountColumn)
@@ -499,7 +578,7 @@
             </tr>
 
             <tr>
-                <td colspan="4" class="signoff-cell">PACKED BY:</td>
+                <td colspan="4" class="signoff-cell">PACKED BY: <span class="signoff-editable" contenteditable="true" data-field="packed_by">{{ $packedBy }}</span></td>
                 <td class="financial-label">NET AMOUNT:</td>
 
                 @if($showDiscountColumn)
@@ -510,7 +589,7 @@
             </tr>
 
             <tr>
-                <td colspan="4" class="signoff-cell">CHECKED BY:</td>
+                <td colspan="4" class="signoff-cell">CHECKED BY: <span class="signoff-editable" contenteditable="true" data-field="checked_by">{{ $checkedBy }}</span></td>
                 <td></td>
 
                 @if($showDiscountColumn)
@@ -541,12 +620,92 @@
             <label>L<input type="number" id="margin-left" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
             <label>R<input type="number" id="margin-right" value="1" step="0.1" min="0" max="10" style="width:40px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:10px;"></label>
         </div>
-        <button onclick="window.print()" style="padding:8px 20px;background:#800000;border:none;border-radius:8px;font-size:11px;font-weight:bold;color:#fff;cursor:pointer;">Print Receipt</button>
-        <button id="export-pdf-btn" onclick="exportPdf()" style="padding:8px 20px;background:#1e40af;border:none;border-radius:8px;font-size:11px;font-weight:bold;color:#fff;cursor:pointer;">Export PDF</button>
+                <!-- W68_SALES_ORDER_SIGNOFF_SAVE_BUTTON_20260929 -->
+        <button id="save-signoff-btn"
+                onclick="saveSalesOrderSignoff(false)"
+                style="padding:8px 16px;background:#15803d;border:none;border-radius:8px;font-size:11px;font-weight:bold;color:#fff;cursor:pointer;">
+            Save Prepared/Packed/Checked
+        </button>
+
+        <span id="signoff-save-status"
+              style="font-size:10px;font-weight:bold;color:#15803d;"></span>
+<button onclick="saveSalesOrderSignoff(true).catch(function(){}).finally(function(){ window.print(); })" style="padding:8px 20px;background:#800000;border:none;border-radius:8px;font-size:11px;font-weight:bold;color:#fff;cursor:pointer;">Print Receipt</button>
+        <button id="export-pdf-btn" onclick="saveSalesOrderSignoff(true).catch(function(){}).finally(function(){ exportPdf(); })" style="padding:8px 20px;background:#1e40af;border:none;border-radius:8px;font-size:11px;font-weight:bold;color:#fff;cursor:pointer;">Export PDF</button>
         <button onclick="window.close()" style="padding:8px 20px;background:#fff;border:2px solid #e2e8f0;border-radius:8px;font-size:11px;font-weight:bold;color:#475569;cursor:pointer;">Close</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
+        // W68_SALES_ORDER_SIGNOFF_EDITOR_20260929
+        const w68SignoffSaveUrl = @json(url('/w68/sales-order/print-signoff'));
+        const w68SignoffCsrf = @json(csrf_token());
+        const w68SignoffSalesNumber = @json($salesNumber);
+
+        function w68SignoffValue(field) {
+            const el = document.querySelector(
+                '.signoff-editable[data-field="' + field + '"]'
+            );
+
+            return el ? el.textContent.trim() : '';
+        }
+
+        async function saveSalesOrderSignoff(silent = false) {
+            const status = document.getElementById('signoff-save-status');
+
+            if (!silent && status) {
+                status.textContent = 'Saving...';
+            }
+
+            try {
+                const response = await fetch(w68SignoffSaveUrl, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': w68SignoffCsrf,
+                    },
+                    body: JSON.stringify({
+                        sales_number: w68SignoffSalesNumber,
+                        prepared_by: w68SignoffValue('prepared_by'),
+                        packed_by: w68SignoffValue('packed_by'),
+                        checked_by: w68SignoffValue('checked_by'),
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(
+                        data.message || 'Unable to save signoff.'
+                    );
+                }
+
+                if (status) {
+                    status.style.color = '#15803d';
+                    status.textContent = 'Saved';
+                }
+
+                return true;
+            }
+            catch (error) {
+                if (status) {
+                    status.style.color = '#b91c1c';
+                    status.textContent = error.message || 'Save failed';
+                }
+
+                if (!silent) {
+                    alert(error.message || 'Unable to save signoff.');
+                }
+
+                throw error;
+            }
+        }
+
+        document.querySelectorAll('.signoff-editable').forEach(function (el) {
+            el.addEventListener('blur', function () {
+                saveSalesOrderSignoff(true).catch(function () {});
+            });
+        });
         function getMargins() {
             return {
                 top: parseFloat(document.getElementById('margin-top').value) || 0,
@@ -568,7 +727,7 @@
         document.querySelectorAll('#margin-top,#margin-bottom,#margin-left,#margin-right').forEach(el => {
             el.addEventListener('input', updatePageMargins);
         });
-        window.onload = function() { updatePageMargins(); setTimeout(() => { window.print(); }, 300); };
+        window.onload = function() { updatePageMargins(); };
 
         function exportPdf() {
             const btn = document.getElementById('export-pdf-btn');
