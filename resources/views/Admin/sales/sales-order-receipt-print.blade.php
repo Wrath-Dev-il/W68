@@ -71,7 +71,7 @@
         }
 
         .sales-order-topline .invoice-heading .invoice-value {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700 !important;
             color: #d00000 !important;
         }
@@ -217,7 +217,14 @@
             width: 35%;
             text-align: right;
         }
-    </style>
+    
+        /* W68_SALES_ORDER_TOTALS_UNDER_UNIT_PRICE_20260929 */
+        .sales-order-footer .signoff-cell,
+        .sales-order-footer .financial-label,
+        .sales-order-footer .financial-value {
+            width: auto !important;
+        }
+</style>
 </head>
 <body>
     @include('partials.global.w68-loader')
@@ -270,8 +277,6 @@
                         <span class="label">DATE:</span>
                         <span class="header-value">{{ $displayPrintDate }}</span><br>
 
-                        <span class="label">TERMS:</span>
-                        <span class="header-value">{{ $terms ?? '' }}</span><br>
 
                         <span class="label">TIN:</span>
                         <span class="header-value">{{ $customerTin }}</span><br>
@@ -346,27 +351,41 @@
         </table>
         @endif
 
-        <table class="sales-order-footer">
+                <table class="sales-order-footer">
+            <colgroup>
+                <col style="width:7%">
+                <col style="width:9%">
+                <col style="width:18%">
+                <col style="width:34%">
+                <col style="width:12%">
+                <col style="width:8%">
+                <col style="width:12%">
+            </colgroup>
+
             <tr>
-                <td class="signoff-cell">PREPARED BY:</td>
+                <td colspan="4" class="signoff-cell">PREPARED BY:</td>
                 <td class="financial-label">INVOICE AMOUNT:</td>
+                <td></td>
                 <td class="financial-value">{{ number_format($netAfterAddl, 2) }}</td>
             </tr>
 
             <tr>
-                <td class="signoff-cell">PACKED BY:</td>
+                <td colspan="4" class="signoff-cell">PACKED BY:</td>
                 <td class="financial-label">NET AMOUNT:</td>
+                <td></td>
                 <td class="financial-value">{{ number_format($grandTotal, 2) }}</td>
             </tr>
 
             <tr>
-                <td class="signoff-cell">CHECKED BY:</td>
+                <td colspan="4" class="signoff-cell">CHECKED BY:</td>
+                <td></td>
                 <td></td>
                 <td></td>
             </tr>
 
             <tr>
-                <td class="signoff-cell">RECEIVED BY:</td>
+                <td colspan="4" class="signoff-cell">RECEIVED BY:</td>
+                <td></td>
                 <td></td>
                 <td></td>
             </tr>
