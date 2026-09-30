@@ -946,12 +946,47 @@
             padding-right: 0 !important;
             font-variant-numeric: tabular-nums;
         }
+
+        /* W68_SALES_ORDER_ALL_PREVIEW_EDITABLE_20260930 */
+
+        /*
+         * Entire Sales Order document is editable in browser preview.
+         * Changes here affect the current print/PDF DOM.
+         * Existing Prepared/Packed/Checked persistence remains intact.
+         */
+        .sales-order-editable-preview {
+            cursor: text;
+            caret-color: #000;
+        }
+
+        .sales-order-editable-preview:focus {
+            outline: none !important;
+        }
+
+        .sales-order-editable-preview *:focus {
+            outline: none !important;
+        }
+
+        @media screen {
+            .sales-order-editable-preview [contenteditable="true"]:focus,
+            .sales-order-editable-preview:focus {
+                outline: none !important;
+            }
+        }
+
+        @media print {
+            .sales-order-editable-preview,
+            .sales-order-editable-preview * {
+                outline: none !important;
+                caret-color: transparent !important;
+            }
+        }
 </style>
 </head>
 <body>
     @include('partials.global.w68-loader')
 
-    <div class="receipt">
+    <div class="receipt sales-order-editable-preview" contenteditable="true" spellcheck="false">
         @php
             $rawPrintDate = trim((string) ($date ?? ''));
             $displayPrintDate = $rawPrintDate;
