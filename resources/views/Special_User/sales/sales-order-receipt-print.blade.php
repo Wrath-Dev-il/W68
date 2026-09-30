@@ -742,6 +742,121 @@
             text-align: right !important;
             padding-right: 4px !important;
         }
+
+        /* W68_SALES_ORDER_NOLESS_REFERENCE_AMOUNT_GRID_20260930 */
+
+        /*
+         * NO-LESS layout only.
+         *
+         * PRINT SALES.docx uses a narrow final amount area.
+         * Keep WITH-LESS at the existing 7 / 9 / 18 / 34 / 12 / 8 / 12.
+         *
+         * NO-LESS:
+         * QTY          8.333333
+         * UNIT        10.333333
+         * PRODUCT     19.333333
+         * ITEM        35.333333
+         * UNIT PRICE  17.500000
+         * TOTAL        9.166668
+         */
+
+        .items-table.no-discount .qty-col {
+            width: 8.333333% !important;
+        }
+
+        .items-table.no-discount .unit-col {
+            width: 10.333333% !important;
+        }
+
+        .items-table.no-discount .code-col {
+            width: 19.333333% !important;
+        }
+
+        .items-table.no-discount .desc-col {
+            width: 35.333333% !important;
+        }
+
+        .items-table.no-discount .price-col {
+            width: 17.5% !important;
+        }
+
+        .items-table.no-discount .total-col {
+            width: 9.166668% !important;
+        }
+
+        /*
+         * TOTAL values must be centered inside the actual TOTAL column.
+         * This restores the original requested body-value alignment.
+         */
+        .items-table.no-discount thead th.total-col,
+        .items-table.no-discount tbody td.total-col {
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /*
+         * Force the no-LESS footer colgroup to use the SAME geometry.
+         * This overrides the old equal-distribution widths.
+         */
+        .sales-order-footer.no-discount col:nth-child(1) {
+            width: 8.333333% !important;
+        }
+
+        .sales-order-footer.no-discount col:nth-child(2) {
+            width: 10.333333% !important;
+        }
+
+        .sales-order-footer.no-discount col:nth-child(3) {
+            width: 19.333333% !important;
+        }
+
+        .sales-order-footer.no-discount col:nth-child(4) {
+            width: 35.333333% !important;
+        }
+
+        .sales-order-footer.no-discount col:nth-child(5) {
+            width: 17.5% !important;
+        }
+
+        .sales-order-footer.no-discount col:nth-child(6) {
+            width: 9.166668% !important;
+        }
+
+        .sales-order-footer.no-discount .financial-label {
+            width: auto !important;
+            text-align: left !important;
+            white-space: nowrap !important;
+        }
+
+        .sales-order-footer.no-discount .financial-value {
+            width: auto !important;
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /*
+         * TOTAL (QTY) amount uses exactly the same final amount column.
+         */
+        .sales-order-total-summary {
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
+        .sales-order-total-summary .lb {
+            width: 90.833332% !important;
+        }
+
+        .sales-order-total-summary .vl {
+            width: 9.166668% !important;
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
 </style>
 </head>
 <body>
@@ -947,7 +1062,7 @@
 
         <div class="sep-dash"></div>
 
-        <table class="summary">
+        <table class="summary sales-order-total-summary">
             <tr><td class="lb bd">TOTAL (QTY {{ $totalQty }}):</td><td class="vl bd">{{ number_format($grossTotal, 2) }}</td></tr>
         </table>
 
