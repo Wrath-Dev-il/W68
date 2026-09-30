@@ -18,6 +18,8 @@ class SalesOrder extends Model
         'invoice_numbers',
         'waybill_no',
         'waybill_date',
+        'terms',
+        'order_type',
         'total_amount',
         'status',
         'remarks',

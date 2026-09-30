@@ -473,6 +473,41 @@
                                 <div class="mt-4">
                                     <p class="text-[9px] text-slate-400 font-bold mb-2 ml-1 uppercase">Sales Order Date <span class="text-red-500">*</span></p>
                                     <input type="date" id="proceed-order-date" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-maroon/20 outline-none transition-all" required>
+                                    <!-- W68_SALES_ORDER_TERMS_ORDER_TYPE_UI_20260930 -->
+                                    <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Terms (Days)</p>
+                                            <input
+                                                type="number"
+                                                id="proceed-terms"
+                                                min="0"
+                                                step="1"
+                                                inputmode="numeric"
+                                                class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-maroon/20 outline-none transition-all"
+                                                placeholder="e.g. 60">
+                                        </div>
+
+                                        <div>
+                                            <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Due Date</p>
+                                            <input
+                                                type="text"
+                                                id="proceed-due-date"
+                                                class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-600"
+                                                placeholder="Calculated automatically"
+                                                readonly>
+                                        </div>
+
+                                        <div>
+                                            <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Order Type</p>
+                                            <select
+                                                id="proceed-order-type"
+                                                class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-maroon/20 outline-none transition-all">
+                                                <option value="NONE" selected>NONE</option>
+                                                <option value="COD">COD</option>
+                                                <option value="COD 30 DAYS">COD 30 DAYS</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <p class="text-[9px] text-slate-400 mt-2 ml-1">This is the date saved on the Sales Order and used by both Sales Order and Sales Invoice print.</p>
                                 </div>
                             <p class="text-[9px] text-slate-400 mt-2 ml-1">Each invoice will create a separate sales order record.</p>
@@ -1049,6 +1084,41 @@
                     <div>
                         <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Sales Order Date <span class="text-red-500">*</span></p>
                         <input type="date" id="edit-so-order-date" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-maroon/20 outline-none transition-all" required>
+                        <!-- W68_SALES_ORDER_TERMS_ORDER_TYPE_EDIT_UI_20260930 -->
+                        <div class="grid grid-cols-1 gap-3 mt-3">
+                            <div>
+                                <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Terms (Days)</p>
+                                <input
+                                    type="number"
+                                    id="edit-so-terms"
+                                    min="0"
+                                    step="1"
+                                    inputmode="numeric"
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-maroon/20 outline-none transition-all"
+                                    placeholder="e.g. 60">
+                            </div>
+
+                            <div>
+                                <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Due Date</p>
+                                <input
+                                    type="text"
+                                    id="edit-so-due-date"
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-600"
+                                    placeholder="Calculated automatically"
+                                    readonly>
+                            </div>
+
+                            <div>
+                                <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Order Type</p>
+                                <select
+                                    id="edit-so-order-type"
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-maroon/20 outline-none transition-all">
+                                    <option value="NONE">NONE</option>
+                                    <option value="COD">COD</option>
+                                    <option value="COD 30 DAYS">COD 30 DAYS</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <p class="text-[9px] text-slate-400 font-bold mb-1 uppercase">Waybill No</p>

@@ -2799,7 +2799,7 @@ Route::prefix('special')->name('special.')->group(function () {
                     $printSalesOrder = DB::connection('sales')
                         ->table('sales_orders')
                         ->where('id', $printSalesOrderId)
-                        ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date']);
+                        ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date', 'terms', 'order_type']);
             }
 
             // Defensive fallback for older browser state: resolve the exact invoice.
@@ -2815,7 +2815,7 @@ Route::prefix('special')->name('special.')->group(function () {
                     }
                     $printSalesOrder = $printOrderQuery
                         ->orderByDesc('id')
-                        ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date']);
+                        ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date', 'terms', 'order_type']);
                 }
             }
 
@@ -2891,6 +2891,30 @@ Route::prefix('special')->name('special.')->group(function () {
                     $salesMan = $note->salesman ?? '';
                 }
             }
+
+            // W68_SALES_ORDER_PER_INVOICE_TERMS_ORDER_TYPE_PRINT_20260930
+            $terms = ($printSalesOrder && $printSalesOrder->terms !== null)
+                ? (string) $printSalesOrder->terms
+                : '';
+
+            $orderType = strtoupper(trim((string) ($printSalesOrder->order_type ?? 'NONE')));
+            if (!in_array($orderType, ['NONE', 'COD', 'COD 30 DAYS'], true)) {
+                $orderType = 'NONE';
+            }
+
+            $printRushParts = [];
+            $requestRushText = trim((string) ($req['rush_text'] ?? ''));
+
+            if ($requestRushText !== '') {
+                $printRushParts[] = $requestRushText;
+            }
+
+            if ($orderType !== 'NONE') {
+                $printRushParts[] = $orderType;
+            }
+
+            $printRushText = implode(' | ', $printRushParts);
+
             $w68ReceiptPrintType = strtolower(trim((string) ($req['print_type'] ?? $req['printType'] ?? 'order')));
 
             // W68_SALES_ORDER_ONLY_PRINT_ROUTE_20260929
@@ -2911,7 +2935,7 @@ Route::prefix('special')->name('special.')->group(function () {
                 'items' => $items,
                 'totalQty' => array_sum(array_column($items, 'print_quantity_total')),
                 'grossTotal' => (float)($req['gross_total'] ?? 0),
-                'rushText' => $req['rush_text'] ?? '',
+                'rushText' => $printRushText,
                 'totalAddlDiscount' => (float)($req['total_addl_discount'] ?? 0),
                 'addlDiscountRate' => (float)($req['addl_discount_rate'] ?? 0),
                 'netAfterAddl' => (float)($req['net_total'] ?? 0),
@@ -17028,7 +17052,32 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
 
         $invoiceNumber = trim((string) $request->input('invoice_number')); // Single invoice per proceed
         $items = $request->input('items', []); // Only checked items from Step 2
-        $orderDate = trim((string) $request->input('order_date', now()->toDateString()));
+
+        // W68_SALES_ORDER_TERMS_ORDER_TYPE_20260930
+        $orderDate = trim((string) $request->input('order_date', ''));
+        if ($orderDate === '') {
+            $orderDate = now()->toDateString();
+        }
+
+        $termsRaw = trim((string) $request->input('terms', ''));
+        if ($termsRaw !== '' && !preg_match('/^\d+$/', $termsRaw)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terms must be a whole number of days.',
+            ], 422);
+        }
+        $terms = $termsRaw === '' ? null : (int) $termsRaw;
+
+        $orderType = strtoupper(trim((string) $request->input('order_type', 'NONE')));
+        if ($orderType === '') {
+            $orderType = 'NONE';
+        }
+        if (!in_array($orderType, ['NONE', 'COD', 'COD 30 DAYS'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid Order Type.',
+            ], 422);
+        }
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $orderDate)) {
             return response()->json(['success' => false, 'message' => 'Sales Order date must be a valid date.'], 422);
@@ -17102,6 +17151,8 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
                 'customer_id' => $note->customer_id,
                 'customer_name' => $note->customer_name,
                 'invoice_numbers' => trim($invoiceNumber), // Store as single invoice (not comma-separated)
+                'terms' => $terms,
+                'order_type' => $orderType,
                 'total_amount' => 0, // Will be calculated from items
                 'status' => 'Confirmed',
                 // created_at is the Sales Order issue date used throughout History/Edit/Print.
@@ -17271,7 +17322,9 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
                 'note_status' => $note->status,
                 'sales_order_id' => $salesOrderId,
                 'invoice_number' => $invoiceNumber,
-                'order_date' => $salesOrderCreatedAt->format('Y-m-d')
+                'order_date' => $salesOrderCreatedAt->format('Y-m-d'),
+                'terms' => $terms,
+                'order_type' => $orderType
             ]);
 
         } catch (\Exception $dbEx) {
@@ -17321,6 +17374,8 @@ Route::get('/admin/sales/sales-order/edit-detail/{salesOrderId}', function ($sal
                 'note_gross_total' => $note ? $note->gross_total : 0,
                 'note_net_total' => $note ? $note->net_total : 0,
                 'order_date' => $so->created_at ? date('Y-m-d', strtotime($so->created_at)) : '',
+                'terms' => $so->terms,
+                'order_type' => $so->order_type ?? 'NONE',
                 'items' => $so->items->map(function ($item) use ($so) {
                     $product = \App\Models\Product::on('masterlist')->find($item->product_id);
 
@@ -17384,11 +17439,24 @@ Route::post('/admin/sales/sales-order/update/{salesOrderId}', function (Request 
         $note = \App\Models\SalesNote::on('sales')->find($so->sales_note_id);
         if (!$note) return response()->json(['success' => false, 'message' => 'Sales note not found.'], 404);
 
+        if (trim((string) $request->input('order_date', '')) === '') {
+            $request->merge([
+                'order_date' => now()->toDateString(),
+            ]);
+        }
+
+        $normalizedOrderType = strtoupper(trim((string) $request->input('order_type', 'NONE')));
+        $request->merge([
+            'order_type' => $normalizedOrderType !== '' ? $normalizedOrderType : 'NONE',
+        ]);
+
         $validator = Validator::make($request->all(), [
             'invoice_number' => 'nullable|string',
             'invoices' => 'nullable|array',
             'invoices.*' => 'nullable|string',
             'order_date' => 'required|date_format:Y-m-d',
+            'terms' => 'nullable|integer|min:0',
+            'order_type' => 'nullable|in:NONE,COD,COD 30 DAYS',
             'waybill_no' => 'nullable|string',
             'waybill_date' => 'nullable|date',
             'remarks' => 'nullable|string',
@@ -17534,6 +17602,12 @@ Route::post('/admin/sales/sales-order/update/{salesOrderId}', function (Request 
             $so->total_amount = $requestTotalAmount;
             $so->remarks = trim((string) ($data['remarks'] ?? '')) !== '' ? $data['remarks'] : $so->remarks;
             $so->created_at = $salesOrderCreatedAt;
+
+            if (array_key_exists('terms', $data)) {
+                $so->terms = $data['terms'] === null ? null : (int) $data['terms'];
+            }
+
+            $so->order_type = $data['order_type'] ?? ($so->order_type ?: 'NONE');
             $so->save();
 
             // The saved invoice snapshot is authoritative for product_ledgers.
@@ -17659,7 +17733,7 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
             $printSalesOrder = DB::connection('sales')
                 ->table('sales_orders')
                 ->where('id', $printSalesOrderId)
-                ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date']);
+                ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date', 'terms', 'order_type']);
         }
 
         // Defensive fallback for older browser state: resolve the exact invoice.
@@ -17675,7 +17749,7 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
                 }
                 $printSalesOrder = $printOrderQuery
                     ->orderByDesc('id')
-                    ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date']);
+                    ->first(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at', 'waybill_date', 'terms', 'order_type']);
             }
         }
 
@@ -17752,6 +17826,30 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
                 $salesMan = $note->salesman ?? '';
             }
         }
+
+        // W68_SALES_ORDER_PER_INVOICE_TERMS_ORDER_TYPE_PRINT_20260930
+        $terms = ($printSalesOrder && $printSalesOrder->terms !== null)
+            ? (string) $printSalesOrder->terms
+            : '';
+
+        $orderType = strtoupper(trim((string) ($printSalesOrder->order_type ?? 'NONE')));
+        if (!in_array($orderType, ['NONE', 'COD', 'COD 30 DAYS'], true)) {
+            $orderType = 'NONE';
+        }
+
+        $printRushParts = [];
+        $requestRushText = trim((string) ($req['rush_text'] ?? ''));
+
+        if ($requestRushText !== '') {
+            $printRushParts[] = $requestRushText;
+        }
+
+        if ($orderType !== 'NONE') {
+            $printRushParts[] = $orderType;
+        }
+
+        $printRushText = implode(' | ', $printRushParts);
+
         $w68ReceiptPrintType = strtolower(trim((string) ($req['print_type'] ?? $req['printType'] ?? 'order')));
 
         // W68_SALES_ORDER_ONLY_PRINT_ROUTE_20260929
@@ -17772,7 +17870,7 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
             'items' => $items,
             'totalQty' => array_sum(array_column($items, 'print_quantity_total')),
             'grossTotal' => (float)($req['gross_total'] ?? 0),
-            'rushText' => $req['rush_text'] ?? '',
+            'rushText' => $printRushText,
             'totalAddlDiscount' => (float)($req['total_addl_discount'] ?? 0),
             'addlDiscountRate' => (float)($req['addl_discount_rate'] ?? 0),
             'netAfterAddl' => (float)($req['net_total'] ?? 0),
