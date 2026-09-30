@@ -846,12 +846,101 @@
             table-layout: fixed !important;
         }
 
-        .sales-order-total-summary .lb {
+        .sales-order-total-summary.no-discount .lb {
             width: 90.833332% !important;
         }
 
-        .sales-order-total-summary .vl {
+        .sales-order-total-summary.no-discount .vl {
             width: 9.166668% !important;
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* W68_SALES_ORDER_WITH_LESS_TOTAL_ALIGNMENT_20260930 */
+
+        /*
+         * WITH LESS uses the original 7-column geometry:
+         *
+         * QTY          7%
+         * UNIT         9%
+         * PRODUCT     18%
+         * ITEM        34%
+         * UNIT PRICE  12%
+         * LESS         8%
+         * TOTAL       12%
+         *
+         * Body TOTAL, TOTAL(QTY), INVOICE AMOUNT and NET AMOUNT
+         * must all share the same centered 12% final column.
+         */
+
+        .items-table:not(.no-discount) .total-col {
+            width: 12% !important;
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sales-order-total-summary.with-discount {
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
+        .sales-order-total-summary.with-discount .lb {
+            width: 88% !important;
+        }
+
+        .sales-order-total-summary.with-discount .vl {
+            width: 12% !important;
+            text-align: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sales-order-footer.with-discount {
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(1) {
+            width: 7% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(2) {
+            width: 9% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(3) {
+            width: 18% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(4) {
+            width: 34% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(5) {
+            width: 12% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(6) {
+            width: 8% !important;
+        }
+
+        .sales-order-footer.with-discount col:nth-child(7) {
+            width: 12% !important;
+        }
+
+        .sales-order-footer.with-discount .financial-label {
+            width: auto !important;
+            text-align: left !important;
+            white-space: nowrap !important;
+        }
+
+        .sales-order-footer.with-discount .financial-value {
+            width: auto !important;
             text-align: center !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
@@ -1062,7 +1151,7 @@
 
         <div class="sep-dash"></div>
 
-        <table class="summary sales-order-total-summary">
+        <table class="summary sales-order-total-summary {{ $showDiscountColumn ? 'with-discount' : 'no-discount' }}">
             <tr><td class="lb bd">TOTAL (QTY {{ $totalQty }}):</td><td class="vl bd">{{ number_format($grossTotal, 2) }}</td></tr>
         </table>
 
