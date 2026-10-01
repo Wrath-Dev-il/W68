@@ -2037,7 +2037,7 @@ function updateSoaAutoExample() {
     const value = Number(rawValue || 0);
 
     if (!enabled || !value || !unit) {
-        el.textContent = 'Enable SOA(AUTO) and enter a lead time. The same setting will apply to every linked customer account.';
+        el.textContent = 'Enable SOA(AUTO) and enter a lead time. The same setting will apply to every linked customer account, while each finalized invoice uses its own Sales Order Terms.';
         return;
     }
 
@@ -2045,12 +2045,12 @@ function updateSoaAutoExample() {
         const sampleTerms = 130;
         const sendAge = sampleTerms - value;
         el.textContent = sendAge >= 0
-            ? `Example: a customer with ${sampleTerms}-day Terms and ${value} day(s) before due receives the SOA at invoice age ${sendAge} day(s).`
-            : `The lead time is longer than ${sampleTerms} days, so a ${sampleTerms}-day customer becomes eligible as soon as the finalized unpaid invoice is seen.`;
+            ? `Example: an invoice with ${sampleTerms}-day Terms and ${value} day(s) before due receives its own SOA at invoice age ${sendAge} day(s).`
+            : `The lead time is longer than ${sampleTerms} days, so an invoice with ${sampleTerms}-day Terms becomes eligible as soon as the finalized unpaid invoice is seen.`;
         return;
     }
 
-    el.textContent = `The same ${value} ${unit} lead time is calculated backward from each linked customer's own due date.`;
+    el.textContent = `The same ${value} ${unit} lead time is calculated backward from each finalized invoice's own due date.`;
 }
 
 window.openSoaAutoModal = async function() {
