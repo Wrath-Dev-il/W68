@@ -248,17 +248,18 @@ class CustomerAutoSoaService
         $customer = DB::connection('masterlist')
             ->table('customers')
             ->where('id', $customerId)
-            ->first(['id', 'name', 'address', 'terms']);
+            ->first(['id', 'name', 'address']);
 
         if (!$customer) {
             return ['sent' => false, 'reason' => 'customer_missing'];
         }
 
-        $termDays = $this->parseTermsDays((string) ($customer->terms ?? ''));
-        if (!$termDays) {
-            return ['sent' => false, 'reason' => 'missing_terms'];
-        }
-
+        /*
+         * W68_SOA_AUTO_PER_INVOICE_TERMS_20261001
+         * A Pricelist account must be permanently linked to this customer.
+         * The reminder schedule itself is calculated from each Sales Order's
+         * own terms value, never from Customer Master terms.
+         */
         $account = $this->linkedPortalAccount($customerId);
         if (!$account || empty($account['email_valid'])) {
             return ['sent' => false, 'reason' => 'invalid_linked_email'];
@@ -283,9 +284,17 @@ class CustomerAutoSoaService
             ->flip();
 
         $eligible = [];
+        $missingInvoiceTerms = 0;
+
         foreach ($statement['transactions'] as $transaction) {
             $invoiceKey = (string) ($transaction['invoice_key'] ?? '');
             if ($invoiceKey === '' || $alreadySent->has($invoiceKey)) {
+                continue;
+            }
+
+            $termDays = (int) ($transaction['term_days'] ?? 0);
+            if ($termDays <= 0) {
+                $missingInvoiceTerms++;
                 continue;
             }
 
@@ -301,65 +310,86 @@ class CustomerAutoSoaService
         }
 
         if ($eligible === []) {
-            return ['sent' => false, 'reason' => 'not_due'];
+            return [
+                'sent' => false,
+                'reason' => $missingInvoiceTerms > 0 ? 'missing_invoice_terms_or_not_due' : 'not_due',
+            ];
         }
-
-        $pages = $this->buildPrintPages($statement['customer'], $statement['transactions']);
-        $dateRangeLabel = 'As Of ' . $now->format('d-M-y');
-        $securityId = Str::uuid()->toString();
-
-        $pdfBytes = Pdf::loadView('Admin.Reports.prints.sales-report-print', [
-            'pages' => $pages,
-            'dateRangeLabel' => $dateRangeLabel,
-            'timestamp' => $now->format('m-d-Y h:i A'),
-            'printedBy' => 'SOA AUTO',
-            'securityId' => $securityId,
-        ])
-            ->setPaper('a4', 'portrait')
-            ->setOption('defaultMediaType', 'print')
-            ->output();
 
         $recipient = (string) $account['email'];
         $customerName = (string) $statement['customer']['name'];
-        $totalBalance = (float) $statement['total_balance'];
-        $subject = 'W68 Statement of Account - Payment Reminder - ' . $customerName;
-        $fileName = 'W68-SOA-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $customerName) . '-' . $now->format('Ymd') . '.pdf';
+        $sentCount = 0;
+        $sentBalance = 0.0;
 
-        Mail::send('emails.customer-soa-reminder', [
-            'customerName' => $customerName,
-            'terms' => (string) ($statement['customer']['terms'] ?? ''),
-            'totalBalance' => $totalBalance,
-            'invoiceCount' => count($statement['transactions']),
-            'eligibleInvoiceCount' => count($eligible),
-            'generatedAt' => $now,
-        ], function ($message) use ($recipient, $subject, $pdfBytes, $fileName) {
-            $message->to($recipient)
-                ->subject($subject)
-                ->attachData($pdfBytes, $fileName, ['mime' => 'application/pdf']);
-        });
+        /*
+         * Send one SOA email/PDF per eligible invoice. Different invoices for
+         * the same customer may have different Terms, due dates and send dates.
+         */
+        foreach ($eligible as $transaction) {
+            $invoiceNo = trim((string) ($transaction['invoice_no'] ?? ''));
+            $invoiceBalance = round((float) ($transaction['balance'] ?? 0), 2);
+            $invoiceTerms = trim((string) ($transaction['terms'] ?? ''));
+            $termDays = (int) ($transaction['term_days'] ?? 0);
+            $termsLabel = $invoiceTerms !== '' ? $invoiceTerms : ($termDays > 0 ? $termDays . ' Days' : '');
+            $dueAt = Carbon::parse((string) $transaction['due_at'], 'Asia/Manila');
 
-        $batchKey = (string) Str::uuid();
-        $system = DB::connection(self::SYSTEM_CONNECTION);
-        $system->transaction(function () use (
-            $eligible,
-            $customerId,
-            $account,
-            $batchKey,
-            $now,
-            $totalBalance,
-            $recipient
-        ) {
-            foreach ($eligible as $transaction) {
+            $pages = $this->buildPrintPages($statement['customer'], [$transaction]);
+            $dateRangeLabel = 'As Of ' . $now->format('d-M-y');
+            $securityId = Str::uuid()->toString();
+
+            $pdfBytes = Pdf::loadView('Admin.Reports.prints.sales-report-print', [
+                'pages' => $pages,
+                'dateRangeLabel' => $dateRangeLabel,
+                'timestamp' => $now->format('m-d-Y h:i A'),
+                'printedBy' => 'SOA AUTO',
+                'securityId' => $securityId,
+            ])
+                ->setPaper('a4', 'portrait')
+                ->setOption('defaultMediaType', 'print')
+                ->output();
+
+            $safeCustomer = preg_replace('/[^A-Za-z0-9_-]+/', '-', $customerName);
+            $safeInvoice = preg_replace('/[^A-Za-z0-9_-]+/', '-', $invoiceNo !== '' ? $invoiceNo : 'INVOICE');
+            $subject = 'W68 Statement of Account - Payment Reminder - ' . $customerName . ' - ' . ($invoiceNo !== '' ? $invoiceNo : 'Invoice');
+            $fileName = 'W68-SOA-' . $safeCustomer . '-' . $safeInvoice . '-' . $now->format('Ymd') . '.pdf';
+
+            Mail::send('emails.customer-soa-reminder', [
+                'customerName' => $customerName,
+                'invoiceNo' => $invoiceNo,
+                'terms' => $termsLabel,
+                'dueAt' => $dueAt,
+                'totalBalance' => $invoiceBalance,
+                'invoiceCount' => 1,
+                'eligibleInvoiceCount' => 1,
+                'generatedAt' => $now,
+            ], function ($message) use ($recipient, $subject, $pdfBytes, $fileName) {
+                $message->to($recipient)
+                    ->subject($subject)
+                    ->attachData($pdfBytes, $fileName, ['mime' => 'application/pdf']);
+            });
+
+            $batchKey = (string) Str::uuid();
+
+            DB::connection(self::SYSTEM_CONNECTION)->transaction(function () use (
+                $transaction,
+                $customerId,
+                $account,
+                $batchKey,
+                $now,
+                $invoiceBalance,
+                $invoiceNo,
+                $recipient
+            ) {
                 DB::connection(self::SYSTEM_CONNECTION)->table(self::LOG_TABLE)->insertOrIgnore([
                     'customer_id' => $customerId,
                     'login_id' => (int) $account['login_id'],
                     'email' => $recipient,
                     'invoice_key' => (string) $transaction['invoice_key'],
-                    'invoice_no' => (string) $transaction['invoice_no'],
+                    'invoice_no' => $invoiceNo,
                     'invoice_date' => substr((string) $transaction['invoice_at'], 0, 19),
                     'due_at' => (string) $transaction['due_at'],
                     'send_at' => (string) $transaction['send_at'],
-                    'balance' => (float) $transaction['balance'],
+                    'balance' => $invoiceBalance,
                     'batch_key' => $batchKey,
                     'status' => 'sent',
                     'error_message' => null,
@@ -367,30 +397,33 @@ class CustomerAutoSoaService
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);
-            }
 
-            DB::connection(self::SYSTEM_CONNECTION)->table(self::NOTIFICATION_TABLE)->insertOrIgnore([
-                'login_id' => (int) $account['login_id'],
-                'customer_id' => $customerId,
-                'event_type' => 'SOA_AUTO_SENT',
-                'event_key' => 'SOA_AUTO_SENT:' . $batchKey,
-                'title' => 'Statement of Account Sent',
-                'message' => 'Your W68 Statement of Account was sent to ' . $recipient . ' as a payment reminder. Outstanding balance: PHP ' . number_format($totalBalance, 2) . '.',
-                'event_at' => $now,
-                'is_read' => 0,
-                'read_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-        });
+                DB::connection(self::SYSTEM_CONNECTION)->table(self::NOTIFICATION_TABLE)->insertOrIgnore([
+                    'login_id' => (int) $account['login_id'],
+                    'customer_id' => $customerId,
+                    'event_type' => 'SOA_AUTO_SENT',
+                    'event_key' => 'SOA_AUTO_SENT:' . $batchKey,
+                    'title' => 'Statement of Account Sent',
+                    'message' => 'Your W68 Statement of Account for invoice ' . ($invoiceNo !== '' ? $invoiceNo : 'Invoice') . ' was sent to ' . $recipient . '. Outstanding balance: PHP ' . number_format($invoiceBalance, 2) . '.',
+                    'event_at' => $now,
+                    'is_read' => 0,
+                    'read_at' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            });
+
+            $sentCount++;
+            $sentBalance += $invoiceBalance;
+        }
 
         return [
-            'sent' => true,
+            'sent' => $sentCount > 0,
             'customer' => $customerName,
             'email' => $recipient,
-            'eligible_invoice_count' => count($eligible),
+            'eligible_invoice_count' => $sentCount,
             'statement_invoice_count' => count($statement['transactions']),
-            'total_balance' => $totalBalance,
+            'total_balance' => round($sentBalance, 2),
         ];
     }
 
@@ -432,6 +465,7 @@ class CustomerAutoSoaService
                 'so.order_number as po_no',
                 DB::raw("COALESCE(NULLIF(so.invoice_numbers, ''), so.order_number) as invoice_no"),
                 'so.total_amount as amount',
+                'so.terms as invoice_terms',
                 'sn.sales_number as sales_note_no',
                 'sn.net_total as sales_note_amount',
                 DB::raw("{$invoiceDateSql} as invoice_date"),
@@ -465,7 +499,7 @@ class CustomerAutoSoaService
                     ->where('order_number', 'LIKE', 'ONL-%')
                     ->whereIn('status', ['Confirmed', 'Closed'])
                     ->where('customer_id', $customerId)
-                    ->get(['id', 'order_number', 'invoice_numbers', 'created_at', 'updated_at']);
+                    ->get(['id', 'order_number', 'invoice_numbers', 'terms', 'created_at', 'updated_at']);
 
                 foreach ($orders as $order) {
                     if (!preg_match('/^ONL-(\d+)-/', (string) $order->order_number, $match)) {
@@ -525,6 +559,7 @@ class CustomerAutoSoaService
                     'po_no' => $invoiceNo,
                     'invoice_no' => $invoiceNo,
                     'amount' => $amount,
+                    'invoice_terms' => $order->terms ?? null,
                     'sales_note_no' => null,
                     'sales_note_amount' => null,
                     'invoice_date' => $invoiceDate,
@@ -673,6 +708,8 @@ class CustomerAutoSoaService
 
             $credit = round(max($amount - $balance, 0.0), 2);
             $invoiceAt = Carbon::parse($doc->invoice_date, 'Asia/Manila');
+            $invoiceTerms = trim((string) ($doc->invoice_terms ?? ''));
+            $termDays = $this->parseTermsDays($invoiceTerms);
             $invoiceKey = $sourceType === 'online_report'
                 ? $sourceType . ':' . $sourceId . ':' . $normalize($invoiceNo)
                 : $sourceType . ':' . $sourceId;
@@ -682,6 +719,8 @@ class CustomerAutoSoaService
                 'invoice_at' => $invoiceAt->toDateTimeString(),
                 'invoice_key' => $invoiceKey,
                 'invoice_no' => $invoiceNo,
+                'terms' => $invoiceTerms,
+                'term_days' => $termDays,
                 'debits' => $amount,
                 'credits' => $credit,
                 'balance' => $balance,
@@ -754,18 +793,18 @@ class CustomerAutoSoaService
     private function globalExampleText(?int $leadValue, ?string $leadUnit): string
     {
         if (!$leadValue || !in_array((string) $leadUnit, ['minutes', 'days', 'months'], true)) {
-            return 'Enable SOA(AUTO) and enter a lead time. Example: 14 Days applies to every linked customer using that customer\'s own Terms.';
+            return 'Enable SOA(AUTO) and enter a lead time. Every finalized invoice uses its own Sales Order Terms.';
         }
 
         if ($leadUnit === 'days') {
             $sampleTerms = 130;
             $sendDay = $sampleTerms - $leadValue;
             return $sendDay >= 0
-                ? "Example: a customer with 130-day Terms and {$leadValue} day(s) before due receives the SOA at invoice age {$sendDay} day(s)."
-                : "Example: the lead time is longer than 130 days, so a 130-day customer becomes eligible as soon as the finalized unpaid invoice is seen.";
+                ? "Example: an invoice with 130-day Terms and {$leadValue} day(s) before due receives its own SOA at invoice age {$sendDay} day(s)."
+                : "Example: the lead time is longer than 130 days, so an invoice with 130-day Terms becomes eligible as soon as the finalized unpaid invoice is seen.";
         }
 
-        return "The same {$leadValue} {$leadUnit} lead time applies to every linked customer, calculated backward from each customer's own due date.";
+        return "The same {$leadValue} {$leadUnit} lead time is calculated backward from each finalized invoice's own due date.";
     }
 
     private function linkedCustomerStats(): array
@@ -794,27 +833,35 @@ class CustomerAutoSoaService
         }
 
         $customerIds = array_keys($byCustomer);
-        $termsByCustomer = empty($customerIds)
-            ? collect()
-            : DB::connection('masterlist')->table('customers')
-                ->whereIn('id', $customerIds)
-                ->pluck('terms', 'id');
 
         $validEmail = 0;
-        $numericTerms = 0;
-        foreach ($byCustomer as $customerId => $email) {
+        foreach ($byCustomer as $email) {
             if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
                 $validEmail++;
             }
-            if ($this->parseTermsDays((string) ($termsByCustomer[$customerId] ?? ''))) {
-                $numericTerms++;
-            }
+        }
+
+        $invoiceTermsCount = 0;
+        if ($customerIds !== []) {
+            $invoiceTermsCount = DB::connection('sales')
+                ->table('sales_orders as so')
+                ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
+                ->whereIn('so.customer_id', $customerIds)
+                ->where(function ($query) {
+                    $query->whereIn('so.status', ['Closed', 'Confirmed'])
+                        ->orWhere('sn.status', 'Closed');
+                })
+                ->whereNotNull('so.terms')
+                ->where('so.terms', '>', 0)
+                ->count();
         }
 
         return [
             'linked_customer_count' => count($byCustomer),
             'valid_email_count' => $validEmail,
-            'numeric_terms_count' => $numericTerms,
+            // Kept for API compatibility; this is now the number of finalized
+            // invoices with usable per-invoice Sales Order Terms.
+            'numeric_terms_count' => (int) $invoiceTermsCount,
         ];
     }
 
