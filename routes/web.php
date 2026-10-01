@@ -22415,7 +22415,10 @@ Route::get('/admin/accounting/payable-cheque-voucher/supplier/{supplierId}', fun
                     'date' => $order->date,
                 ];
             })
-            ->filter(fn ($invoice) => $invoice['amountDue'] > 0 || $invoice['unusedReturnAmount'] > 0 || $invoice['unusedReturnCount'] > 0)
+            // W68_PCV_ACTIVE_ONLY_AMOUNT_DUE_20261001
+            // Fully settled invoices must not remain in Proceed Voucher merely
+            // because a Purchase Return has not yet been linked to a PCV row.
+            ->filter(fn ($invoice) => (float) $invoice['amountDue'] > 0.005)
             ->values()
             ->keyBy('sourceId');
 
