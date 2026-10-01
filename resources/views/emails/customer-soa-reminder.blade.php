@@ -21,8 +21,16 @@
 
             <table style="width:100%;border-collapse:collapse;margin:18px 0;">
                 <tr>
-                    <td style="padding:10px;border:1px solid #e5e7eb;background:#f8fafc;font-weight:700;">Customer Terms</td>
+                    <td style="padding:10px;border:1px solid #e5e7eb;background:#f8fafc;font-weight:700;">Invoice</td>
+                    <td style="padding:10px;border:1px solid #e5e7eb;">{{ $invoiceNo ?: 'Not specified' }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px;border:1px solid #e5e7eb;background:#f8fafc;font-weight:700;">Invoice Terms</td>
                     <td style="padding:10px;border:1px solid #e5e7eb;">{{ $terms ?: 'Not specified' }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px;border:1px solid #e5e7eb;background:#f8fafc;font-weight:700;">Due Date</td>
+                    <td style="padding:10px;border:1px solid #e5e7eb;">{{ isset($dueAt) && $dueAt ? $dueAt->format('F d, Y') : 'Not specified' }}</td>
                 </tr>
                 <tr>
                     <td style="padding:10px;border:1px solid #e5e7eb;background:#f8fafc;font-weight:700;">Outstanding Balance</td>
