@@ -521,7 +521,10 @@ Artisan::command('payables:fix-legacy-return-only
         $returnsTotal = (float) ($allReturnTotals[$poId] ?? 0);
         $due = max($amount - $paid - $returnsTotal, 0);
 
-        if ($amount <= 0 || $due > 0.005) {
+        // Legacy records can have a zero/missing stored invoice amount.
+        // Proceed Voucher still treats them as active when an unused return exists,
+        // so the repair criterion is the same effective rule: no remaining due.
+        if ($due > 0.005) {
             continue;
         }
 
