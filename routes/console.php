@@ -430,6 +430,257 @@ Artisan::command('ledger:repair-sales-order-stock {--dry-run : Preview changes w
     return 0;
 })->purpose('Detect and repair missing or incorrect Product Ledger entries for Sales Order stock movements.');
 
+
+/* W68_FIX_LEGACY_RETURN_ONLY_PAYABLES_20261001 */
+Artisan::command('payables:fix-legacy-return-only
+    {--from=2015-01-01 : Earliest purchase invoice date}
+    {--to=2026-07-30 : Latest purchase invoice date, inclusive}
+    {--reference=BULK-OLD-PO-20260725 : Historical bulk PCV reference}
+    {--payment-date=2026-07-25 : Date assigned to legacy accounting rows}
+    {--dry-run : Preview only}', function () {
+    @set_time_limit(0);
+
+    $from = (string) $this->option('from');
+    $to = (string) $this->option('to');
+    $reference = (string) $this->option('reference');
+    $paymentDate = (string) $this->option('payment-date');
+    $dryRun = (bool) $this->option('dry-run');
+
+    $purchase = DB::connection('purchase');
+    $accounting = DB::connection('accounting');
+    $masterlist = DB::connection('masterlist');
+
+    $orders = $purchase->table('purchase_orders')
+        ->whereDate('date', '>=', $from)
+        ->whereDate('date', '<=', $to)
+        ->whereNotIn('status', ['Cancelled', 'Void'])
+        ->where('supplier_id', '>', 0)
+        ->get();
+
+    if ($orders->isEmpty()) {
+        $this->info('No purchase orders found in the requested date range.');
+        return 0;
+    }
+
+    $orderIds = $orders->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+
+    $itemTotals = $purchase->table('purchase_order_items')
+        ->whereIn('purchase_order_id', $orderIds)
+        ->select('purchase_order_id')
+        ->selectRaw('SUM(COALESCE(NULLIF(actual_subtotal, 0), subtotal, 0)) AS total')
+        ->groupBy('purchase_order_id')
+        ->pluck('total', 'purchase_order_id');
+
+    $paidTotals = $accounting->table('payable_cheque_voucher_invoices')
+        ->whereIn('purchase_order_id', $orderIds)
+        ->whereNotNull('purchase_order_id')
+        ->select('purchase_order_id')
+        ->selectRaw('SUM(COALESCE(amount_paid,0) + COALESCE(amount_due * discount_1 / 100,0) + COALESCE(amount_due * discount_2 / 100,0)) AS total')
+        ->groupBy('purchase_order_id')
+        ->pluck('total', 'purchase_order_id');
+
+    $suddenReturnTotals = $accounting->table('payable_cheque_voucher_sudden_returns as sr')
+        ->join('payable_cheque_voucher_invoices as i', 'i.id', '=', 'sr.payable_cheque_voucher_invoice_id')
+        ->whereIn('i.purchase_order_id', $orderIds)
+        ->selectRaw('i.purchase_order_id, COALESCE(SUM(sr.return_amount),0) AS total')
+        ->groupBy('i.purchase_order_id')
+        ->pluck('total', 'purchase_order_id');
+
+    $purchaseReturns = $purchase->table('purchase_returns')
+        ->whereIn('po_id', $orderIds)
+        ->orderBy('id')
+        ->get(['id', 'po_id', 'return_number', 'total_amount']);
+
+    $allReturnTotals = $purchaseReturns->groupBy('po_id')
+        ->map(fn ($rows) => (float) $rows->sum(fn ($row) => (float) ($row->total_amount ?? 0)));
+
+    $usedReturnKeys = [];
+    foreach ($accounting->table('payable_cheque_voucher_invoices')
+        ->whereIn('purchase_order_id', $orderIds)
+        ->whereNotNull('return_number')
+        ->where('return_number', '!=', '')
+        ->get(['purchase_order_id', 'return_number']) as $row) {
+        foreach (preg_split('/\s*,\s*/', (string) $row->return_number, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $number) {
+            $number = mb_strtolower(trim((string) $number));
+            if ($number !== '') {
+                $usedReturnKeys[(int) $row->purchase_order_id . '|' . $number] = true;
+            }
+        }
+    }
+
+    $ordersById = $orders->keyBy(fn ($row) => (int) $row->id);
+    $todoByPo = collect();
+
+    foreach ($purchaseReturns as $return) {
+        $poId = (int) $return->po_id;
+        $order = $ordersById->get($poId);
+        if (!$order) continue;
+
+        $amount = (float) ($order->actual_total_amount ?: $order->total_amount ?: ($itemTotals[$poId] ?? 0));
+        $paid = (float) ($paidTotals[$poId] ?? 0) + (float) ($suddenReturnTotals[$poId] ?? 0);
+        $returnsTotal = (float) ($allReturnTotals[$poId] ?? 0);
+        $due = max($amount - $paid - $returnsTotal, 0);
+
+        if ($amount <= 0 || $due > 0.005) {
+            continue;
+        }
+
+        $oldNumber = trim((string) ($return->return_number ?? ''));
+        $effectiveNumber = $oldNumber !== '' ? $oldNumber : 'LEGACY-PR-' . (int) $return->id;
+        $key = $poId . '|' . mb_strtolower($effectiveNumber);
+
+        if ($oldNumber !== '' && isset($usedReturnKeys[$key])) {
+            continue;
+        }
+
+        $todoByPo->push([
+            'po_id' => $poId,
+            'return_id' => (int) $return->id,
+            'old_return_number' => $oldNumber,
+            'return_number' => $effectiveNumber,
+            'return_amount' => (float) ($return->total_amount ?? 0),
+        ]);
+    }
+
+    if ($todoByPo->isEmpty()) {
+        $this->info('No legacy return-only payable records need repair.');
+        return 0;
+    }
+
+    $grouped = $todoByPo->groupBy('po_id');
+
+    $this->info('Legacy return-only POs to repair: ' . $grouped->count());
+    $this->line('Unused Purchase Returns to link: ' . $todoByPo->count());
+
+    if ($dryRun) {
+        foreach ($grouped->take(20) as $poId => $rows) {
+            $order = $ordersById->get((int) $poId);
+            $this->line(
+                ($order->po_number ?? ('PO#' . $poId))
+                . ' | returns: '
+                . $rows->pluck('return_number')->implode(', ')
+            );
+        }
+        if ($grouped->count() > 20) {
+            $this->line('... and ' . ($grouped->count() - 20) . ' more PO(s).');
+        }
+        return 0;
+    }
+
+    $backupDir = storage_path('app/backups');
+    File::ensureDirectoryExists($backupDir);
+    $backupFile = $backupDir . DIRECTORY_SEPARATOR
+        . 'legacy-return-only-fix-' . now('Asia/Manila')->format('Ymd_His') . '.json';
+
+    File::put($backupFile, json_encode([
+        'reference' => $reference,
+        'from' => $from,
+        'to' => $to,
+        'payment_date' => $paymentDate,
+        'created_at' => now('Asia/Manila')->toDateTimeString(),
+        'records' => $todoByPo->values()->all(),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+    $supplierNames = $masterlist->table('suppliers')
+        ->whereIn('id', $orders->pluck('supplier_id')->unique()->values()->all())
+        ->pluck('name', 'id');
+
+    $voucherBySupplier = $accounting->table('payable_cheque_vouchers')
+        ->where('reference_no', $reference)
+        ->orderBy('id')
+        ->get(['id', 'supplier_id'])
+        ->groupBy('supplier_id')
+        ->map(fn ($rows) => (int) $rows->first()->id);
+
+    $maxVoucherNumber = $accounting->table('payable_cheque_vouchers')
+        ->where('voucher_no', 'like', 'PCV-%')
+        ->pluck('voucher_no')
+        ->map(fn ($value) => preg_match('/^PCV-(\d+)$/', (string) $value, $m) ? (int) $m[1] : 0)
+        ->max();
+    $nextVoucherNumber = ((int) $maxVoucherNumber) + 1;
+
+    $createdRows = 0;
+    $createdZeroVouchers = 0;
+    $assignedLegacyNumbers = 0;
+
+    foreach ($grouped as $poId => $returnRows) {
+        $poId = (int) $poId;
+        $order = $ordersById->get($poId);
+        if (!$order) continue;
+
+        $supplierId = (int) $order->supplier_id;
+        $voucherId = (int) ($voucherBySupplier[$supplierId] ?? 0);
+
+        if ($voucherId <= 0) {
+            $voucherNo = 'PCV-' . str_pad((string) $nextVoucherNumber++, 7, '0', STR_PAD_LEFT);
+            $voucherId = $accounting->table('payable_cheque_vouchers')->insertGetId([
+                'voucher_no' => $voucherNo,
+                'supplier_id' => $supplierId,
+                'supplier_name' => (string) ($supplierNames[$supplierId] ?? ('Supplier #' . $supplierId)),
+                'voucher_date' => $paymentDate,
+                'reference_no' => $reference,
+                'particulars' => 'Legacy return-only historical settlement',
+                'payment_method' => 'Cash',
+                'total_paid' => 0,
+                'global_discount' => 0,
+                'global_discount_amount' => 0,
+                'additional_discount' => 0,
+                'additional_discount_amount' => 0,
+                'status' => 'Posted',
+                'is_draft' => false,
+                'created_at' => $paymentDate . ' 12:00:00',
+                'updated_at' => $paymentDate . ' 12:00:00',
+            ]);
+            $voucherBySupplier[$supplierId] = $voucherId;
+            $createdZeroVouchers++;
+        }
+
+        foreach ($returnRows as $row) {
+            if ($row['old_return_number'] === '') {
+                $purchase->table('purchase_returns')
+                    ->where('id', $row['return_id'])
+                    ->update(['return_number' => $row['return_number']]);
+                $assignedLegacyNumbers++;
+            }
+        }
+
+        $returnNumbers = $returnRows->pluck('return_number')->unique()->implode(', ');
+        $returnAmount = round((float) $returnRows->sum('return_amount'), 2);
+        $invoiceAmount = (float) ($order->actual_total_amount ?: $order->total_amount ?: ($itemTotals[$poId] ?? 0));
+
+        $accounting->table('payable_cheque_voucher_invoices')->insert([
+            'payable_cheque_voucher_id' => $voucherId,
+            'purchase_order_id' => $poId,
+            'purchase_no' => (string) $order->po_number,
+            'invoice_no' => (string) ($order->supplier_invoice_number ?: $order->po_number),
+            'invoice_amount' => $invoiceAmount,
+            'amount_due' => 0,
+            'amount_paid' => 0,
+            'discount_1' => 0,
+            'discount_2' => 0,
+            'return_amount' => $returnAmount,
+            'total_returns' => $returnRows->count(),
+            'return_number' => $returnNumbers,
+            'rs_details' => null,
+            'remarks' => 'Legacy return-only settlement - July 25, 2026',
+            'payment_status' => 'Full',
+            'created_at' => $paymentDate . ' 12:00:00',
+            'updated_at' => $paymentDate . ' 12:00:00',
+        ]);
+
+        $createdRows++;
+    }
+
+    $this->info('LEGACY RETURN-ONLY DATA FIX COMPLETE');
+    $this->line('PCV invoice rows created: ' . $createdRows);
+    $this->line('Zero-value PCV vouchers created: ' . $createdZeroVouchers);
+    $this->line('Blank legacy Return Nos. assigned: ' . $assignedLegacyNumbers);
+    $this->line('No new cash payment rows were created.');
+    $this->line('Backup: ' . $backupFile);
+
+    return 0;
+})->purpose('Repair legacy fully settled purchase-return invoices that have no accounting return link.');
+
 Schedule::command('data-ups:run')
     ->dailyAt('18:00')
     ->timezone('Asia/Manila')
