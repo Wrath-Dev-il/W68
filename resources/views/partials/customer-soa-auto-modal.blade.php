@@ -19,7 +19,7 @@
                     <i data-lucide="users" class="mt-0.5 h-5 w-5 text-amber-700"></i>
                     <div>
                         <p class="text-[9px] font-black uppercase tracking-widest text-amber-700">Applies To All Linked Customer Accounts</p>
-                        <p class="mt-1 text-xs font-bold leading-relaxed text-slate-700">This is one global SOA(AUTO) setting. Every customer linked to a Pricelist login uses this same lead time, while each customer keeps their own Terms to calculate their own due date.</p>
+                        <p class="mt-1 text-xs font-bold leading-relaxed text-slate-700">This is one global SOA(AUTO) setting. Every customer linked to a Pricelist login uses this same lead time, while each finalized invoice uses its own Sales Order Terms to calculate its own due date.</p>
                     </div>
                 </div>
             </div>
@@ -34,7 +34,7 @@
                     <p id="soa-auto-email-count" class="mt-1 text-xl font-black text-slate-800">—</p>
                 </div>
                 <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Numeric Terms</p>
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Invoices With Terms</p>
                     <p id="soa-auto-terms-count" class="mt-1 text-xl font-black text-slate-800">—</p>
                 </div>
             </div>
@@ -50,7 +50,7 @@
 
                 <div class="mt-5 grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="soa-auto-lead-value" class="mb-1.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Send Before Customer Terms</label>
+                        <label for="soa-auto-lead-value" class="mb-1.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Send Before Invoice Terms</label>
                         <input id="soa-auto-lead-value" type="number" min="1" max="525600" placeholder="e.g. 14" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black outline-none transition focus:border-maroon focus:ring-4 focus:ring-maroon/5">
                     </div>
                     <div>
