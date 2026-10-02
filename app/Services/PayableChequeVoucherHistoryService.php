@@ -250,6 +250,20 @@ class PayableChequeVoucherHistoryService
                 'remarks' => (string) ($row->remarks ?? ''),
                 'payment_status' => (string) ($row->payment_status ?? ''),
             ];
+        })->sort(function (array $a, array $b) {
+            // W68_PCV_PRINT_OLDEST_TO_LATEST_20261002
+            // Print/history detail must list the oldest supplier invoice first
+            // and the latest invoice at the bottom.
+            $dateA = trim((string) ($a['invoice_date'] ?? '')) ?: '9999-12-31';
+            $dateB = trim((string) ($b['invoice_date'] ?? '')) ?: '9999-12-31';
+
+            $dateCompare = strcmp($dateA, $dateB);
+            if ($dateCompare !== 0) return $dateCompare;
+
+            $invoiceCompare = strnatcasecmp((string) ($a['invoice_no'] ?? ''), (string) ($b['invoice_no'] ?? ''));
+            if ($invoiceCompare !== 0) return $invoiceCompare;
+
+            return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
         })->values()->all();
 
         $payments = DB::connection('accounting')->table('payable_cheque_voucher_payments')
