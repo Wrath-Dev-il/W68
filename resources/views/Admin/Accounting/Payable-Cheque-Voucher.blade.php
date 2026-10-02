@@ -723,7 +723,7 @@
 </div>
 
 <div id="pcv-print-layout" class="hidden">
-    <div id="pcv-print-content" style="font-family: 'Courier New', monospace; font-size: 11px; width: 1050px; max-width: 1050px; margin: 0 auto; padding: 20px 16px; box-sizing: border-box;">
+    <div id="pcv-print-content" style="font-family: 'Courier New', monospace; font-size: 13px; width: 800px; margin: 0 auto; padding: 30px 20px;">
         <div style="text-align: center; margin-bottom: 20px;">
             <div style="font-size: 20px; font-weight: bold; font-family: 'Arial Black', Arial, sans-serif; letter-spacing: 1px;">W68 AUTO PARTS &amp; SERVICE CENTER</div>
             <div style="font-size: 15px; font-weight: bold;">48 TIMOTHY ST. MULTINATIONAL VILLAGE PARAÑAQUE CITY</div>
@@ -742,19 +742,9 @@
             </tr>
         </table>
 
-        <table id="pcv-print-invoice-table" style="width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; margin-bottom: 8px;">
-            <colgroup>
-                <col style="width: 15%;">
-                <col style="width: 12%;">
-                <col style="width: 9%;">
-                <col style="width: 12%;">
-                <col style="width: 18%;">
-                <col style="width: 13%;">
-                <col style="width: 9%;">
-                <col style="width: 12%;">
-            </colgroup>
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 8px;">
             <thead>
-                <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000; font-size: 9px; line-height: 1.15;">
+                <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
                     <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE NO.</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">Slip No.</th>
@@ -2962,25 +2952,7 @@
                     const res = await fetch(`${routes().historyDetail}/${voucherId}`);
                     const data = await res.json();
                     if (!data.success) throw new Error(data.message);
-                    const v = data.voucher;
-                    // W68_PCV_PRINT_OLDEST_TO_LATEST_20261002
-                    // Oldest invoice at the top; newest invoice at the bottom.
-                    const invoices = [...(data.invoices || [])].sort((a, b) => {
-                        const dateA = String(a.invoice_date || '9999-12-31');
-                        const dateB = String(b.invoice_date || '9999-12-31');
-                        const byDate = dateA.localeCompare(dateB);
-                        if (byDate !== 0) return byDate;
-
-                        const byInvoice = String(a.invoice_no || '').localeCompare(
-                            String(b.invoice_no || ''),
-                            undefined,
-                            { numeric: true, sensitivity: 'base' }
-                        );
-                        if (byInvoice !== 0) return byInvoice;
-
-                        return Number(a.id || 0) - Number(b.id || 0);
-                    });
-                    const suddenReturnRows = data.sudden_returns || [];
+                    const v = data.voucher, invoices = data.invoices || [], suddenReturnRows = data.sudden_returns || [];
                     $('print-supplier').textContent = v.supplier_name || '---';
                     $('print-voucher-no').textContent = v.voucher_no || '---';
                     $('print-address').textContent = v.supplier_address || '---';
@@ -2990,15 +2962,15 @@
                         const paid = Number(inv.amount_paid || 0);
                         const retAmt = Number(inv.return_amount || 0);
                         const totalRet = Number(inv.total_returns || 0);
-                        return `<tr style="page-break-inside: avoid;">
-                            <td style="border: 1px solid #000; padding: 4px 5px; white-space: nowrap; vertical-align: top;">${escapeHtml(inv.invoice_no || '---')}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: right; white-space: nowrap; vertical-align: top;">${peso.format(invAmt)}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: center; word-break: break-word; vertical-align: top;">${escapeHtml(inv.slip_no || '---')}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: right; white-space: nowrap; vertical-align: top;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: left; overflow-wrap: anywhere; vertical-align: top;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: left; overflow-wrap: anywhere; vertical-align: top;">${escapeHtml(inv.rs_details || '---')}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: center; overflow-wrap: anywhere; vertical-align: top;">${escapeHtml(inv.remarks || '---')}</td>
-                            <td style="border: 1px solid #000; padding: 4px 5px; text-align: right; white-space: nowrap; vertical-align: top; font-weight: bold;">${peso.format(paid)}</td>
+                        return `<tr>
+                            <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
+                            <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(invAmt)}</td>
+                            <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.slip_no || '---')}</td>
+                            <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
+                            <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
+                            <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.rs_details || '---')}</td>
+                            <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.remarks || '---')}</td>
+                            <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(paid)}</td>
                         </tr>`;
                     }).join('');
                     $('print-invoice-rows').innerHTML = invoiceRows;
@@ -3089,20 +3061,11 @@
                         if (!printContent) return;
                         printContent.classList.remove('hidden');
                         const frame = $('pcv-print-frame');
-                        frame.style.width = '1120px';
-                        frame.style.height = '800px';
+                        frame.style.width = '850px';
+                        frame.style.height = '1100px';
                         const doc = frame.contentDocument || frame.contentWindow.document;
                         doc.open();
-                        doc.write(`<html><head><style>
-                            @page { size: A4 landscape; margin: 8mm; }
-                            * { box-sizing: border-box; }
-                            body { margin: 0; padding: 0; background: #fff; }
-                            table { border-collapse: collapse; }
-                            thead { display: table-header-group; }
-                            tr { break-inside: avoid; page-break-inside: avoid; }
-                            #pcv-print-content { width: 100% !important; max-width: none !important; margin: 0 auto !important; padding: 0 !important; }
-                            #pcv-print-invoice-table th { padding: 5px 4px !important; vertical-align: middle; overflow-wrap: anywhere; }
-                        </style></head><body>${printContent.outerHTML}</body></html>`);
+                        doc.write(`<html><head><style>body { margin: 0; padding: 0; } table { border-collapse: collapse; } td, th { padding: 4px 8px; }</style></head><body>${printContent.outerHTML}</body></html>`);
                         doc.close();
                         setTimeout(() => { frame.contentWindow.print(); }, 300);
                     }, 200);
