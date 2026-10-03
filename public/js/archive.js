@@ -62,6 +62,8 @@
          pendingRestore: null,
          pendingDelete: null,
          selectedIds: new Set(),
+         requestController: null,
+         requestSequence: 0,
          isLoading: false,
         countdownTimer: null,
         expiryReloadQueued: false,
@@ -397,6 +399,14 @@
      async function loadData() {
          if (!dataUrl) return;
 
+         if (state.requestController) {
+             state.requestController.abort();
+         }
+
+         const controller = new AbortController();
+         state.requestController = controller;
+         const requestSequence = ++state.requestSequence;
+
          clearSelection();
         state.expiryReloadQueued = false;
          setLoading(true);
@@ -405,11 +415,14 @@
          try {
              const query = buildQueryParams();
              const res = await fetch(`${dataUrl}?${query}`, {
+                 signal: controller.signal,
                  headers: {
                      'Accept': 'application/json',
                  },
              });
              const json = await res.json();
+
+             if (requestSequence !== state.requestSequence) return;
  
              if (!json || json.success !== true) {
                  renderRows([]);
@@ -431,6 +444,8 @@
              renderRows(items);
              updatePaginationUi();
          } catch (e) {
+             if (e?.name === 'AbortError') return;
+
              renderRows([]);
              state.total = 0;
              state.from = 0;
@@ -438,8 +453,11 @@
              state.lastPage = 1;
              updatePaginationUi();
          } finally {
-             state.isLoading = false;
-             updatePaginationUi();
+             if (requestSequence === state.requestSequence) {
+                 state.isLoading = false;
+                 state.requestController = null;
+                 updatePaginationUi();
+             }
          }
      }
  
