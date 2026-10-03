@@ -6,11 +6,15 @@
      const dataUrl = root.dataset.dataUrl || '';
      const restoreUrl = root.dataset.restoreUrl || '';
      const deleteUrl = root.dataset.deleteUrl || '';
+     const bulkDeleteUrl = root.dataset.bulkDeleteUrl || '';
  
      const els = {
          activeFilter: document.getElementById('archive-active-filter'),
          clearFilters: document.getElementById('archive-clear-filters'),
          refresh: document.getElementById('archive-refresh'),
+         bulkDelete: document.getElementById('archive-bulk-delete'),
+         selectedCount: document.getElementById('archive-selected-count'),
+         selectAll: document.getElementById('archive-select-all'),
          cards: Array.from(document.querySelectorAll('.archive-card')),
          tbody: document.getElementById('archive-tbody'),
          paginationLabel: document.getElementById('archive-pagination-label'),
@@ -57,6 +61,7 @@
          },
          pendingRestore: null,
          pendingDelete: null,
+         selectedIds: new Set(),
          isLoading: false,
         countdownTimer: null,
         expiryReloadQueued: false,
@@ -81,6 +86,31 @@
          if (window.lucide?.createIcons) window.lucide.createIcons();
      }
  
+     function syncSelectionUi() {
+         const checkboxes = els.tbody
+             ? Array.from(els.tbody.querySelectorAll('.archive-row-check'))
+             : [];
+         const selectedOnPage = checkboxes.filter((cb) => cb.checked).length;
+
+         if (els.selectAll) {
+             els.selectAll.checked = checkboxes.length > 0 && selectedOnPage === checkboxes.length;
+             els.selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < checkboxes.length;
+         }
+
+         const count = state.selectedIds.size;
+         if (els.selectedCount) els.selectedCount.textContent = `(${count})`;
+         if (els.bulkDelete) els.bulkDelete.disabled = count === 0;
+     }
+
+     function clearSelection() {
+         state.selectedIds.clear();
+         if (els.selectAll) {
+             els.selectAll.checked = false;
+             els.selectAll.indeterminate = false;
+         }
+         syncSelectionUi();
+     }
+
      function debounce(fn, delayMs) {
          let t = null;
          return function (...args) {
@@ -158,7 +188,7 @@
          state.isLoading = show;
          if (!els.tbody) return;
          if (show) {
-             els.tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">Loading...</td></tr>`;
+             els.tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">Loading...</td></tr>`;
          }
      }
  
@@ -292,7 +322,8 @@
          if (!els.tbody) return;
          if (!Array.isArray(items) || items.length === 0) {
             stopCountdownTimer();
-             els.tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">No archived data found</td></tr>`;
+             els.tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">No archived data found</td></tr>`;
+             syncSelectionUi();
              return;
          }
  
@@ -310,6 +341,12 @@
  
              return `
                  <tr class="hover:bg-slate-50/60">
+                     <td class="px-3 py-3 text-center align-top">
+                         <input type="checkbox"
+                             class="archive-row-check w-4 h-4 accent-rose-600 cursor-pointer"
+                             data-id="${safeStr(it.id || '')}"
+                             aria-label="Select archived row">
+                     </td>
                      <td class="px-4 py-3 align-top">
                          <div class="flex flex-col gap-1">
                              <div class="text-xs font-black text-slate-800">${idValue}</div>
@@ -348,13 +385,19 @@
          }).join('');
  
          els.tbody.innerHTML = rowsHtml;
+         els.tbody.querySelectorAll('.archive-row-check').forEach((cb) => {
+             const id = Number(cb.dataset.id || 0);
+             cb.checked = id > 0 && state.selectedIds.has(id);
+         });
+         syncSelectionUi();
         startCountdownTimer();
          if (window.lucide?.createIcons) window.lucide.createIcons();
      }
  
      async function loadData() {
          if (!dataUrl) return;
- 
+
+         clearSelection();
         state.expiryReloadQueued = false;
          setLoading(true);
          updatePaginationUi();
@@ -424,8 +467,13 @@
      function openConfirmDelete(payload) {
          state.pendingDelete = payload;
          if (els.deleteConfirmText) {
-             const label = payload?.name ? `"${payload.name}"` : 'this archived item';
-             els.deleteConfirmText.textContent = `Are you sure you want to permanently delete ${label}?`;
+             if (payload?.bulk) {
+                 const count = Array.isArray(payload.ids) ? payload.ids.length : 0;
+                 els.deleteConfirmText.textContent = `Are you sure you want to permanently delete ${count} selected archived record${count === 1 ? '' : 's'}?`;
+             } else {
+                 const label = payload?.name ? `"${payload.name}"` : 'this archived item';
+                 els.deleteConfirmText.textContent = `Are you sure you want to permanently delete ${label}?`;
+             }
          }
          setModal(els.deleteConfirmModal, true);
      }
@@ -437,7 +485,11 @@
 
      async function submitDelete() {
          const payload = state.pendingDelete;
-         if (!payload || !deleteUrl) return;
+         if (!payload) return;
+
+         const isBulk = Boolean(payload.bulk);
+         const targetUrl = isBulk ? bulkDeleteUrl : deleteUrl;
+         if (!targetUrl) return;
 
          if (els.deleteConfirmYes) {
              els.deleteConfirmYes.disabled = true;
@@ -445,17 +497,21 @@
          }
 
          try {
-             const res = await fetch(deleteUrl, {
+             const requestBody = isBulk
+                 ? { ids: Array.isArray(payload.ids) ? payload.ids : [] }
+                 : {
+                     module: payload.module || null,
+                     id: payload.id || null,
+                 };
+
+             const res = await fetch(targetUrl, {
                  method: 'DELETE',
                  headers: {
                      'Accept': 'application/json',
                      'Content-Type': 'application/json',
                      'X-CSRF-TOKEN': csrfToken,
                  },
-                 body: JSON.stringify({
-                     module: payload.module || null,
-                     id: payload.id || null,
-                 }),
+                 body: JSON.stringify(requestBody),
              });
 
              const json = await res.json();
@@ -470,6 +526,7 @@
              setModal(els.successModal, true);
 
              if (json?.success) {
+                 clearSelection();
                  await loadData();
              }
          } catch (e) {
@@ -610,6 +667,19 @@
          });
  
          if (els.tbody) {
+             els.tbody.addEventListener('change', (e) => {
+                 const checkbox = e.target?.closest?.('.archive-row-check');
+                 if (!checkbox) return;
+
+                 const id = Number(checkbox.dataset.id || 0);
+                 if (id <= 0) return;
+
+                 if (checkbox.checked) state.selectedIds.add(id);
+                 else state.selectedIds.delete(id);
+
+                 syncSelectionUi();
+             });
+
              els.tbody.addEventListener('click', (e) => {
                  const restoreBtn = e.target?.closest?.('.archive-restore-btn');
                  if (restoreBtn) {
@@ -629,6 +699,33 @@
                          name: deleteBtn.dataset.name || null,
                      });
                  }
+             });
+         }
+
+         if (els.selectAll) {
+             els.selectAll.addEventListener('change', () => {
+                 const checked = els.selectAll.checked;
+                 const checkboxes = els.tbody
+                     ? Array.from(els.tbody.querySelectorAll('.archive-row-check'))
+                     : [];
+
+                 checkboxes.forEach((cb) => {
+                     cb.checked = checked;
+                     const id = Number(cb.dataset.id || 0);
+                     if (id <= 0) return;
+                     if (checked) state.selectedIds.add(id);
+                     else state.selectedIds.delete(id);
+                 });
+
+                 syncSelectionUi();
+             });
+         }
+
+         if (els.bulkDelete) {
+             els.bulkDelete.addEventListener('click', () => {
+                 const ids = Array.from(state.selectedIds);
+                 if (!ids.length) return;
+                 openConfirmDelete({ bulk: true, ids });
              });
          }
 
