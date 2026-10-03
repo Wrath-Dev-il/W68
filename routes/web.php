@@ -5373,25 +5373,44 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
             $query->where('data_name', 'like', '%' . $search['name'] . '%');
         }
         if (!empty($search['deleted'])) {
-            $query->whereDate('deleted_at', $search['deleted']);
+            // W68_ARCHIVE_DATE_RANGE_20261003
+            // Avoid whereDate() wrapping the column so an existing deleted_at index can be used.
+            try {
+                $deletedDay = \Carbon\Carbon::parse((string) $search['deleted'])->startOfDay();
+                $query
+                    ->where('deleted_at', '>=', $deletedDay)
+                    ->where('deleted_at', '<', $deletedDay->copy()->addDay());
+            } catch (\Throwable) {
+                // Keep invalid date filters from expanding into an unbounded result set.
+                $query->whereRaw('1 = 0');
+            }
         }
 
-        // W68_ARCHIVE_FAST_LIST_20261003
-        // The archive payload for Sales/Purchase Notes can contain very large JSON.
-        // The table does not use archived_data, so never load it for listing/filtering.
-        $paginator = $query
+        // W68_ARCHIVE_NO_COUNT_PAGINATION_20261003
+        // Avoid Laravel paginate() here because it issues an additional filtered COUNT(*)
+        // on every Archive filter request. Fetch one extra row instead to detect Next.
+        $offset = ($page - 1) * $perPage;
+
+        $rows = $query
             ->orderByDesc('deleted_at')
             ->orderByDesc('id')
-            ->paginate($perPage, [
+            ->offset($offset)
+            ->limit($perPage + 1)
+            ->get([
                 'id',
                 'module',
                 'display_id',
                 'data_name',
                 'deleted_at',
                 'expires_at',
-            ], 'page', $page);
+            ]);
 
-        $items = collect($paginator->items())->map(function ($row) {
+        $hasMore = $rows->count() > $perPage;
+        if ($hasMore) {
+            $rows = $rows->take($perPage)->values();
+        }
+
+        $items = $rows->map(function ($row) {
             $deletedAt = $row->deleted_at ? \Carbon\Carbon::parse($row->deleted_at) : null;
             $expiresAt = $row->expires_at ? \Carbon\Carbon::parse($row->expires_at) : null;
             $remainingDays = $expiresAt ? max(0, now()->startOfDay()->diffInDays($expiresAt->startOfDay(), false)) : null;
@@ -5412,15 +5431,21 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
             $items = $items->filter(fn ($row) => str_contains(strtolower((string) $row['remaining_days']), $needle))->values();
         }
 
+        $visibleCount = $items->count();
+        $from = $visibleCount > 0 ? ($offset + 1) : 0;
+        $to = $visibleCount > 0 ? ($offset + $visibleCount) : 0;
+
         return response()->json([
             'success' => true,
             'items' => $items->values(),
-            'page' => $paginator->currentPage(),
-            'last_page' => $paginator->lastPage(),
-            'total' => $paginator->total(),
-            'from' => $paginator->firstItem() ?? 0,
-            'to' => $paginator->lastItem() ?? 0,
-            'per_page' => $paginator->perPage(),
+            'page' => $page,
+            'last_page' => $page + ($hasMore ? 1 : 0),
+            'total' => null,
+            'total_exact' => false,
+            'has_more' => $hasMore,
+            'from' => $from,
+            'to' => $to,
+            'per_page' => $perPage,
         ]);
     } catch (\Throwable $e) {
         Log::error('Archive data error: ' . $e->getMessage());
