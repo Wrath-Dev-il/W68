@@ -684,6 +684,46 @@ Artisan::command('payables:fix-legacy-return-only
     return 0;
 })->purpose('Repair legacy fully settled purchase-return invoices that have no accounting return link.');
 
+/* W68_ARCHIVE_PURGE_SCHEDULER_20261003 */
+Artisan::command('archive:purge-expired', function () {
+    $ledger = DB::connection('ledger');
+
+    if (!Schema::connection('ledger')->hasTable('archived_records')) {
+        $this->info('Archive table not found.');
+        return 0;
+    }
+
+    $totalDeleted = 0;
+
+    do {
+        $ids = $ledger->table('archived_records')
+            ->whereNull('restored_at')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->orderBy('id')
+            ->limit(250)
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            break;
+        }
+
+        $deleted = $ledger->table('archived_records')
+            ->whereIn('id', $ids->all())
+            ->delete();
+
+        $totalDeleted += (int) $deleted;
+    } while ($deleted > 0);
+
+    $this->info('Expired archived records deleted: ' . $totalDeleted);
+    return 0;
+})->purpose('Delete expired archived records in small batches without blocking the Archived page.');
+
+Schedule::command('archive:purge-expired')
+    ->everyTenMinutes()
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping(15);
+
 Schedule::command('data-ups:run')
     ->dailyAt('18:00')
     ->timezone('Asia/Manila')
