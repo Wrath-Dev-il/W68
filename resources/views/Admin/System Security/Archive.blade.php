@@ -3,7 +3,7 @@
 @endpush
 
 @section('archived_content')
-    <div id="archive-page" class="space-y-6" data-data-url="{{ route('admin.archived.data') }}" data-restore-url="{{ route('admin.archived.restore') }}" data-delete-url="{{ route('admin.archived.delete') }}">
+    <div id="archive-page" class="space-y-6" data-data-url="{{ route('admin.archived.data') }}" data-restore-url="{{ route('admin.archived.restore') }}" data-delete-url="{{ route('admin.archived.delete') }}" data-bulk-delete-url="{{ route('admin.archived.bulk-delete') }}">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
@@ -49,6 +49,9 @@
                     <p id="archive-active-filter" class="mt-1 text-[10px] text-slate-400 font-semibold truncate">Showing: All</p>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button id="archive-bulk-delete" type="button" disabled class="px-4 py-2 rounded-xl bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Bulk Delete <span id="archive-selected-count">(0)</span>
+                    </button>
                     <button id="archive-clear-filters" type="button" class="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:border-slate-300">Clear Filters</button>
                     <button id="archive-refresh" type="button" class="px-4 py-2 rounded-xl bg-maroon-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800">Refresh</button>
                 </div>
@@ -58,9 +61,13 @@
                 <table class="min-w-full divide-y divide-slate-100 text-xs">
                     <thead class="bg-white sticky top-0 z-10">
                         <tr class="bg-white">
+                            <th class="px-3 py-3 text-center w-[52px]">
+                                <input id="archive-select-all" type="checkbox" class="w-4 h-4 accent-rose-600 cursor-pointer" title="Select all rows on this page">
+                                <div class="mt-2 h-[30px]"></div>
+                            </th>
                             <th class="px-4 py-3 text-left text-[10px] font-black text-slate-600 uppercase tracking-widest w-[170px]">
                                 <div class="flex items-center justify-between gap-2">
-                                    <span>ID</span>
+                                    <span id="archive-id-col-label">ID</span>
                                     <button id="archive-id-info-btn" type="button" class="archive-id-info-btn" title="ID Guide">
                                         <i data-lucide="info" class="w-4 h-4"></i>
                                     </button>
@@ -87,7 +94,7 @@
                     </thead>
                     <tbody id="archive-tbody" class="bg-white divide-y divide-slate-50">
                         <tr>
-                            <td colspan="5" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">Loading...</td>
+                            <td colspan="6" class="px-4 py-10 text-center text-slate-400 text-xs font-semibold">Loading...</td>
                         </tr>
                     </tbody>
                 </table>
