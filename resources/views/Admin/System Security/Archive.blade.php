@@ -1,5 +1,5 @@
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/archive.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('css/archive.css') }}?v={{ filemtime(public_path('css/archive.css')) }}">
 @endpush
 
 @section('archived_content')
@@ -212,7 +212,7 @@
 @endsection
 
 @push('scripts')
-    <script src="{{ asset('js/archive.js') }}?v={{ time() }}"></script>
+    <script src="{{ asset('js/archive.js') }}?v={{ filemtime(public_path('js/archive.js')) }}"></script>
 @endpush
 
 @include('partials.admin.admin_sidebar_navbar')
