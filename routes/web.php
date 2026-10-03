@@ -5416,6 +5416,81 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
     }
 })->name('admin.archived.data');
 
+Route::delete('/admin/system-security/archived/delete', function (Request $request) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+    if (($user->account_type ?? null) != 1) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $validated = $request->validate([
+        'id' => 'required|integer|min:1',
+        'module' => 'nullable|string|max:100',
+    ]);
+
+    try {
+        if (!Schema::connection('ledger')->hasTable('archived_records')) {
+            return response()->json(['success' => false, 'message' => 'Archive storage is not available.'], 422);
+        }
+
+        $query = DB::connection('ledger')
+            ->table('archived_records')
+            ->where('id', (int) $validated['id'])
+            ->whereNull('restored_at');
+
+        $module = trim((string) ($validated['module'] ?? ''));
+        if ($module !== '') {
+            $query->where('module', $module);
+        }
+
+        $archive = $query->first();
+        if (!$archive) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Archived record not found, already restored, or already permanently deleted.',
+            ], 404);
+        }
+
+        $deleted = DB::connection('ledger')
+            ->table('archived_records')
+            ->where('id', (int) $archive->id)
+            ->whereNull('restored_at')
+            ->delete();
+
+        if ($deleted !== 1) {
+            throw new \RuntimeException('The archived record could not be permanently deleted.');
+        }
+
+        Log::warning('Archived record permanently deleted by admin.', [
+            'archive_id' => (int) $archive->id,
+            'module' => (string) ($archive->module ?? ''),
+            'display_id' => (string) ($archive->display_id ?? ''),
+            'data_name' => (string) ($archive->data_name ?? ''),
+            'deleted_by_user_id' => $user->User_ID ?? null,
+            'deleted_by_login_id' => $user->login_ID ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Archived data was permanently deleted.',
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Permanent archived record delete error: ' . $e->getMessage(), [
+            'archive_id' => (int) ($validated['id'] ?? 0),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to permanently delete the archived data.',
+        ], 422);
+    }
+})->name('admin.archived.delete');
+
 Route::post('/admin/system-security/archived/restore', function (Request $request) {
     $user = session('user');
     if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
