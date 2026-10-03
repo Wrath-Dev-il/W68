@@ -5360,7 +5360,14 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
 
         $query = DB::connection('ledger')
             ->table('archived_records')
-            ->whereNull('restored_at');
+            ->whereNull('restored_at')
+            // W68_ARCHIVE_HIDE_EXPIRED_FROM_LIST_20261003
+            // Never return expired rows to the browser. Physical deletion may
+            // happen later via the scheduler without blocking this request.
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
 
         if ($category !== 'all' && $category !== '') {
             $query->where('module', $category);
