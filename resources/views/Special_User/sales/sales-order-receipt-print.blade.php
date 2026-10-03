@@ -20,6 +20,51 @@
         }
         .receipt { width: 100%; }
 
+        /* W68_ONLINE_SALES_ORDER_KEEP_LOCAL_FONT_SCALE_20261003
+         * Online invoice numbers can be much longer than local invoice numbers.
+         * Keep the Sales Order inside the A4 printable width so Chrome does not
+         * shrink the entire document and make its fonts appear smaller.
+         * This applies ONLY to an ONL-* Sales Order print.
+         */
+        body.w68-online-sales-order-print .receipt {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-x: hidden !important;
+        }
+
+        body.w68-online-sales-order-print .sales-order-topline,
+        body.w68-online-sales-order-print .sales-order-customer-info,
+        body.w68-online-sales-order-print .items-table,
+        body.w68-online-sales-order-print .sales-order-footer,
+        body.w68-online-sales-order-print .summary {
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        body.w68-online-sales-order-print .sales-order-topline .invoice-heading {
+            overflow: hidden !important;
+            min-width: 0 !important;
+        }
+
+        body.w68-online-sales-order-print .sales-order-topline .invoice-align-row {
+            max-width: calc(100% - 80px) !important;
+            min-width: 0 !important;
+        }
+
+        body.w68-online-sales-order-print .sales-order-topline .invoice-align-row .invoice-value {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+        }
+
+        body.w68-online-sales-order-print .sales-order-customer-info .sales-order-meta {
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
         /* W68_SALES_ORDER_ONLY_PRINT_LAYOUT_20260929 */
 
         body {
@@ -983,7 +1028,7 @@
         }
 </style>
 </head>
-<body>
+<body class="{{ !empty($w68IsOnlineSalesOrderPrint) ? 'w68-online-sales-order-print' : '' }}">
     @include('partials.global.w68-loader')
 
     <div class="receipt sales-order-editable-preview" contenteditable="true" spellcheck="false">
@@ -994,6 +1039,33 @@
             // W68_SALES_PRINT_INVOICE_REF_20260921
             // Invoice number sent by Sales-Order.js for both new and history prints.
             $printInvoiceNumber = trim((string) request()->input('invoice_number', ''));
+
+            // W68_ONLINE_SALES_ORDER_KEEP_LOCAL_FONT_SCALE_20261003
+            // Detect only ONL-* Sales Orders. Online Report and Sales Invoice
+            // use different templates and are intentionally untouched.
+            $w68IsOnlineSalesOrderPrint = false;
+            try {
+                $w68PrintSalesOrderId = (int) request()->input('sales_order_id', 0);
+
+                if ($w68PrintSalesOrderId > 0) {
+                    $w68IsOnlineSalesOrderPrint = DB::connection('sales')
+                        ->table('sales_orders')
+                        ->where('id', $w68PrintSalesOrderId)
+                        ->where('order_number', 'like', 'ONL-%')
+                        ->exists();
+                }
+
+                if (!$w68IsOnlineSalesOrderPrint && $printInvoiceNumber !== '') {
+                    $w68IsOnlineSalesOrderPrint = DB::connection('sales')
+                        ->table('sales_orders')
+                        ->where('invoice_numbers', $printInvoiceNumber)
+                        ->where('order_number', 'like', 'ONL-%')
+                        ->exists();
+                }
+            } catch (\Throwable $w68OnlineSalesOrderDetectError) {
+                $w68IsOnlineSalesOrderPrint = false;
+            }
+
             if ($rawPrintDate !== '') {
                 try {
                     $displayPrintDate = \Carbon\Carbon::parse($rawPrintDate)->format('d-m-Y');
