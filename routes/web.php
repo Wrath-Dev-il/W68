@@ -5375,9 +5375,20 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
             $query->whereDate('deleted_at', $search['deleted']);
         }
 
+        // W68_ARCHIVE_FAST_LIST_20261003
+        // The archive payload for Sales/Purchase Notes can contain very large JSON.
+        // The table does not use archived_data, so never load it for listing/filtering.
         $paginator = $query
             ->orderByDesc('deleted_at')
-            ->paginate($perPage, ['*'], 'page', $page);
+            ->orderByDesc('id')
+            ->paginate($perPage, [
+                'id',
+                'module',
+                'display_id',
+                'data_name',
+                'deleted_at',
+                'expires_at',
+            ], 'page', $page);
 
         $items = collect($paginator->items())->map(function ($row) {
             $deletedAt = $row->deleted_at ? \Carbon\Carbon::parse($row->deleted_at) : null;
@@ -5448,7 +5459,7 @@ Route::delete('/admin/system-security/archived/delete', function (Request $reque
             $query->where('module', $module);
         }
 
-        $archive = $query->first();
+        $archive = $query->first(['id', 'module', 'display_id', 'data_name']);
         if (!$archive) {
             return response()->json([
                 'success' => false,
@@ -5490,6 +5501,95 @@ Route::delete('/admin/system-security/archived/delete', function (Request $reque
         ], 422);
     }
 })->name('admin.archived.delete');
+
+Route::delete('/admin/system-security/archived/bulk-delete', function (Request $request) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+    if (($user->account_type ?? null) != 1) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $validated = $request->validate([
+        'ids' => 'required|array|min:1|max:500',
+        'ids.*' => 'required|integer|min:1|distinct',
+    ]);
+
+    $ids = collect($validated['ids'])
+        ->map(fn ($id) => (int) $id)
+        ->filter(fn ($id) => $id > 0)
+        ->unique()
+        ->values();
+
+    try {
+        if (!Schema::connection('ledger')->hasTable('archived_records')) {
+            return response()->json(['success' => false, 'message' => 'Archive storage is not available.'], 422);
+        }
+
+        DB::connection('ledger')->beginTransaction();
+
+        $archives = DB::connection('ledger')
+            ->table('archived_records')
+            ->whereIn('id', $ids->all())
+            ->whereNull('restored_at')
+            ->get(['id', 'module', 'display_id', 'data_name']);
+
+        if ($archives->isEmpty()) {
+            DB::connection('ledger')->rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'None of the selected archived records are available for permanent deletion.',
+            ], 404);
+        }
+
+        $deleteIds = $archives->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $deleted = DB::connection('ledger')
+            ->table('archived_records')
+            ->whereIn('id', $deleteIds)
+            ->whereNull('restored_at')
+            ->delete();
+
+        DB::connection('ledger')->commit();
+
+        Log::warning('Archived records permanently bulk deleted by admin.', [
+            'archive_ids' => $deleteIds,
+            'requested_count' => $ids->count(),
+            'deleted_count' => (int) $deleted,
+            'deleted_by_user_id' => $user->User_ID ?? null,
+            'deleted_by_login_id' => $user->login_ID ?? null,
+            'records' => $archives->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'module' => (string) ($row->module ?? ''),
+                'display_id' => (string) ($row->display_id ?? ''),
+                'data_name' => (string) ($row->data_name ?? ''),
+            ])->values()->all(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'deleted_count' => (int) $deleted,
+            'message' => ((int) $deleted) . ' archived record' . ((int) $deleted === 1 ? '' : 's') . ' permanently deleted.',
+        ]);
+    } catch (\Throwable $e) {
+        if (DB::connection('ledger')->transactionLevel() > 0) {
+            DB::connection('ledger')->rollBack();
+        }
+
+        Log::error('Permanent archived bulk delete error: ' . $e->getMessage(), [
+            'archive_ids' => $ids->all(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to permanently delete the selected archived data.',
+        ], 422);
+    }
+})->name('admin.archived.bulk-delete');
 
 Route::post('/admin/system-security/archived/restore', function (Request $request) {
     $user = session('user');
