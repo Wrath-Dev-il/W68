@@ -169,22 +169,16 @@
 
     function startCountdownTimer() {
         stopCountdownTimer();
-        const hasExpired = refreshCountdownCells();
+        refreshCountdownCells();
 
         if (!els.tbody || !els.tbody.querySelector('[data-expires-at]')) return;
-        if (hasExpired && !state.expiryReloadQueued) {
-            state.expiryReloadQueued = true;
-            loadData();
-            return;
-        }
 
+        // W68_ARCHIVE_NO_EXPIRY_RELOAD_LOOP_20261003
+        // Countdown display is client-side only. Do not reload the API when a
+        // row reaches zero; the server already excludes expired rows on the
+        // next normal refresh/filter/page request.
         state.countdownTimer = window.setInterval(() => {
-            const hitExpired = refreshCountdownCells();
-            if (hitExpired && !state.isLoading && !state.expiryReloadQueued) {
-                state.expiryReloadQueued = true;
-                stopCountdownTimer();
-                loadData();
-            }
+            refreshCountdownCells();
         }, 1000);
     }
  
@@ -422,7 +416,6 @@
          const requestSequence = ++state.requestSequence;
 
          clearSelection();
-        state.expiryReloadQueued = false;
          setLoading(true);
          updatePaginationUi();
  
