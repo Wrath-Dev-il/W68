@@ -5350,7 +5350,8 @@ Route::get('/admin/system-security/archived/data', function (Request $request) {
             ]);
         }
 
-        hatdogDeleteExpiredArchivedRecords();
+        // W68_ARCHIVE_ASYNC_PURGE_20261003
+        // Expired archive cleanup runs from the scheduler; never block a table/filter request.
 
         $page = max(1, (int) $request->query('page', 1));
         $perPage = max(1, min(100, (int) $request->query('perPage', 50)));
