@@ -3,7 +3,7 @@
 @endpush
 
 @section('archived_content')
-    <div id="archive-page" class="space-y-6" data-data-url="{{ route('admin.archived.data') }}" data-restore-url="{{ route('admin.archived.restore') }}">
+    <div id="archive-page" class="space-y-6" data-data-url="{{ route('admin.archived.data') }}" data-restore-url="{{ route('admin.archived.restore') }}" data-delete-url="{{ route('admin.archived.delete') }}">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
@@ -123,6 +123,24 @@
                     <div class="mt-6 flex items-center justify-center gap-3">
                         <button id="archive-confirm-no" type="button" class="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200">No</button>
                         <button id="archive-confirm-yes" type="button" class="px-8 py-3 rounded-xl bg-maroon-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800">Yes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="archive-confirm-delete-modal" class="fixed inset-0 z-[3005] hidden items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
+            <div class="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+                <div class="p-6 text-center">
+                    <div class="mx-auto w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <i data-lucide="trash-2" class="w-9 h-9"></i>
+                    </div>
+                    <h3 class="mt-5 text-lg font-black text-slate-800 uppercase tracking-widest">Delete Permanently</h3>
+                    <p id="archive-delete-confirm-text" class="mt-2 text-sm font-semibold text-slate-500">Are you sure you want to permanently delete this archived item?</p>
+                    <p class="mt-3 text-[11px] font-bold text-rose-600">This cannot be undone and the archived data can no longer be restored.</p>
+                    <div class="mt-6 flex items-center justify-center gap-3">
+                        <button id="archive-delete-confirm-no" type="button" class="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200">Cancel</button>
+                        <button id="archive-delete-confirm-yes" type="button" class="px-8 py-3 rounded-xl bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-700">Delete Permanently</button>
                     </div>
                 </div>
             </div>
