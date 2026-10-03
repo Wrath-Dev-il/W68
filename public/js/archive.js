@@ -5,6 +5,7 @@
      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
      const dataUrl = root.dataset.dataUrl || '';
      const restoreUrl = root.dataset.restoreUrl || '';
+     const deleteUrl = root.dataset.deleteUrl || '';
  
      const els = {
          activeFilter: document.getElementById('archive-active-filter'),
@@ -26,6 +27,10 @@
          confirmText: document.getElementById('archive-confirm-text'),
          confirmYes: document.getElementById('archive-confirm-yes'),
          confirmNo: document.getElementById('archive-confirm-no'),
+         deleteConfirmModal: document.getElementById('archive-confirm-delete-modal'),
+         deleteConfirmText: document.getElementById('archive-delete-confirm-text'),
+         deleteConfirmYes: document.getElementById('archive-delete-confirm-yes'),
+         deleteConfirmNo: document.getElementById('archive-delete-confirm-no'),
          successModal: document.getElementById('archive-success-modal'),
          successMessage: document.getElementById('archive-success-message'),
          successDone: document.getElementById('archive-success-done'),
@@ -51,6 +56,7 @@
              remaining: '',
          },
          pendingRestore: null,
+         pendingDelete: null,
          isLoading: false,
         countdownTimer: null,
         expiryReloadQueued: false,
@@ -320,13 +326,22 @@
                         <div class="text-xs font-black text-slate-700" data-expires-at="${expiresAt.replace(/"/g, '&quot;')}">${remaining || '—'}</div>
                      </td>
                      <td class="px-4 py-3 text-center align-top">
-                         <button type="button"
-                             class="archive-restore-btn px-4 py-2 rounded-xl bg-maroon-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800"
-                             data-module="${moduleKey}"
-                             data-id="${safeStr(it.id || '')}"
-                             data-name="${name.replace(/"/g, '&quot;')}">
-                             Restore
-                         </button>
+                         <div class="flex items-center justify-center gap-2">
+                             <button type="button"
+                                 class="archive-restore-btn px-4 py-2 rounded-xl bg-maroon-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800"
+                                 data-module="${moduleKey}"
+                                 data-id="${safeStr(it.id || '')}"
+                                 data-name="${name.replace(/"/g, '&quot;')}">
+                                 Restore
+                             </button>
+                             <button type="button"
+                                 class="archive-delete-btn px-4 py-2 rounded-xl bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-700"
+                                 data-module="${moduleKey}"
+                                 data-id="${safeStr(it.id || '')}"
+                                 data-name="${name.replace(/"/g, '&quot;')}">
+                                 Delete
+                             </button>
+                         </div>
                      </td>
                  </tr>
              `;
@@ -406,6 +421,71 @@
          state.pendingRestore = null;
      }
  
+     function openConfirmDelete(payload) {
+         state.pendingDelete = payload;
+         if (els.deleteConfirmText) {
+             const label = payload?.name ? `"${payload.name}"` : 'this archived item';
+             els.deleteConfirmText.textContent = `Are you sure you want to permanently delete ${label}?`;
+         }
+         setModal(els.deleteConfirmModal, true);
+     }
+
+     function closeConfirmDelete() {
+         setModal(els.deleteConfirmModal, false);
+         state.pendingDelete = null;
+     }
+
+     async function submitDelete() {
+         const payload = state.pendingDelete;
+         if (!payload || !deleteUrl) return;
+
+         if (els.deleteConfirmYes) {
+             els.deleteConfirmYes.disabled = true;
+             els.deleteConfirmYes.textContent = 'Deleting...';
+         }
+
+         try {
+             const res = await fetch(deleteUrl, {
+                 method: 'DELETE',
+                 headers: {
+                     'Accept': 'application/json',
+                     'Content-Type': 'application/json',
+                     'X-CSRF-TOKEN': csrfToken,
+                 },
+                 body: JSON.stringify({
+                     module: payload.module || null,
+                     id: payload.id || null,
+                 }),
+             });
+
+             const json = await res.json();
+             closeConfirmDelete();
+
+             if (els.successMessage) {
+                 els.successMessage.textContent = safeStr(
+                     json?.message || (json?.success ? 'Archived data was permanently deleted.' : 'Delete failed.')
+                 );
+             }
+
+             setModal(els.successModal, true);
+
+             if (json?.success) {
+                 await loadData();
+             }
+         } catch (e) {
+             closeConfirmDelete();
+             if (els.successMessage) {
+                 els.successMessage.textContent = 'Unable to permanently delete the archived data.';
+             }
+             setModal(els.successModal, true);
+         } finally {
+             if (els.deleteConfirmYes) {
+                 els.deleteConfirmYes.disabled = false;
+                 els.deleteConfirmYes.textContent = 'Delete Permanently';
+             }
+         }
+     }
+
      async function submitRestore() {
          const payload = state.pendingRestore;
          if (!payload || !restoreUrl) return;
@@ -531,19 +611,32 @@
  
          if (els.tbody) {
              els.tbody.addEventListener('click', (e) => {
-                 const btn = e.target?.closest?.('.archive-restore-btn');
-                 if (!btn) return;
-                 openConfirmRestore({
-                     module: btn.dataset.module || null,
-                     id: btn.dataset.id || null,
-                     name: btn.dataset.name || null,
-                 });
+                 const restoreBtn = e.target?.closest?.('.archive-restore-btn');
+                 if (restoreBtn) {
+                     openConfirmRestore({
+                         module: restoreBtn.dataset.module || null,
+                         id: restoreBtn.dataset.id || null,
+                         name: restoreBtn.dataset.name || null,
+                     });
+                     return;
+                 }
+
+                 const deleteBtn = e.target?.closest?.('.archive-delete-btn');
+                 if (deleteBtn) {
+                     openConfirmDelete({
+                         module: deleteBtn.dataset.module || null,
+                         id: deleteBtn.dataset.id || null,
+                         name: deleteBtn.dataset.name || null,
+                     });
+                 }
              });
          }
- 
+
          if (els.confirmNo) els.confirmNo.addEventListener('click', () => closeConfirmRestore());
          if (els.confirmYes) els.confirmYes.addEventListener('click', () => submitRestore());
- 
+         if (els.deleteConfirmNo) els.deleteConfirmNo.addEventListener('click', () => closeConfirmDelete());
+         if (els.deleteConfirmYes) els.deleteConfirmYes.addEventListener('click', () => submitDelete());
+
          if (els.successDone) els.successDone.addEventListener('click', () => closeSuccessModal());
  
          if (els.idInfoBtn) els.idInfoBtn.addEventListener('click', () => openIdGuide());
