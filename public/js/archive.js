@@ -51,6 +51,8 @@
          perPage: 50,
          lastPage: 1,
          total: 0,
+         totalExact: true,
+         hasMore: false,
          from: 0,
          to: 0,
          search: {
@@ -298,13 +300,25 @@
  
      function updatePaginationUi() {
          if (els.pageLabel) els.pageLabel.textContent = safeStr(state.page);
-         if (els.lastPageLabel) els.lastPageLabel.textContent = safeStr(state.lastPage);
+         if (els.lastPageLabel) {
+             els.lastPageLabel.textContent = state.totalExact
+                 ? safeStr(state.lastPage)
+                 : (state.hasMore ? safeStr(state.page + 1) + '+' : safeStr(state.page));
+         }
  
          if (els.prev) els.prev.disabled = state.page <= 1 || state.isLoading;
-         if (els.next) els.next.disabled = state.page >= state.lastPage || state.isLoading;
+         if (els.next) {
+             els.next.disabled = state.isLoading || (
+                 state.totalExact
+                     ? state.page >= state.lastPage
+                     : !state.hasMore
+             );
+         }
  
          if (els.paginationLabel) {
-             els.paginationLabel.textContent = `Showing ${state.from} to ${state.to} of ${state.total}`;
+             els.paginationLabel.textContent = state.totalExact
+                 ? `Showing ${state.from} to ${state.to} of ${state.total}`
+                 : `Showing ${state.from} to ${state.to}${state.hasMore ? ' — more available' : ''}`;
          }
      }
  
@@ -427,6 +441,8 @@
              if (!json || json.success !== true) {
                  renderRows([]);
                  state.total = 0;
+                 state.totalExact = true;
+                 state.hasMore = false;
                  state.from = 0;
                  state.to = 0;
                  state.lastPage = 1;
@@ -436,8 +452,10 @@
  
              const items = json.items || [];
              state.page = Number(json.page || state.page || 1) || 1;
-             state.lastPage = Number(json.last_page || 1) || 1;
-             state.total = Number(json.total || 0) || 0;
+             state.lastPage = Number(json.last_page || state.page || 1) || 1;
+             state.totalExact = json.total_exact !== false;
+             state.hasMore = Boolean(json.has_more);
+             state.total = state.totalExact ? (Number(json.total || 0) || 0) : 0;
              state.from = Number(json.from || 0) || 0;
              state.to = Number(json.to || 0) || 0;
  
