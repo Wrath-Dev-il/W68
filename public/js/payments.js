@@ -2822,7 +2822,13 @@ function openPrintablePaymentLayout({
     // Re-Total is always the TOTAL INVOICE AMOUNT of the selected invoices,
     // never the paid amount and never the Online Payment after any calculation.
     const normalizedRetotal = totalInvoice;
-    const invoiceBlanks = Math.max(5 - printableInvoices.length, 0);
+    // W68_SPECIAL_PAYMENT_HISTORY_A5_7_INVOICES_20261006
+    // Special Payment History uses half-A4 (A5) and reserves exactly 7 invoice rows.
+    const isSpecialPaymentHistoryPrint = paymentHistoryPrint
+        && window.location.pathname.includes('/special/accounting/payments');
+    const invoiceBlanks = isSpecialPaymentHistoryPrint
+        ? Math.max(7 - printableInvoices.length, 0)
+        : Math.max(5 - printableInvoices.length, 0);
     const returnBlanks = Math.max(4 - returns.length, 0);
     const bankBlanks = Math.max(2 - checks.length, 0);
     const blankCells = count => `<tr class="blank-row">${'<td>&nbsp;</td>'.repeat(count)}</tr>`;
@@ -2852,9 +2858,8 @@ function openPrintablePaymentLayout({
     // W68_SPECIAL_PAYMENT_HISTORY_PRINT_FONT_20261006
     // Only Special User > Accounting > Payments > Payment History prints use
     // 10px for all normal text, 11px for table column heads and Customer.
-    const specialPaymentHistoryPrintFontCss = paymentHistoryPrint
-        && window.location.pathname.includes('/special/accounting/payments')
-        ? 'body *{font-size:10px!important}th{font-size:11px!important}.meta-row:first-child,.meta-row:first-child *{font-size:11px!important}'
+    const specialPaymentHistoryPrintFontCss = isSpecialPaymentHistoryPrint
+        ? '@page{size:A5 portrait;margin:5mm!important}body *{font-size:10px!important}.column-head th,.detail-table th{font-size:11px!important}.meta-row:first-child,.meta-row:first-child *{font-size:11px!important}.company,.subtitle,.transaction-section-title,.section-title,.summary,.summary *{font-size:10px!important}.transaction-table td,.transaction-table th,.detail-table td,.detail-table th{padding:2px 3px!important;height:18px!important;line-height:1.05!important}.doc-head-cell{padding:0 0 4px!important}.subtitle{margin:1px 0 4px!important}.meta{gap:2px 8px!important}.meta-row{min-height:13px!important;grid-template-columns:68px 1fr!important;gap:4px!important}.transaction-section-title{padding:3px 0!important}.section-block{margin-top:5px!important}.section-title{margin:0 0 3px!important}.summary{margin-top:5px!important;width:100%!important;max-width:240px!important}.summary>div{padding:2px 0!important}.blank-row td{height:18px!important}'
         : '';
 
     const groupEditablePreview = isGroupPayment;
@@ -3373,9 +3378,18 @@ function openWholePaymentHistoryLayout(detail, printWindow = null) {
     const totalAmount = Number(payment.total_paid ?? invoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0));
 
     // W68_SPECIAL_PAYMENT_HISTORY_PRINT_FONT_20261006
-    const specialPaymentHistoryPrintFontCss = window.location.pathname.includes('/special/accounting/payments')
-        ? 'body *{font-size:10px!important}th{font-size:11px!important}.customer-box,.customer-box *{font-size:11px!important}'
+    // W68_SPECIAL_PAYMENT_HISTORY_A5_7_INVOICES_20261006
+    const isSpecialPaymentHistoryPrint = window.location.pathname.includes('/special/accounting/payments');
+    const specialPaymentHistoryPrintFontCss = isSpecialPaymentHistoryPrint
+        ? '@page{size:A5 portrait;margin:5mm!important}body *{font-size:10px!important}th{font-size:11px!important}.customer-box,.customer-box *{font-size:11px!important}.doc-title,.section-title,.label,.value,.total,.total *{font-size:10px!important}.doc-title{margin:0 0 6px!important}.top{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)!important;gap:8px!important;padding-bottom:5px!important;margin-bottom:6px!important}.meta-row{grid-template-columns:82px 1fr!important;gap:4px!important;padding:1px 0!important}.value{min-height:14px!important;padding-bottom:1px!important}.customer-box{padding:5px 6px!important;min-height:40px!important}.customer-label{margin-bottom:3px!important}.section-title{margin:6px 0 3px!important}.transactions th,.transactions td,.payment-details th,.payment-details td{padding:2px 3px!important;height:18px!important;line-height:1.05!important}.invoice-blank-row td{height:18px!important}.total{margin-top:5px!important;width:100%!important;max-width:250px!important;grid-template-columns:1fr 100px!important}.total.paid-summary{margin-top:5px!important;margin-bottom:5px!important}.total span{padding:4px 5px!important}'
         : '';
+
+    const historyInvoiceBlanks = isSpecialPaymentHistoryPrint
+        ? Math.max(7 - invoices.length, 0)
+        : 0;
+    const blankTransactionRows = Array.from({ length: historyInvoiceBlanks }, () =>
+        '<tr class="invoice-blank-row">' + '<td>&nbsp;</td>'.repeat(7) + '</tr>'
+    ).join('');
 
     const transactionRows = invoices.length ? invoices.map(inv => {
         const rowDate = inv.date || inv.date_created || inv.invoice_date || printable.paymentDate || '---';
@@ -3441,7 +3455,7 @@ ${specialPaymentHistoryPrintFontCss}
 </div>
 
 <div class="section-title">Invoice Details</div>
-<table class="transactions"><thead><tr><th>Date</th><th>Invoice No.</th><th class="right">Inv. Amount</th><th>Slip (Return No.)</th><th class="right">Adjustment</th><th class="right">Amount Due</th><th class="right">Amount Paid</th></tr></thead><tbody>${transactionRows}</tbody></table>
+<table class="transactions"><thead><tr><th>Date</th><th>Invoice No.</th><th class="right">Inv. Amount</th><th>Slip (Return No.)</th><th class="right">Adjustment</th><th class="right">Amount Due</th><th class="right">Amount Paid</th></tr></thead><tbody>${transactionRows}${blankTransactionRows}</tbody></table>
 
 <div class="total paid-summary"><span>Total Paid Amount</span><span class="amount">${money.format(totalAmount)}</span></div>
 
