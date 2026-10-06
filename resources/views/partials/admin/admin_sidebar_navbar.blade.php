@@ -461,6 +461,11 @@
                         </div>
                     </div>
 
+                    <!-- Payments Peso Shortcut -->
+                    <a href="{{ route('admin.payments') }}" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-maroon-900 relative transition-all flex items-center justify-center" title="Payments" aria-label="Payments">
+                        <span class="w-5.5 h-5.5 flex items-center justify-center text-[20px] font-bold leading-none">₱</span>
+                    </a>
+
                     <!-- Notification Bell -->
                     <div class="relative">
                         <button id="notif-btn" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 relative transition-all" title="View Notifications">
