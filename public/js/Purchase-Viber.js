@@ -449,10 +449,8 @@ function w68UpdateReadyItemCache(itemId, field, value, serverData = null) {
     const apply = (item) => {
         if (!item || Number(item.id) !== Number(itemId)) return;
 
-        if (serverData && typeof serverData === 'object') {
-            if (Object.prototype.hasOwnProperty.call(serverData, 'new_cost')) item.new_cost = serverData.new_cost;
-            if (Object.prototype.hasOwnProperty.call(serverData, 'order_qty')) item.order_qty = serverData.order_qty;
-            if (Object.prototype.hasOwnProperty.call(serverData, 'unit')) item.unit = serverData.unit;
+        if (serverData && typeof serverData === 'object' && Object.prototype.hasOwnProperty.call(serverData, field)) {
+            item[field] = serverData[field];
         } else {
             item[field] = value;
         }
@@ -468,9 +466,7 @@ function w68UpdateReadyItemCache(itemId, field, value, serverData = null) {
 }
 
 window.queueReadyToShippedAutoSave = function(input, itemId, field, immediate = false) {
-    if (!input || toShippedTab !== 'ready') return;
-
-    event?.stopPropagation?.();
+    if (VIBER_READ_ONLY || !input || toShippedTab !== 'ready') return;
 
     const allowed = ['new_cost', 'order_qty', 'unit'];
     if (!allowed.includes(field)) return;
@@ -500,6 +496,8 @@ window.queueReadyToShippedAutoSave = function(input, itemId, field, immediate = 
 };
 
 window.saveReadyToShippedField = async function(itemId, field) {
+    if (VIBER_READ_ONLY || toShippedTab !== 'ready') return;
+
     const key = w68ReadyAutoSaveKey(itemId, field);
     const state = w68ReadyAutoSaveState[key];
     if (!state || !state.input) return;
@@ -622,7 +620,7 @@ function renderToShippedItems() {
             <td class="py-3 px-4 ${textClass}">${item.application || '—'}</td>
             <td class="py-3 px-4 text-right ${textClass}">${item.last_cost != null ? formatCurrencyValue(item.last_cost, toShippedTab === 'ready' ? toShippedCurrency : item.currency_code) : '—'}</td>
             <td class="py-3 px-4 text-right ${isClickable && isSelected ? 'text-maroon' : 'text-slate-600'}">
-                ${toShippedTab === 'ready'
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
                     ? `<div class="inline-flex items-center gap-1" onclick="event.stopPropagation()">
                         <span class="text-[10px] font-bold text-slate-400">${escapePrintValue(CURRENCY_SYMBOLS[toShippedCurrency] || '₱')}</span>
                         <input type="number" min="0" step="0.01"
@@ -639,7 +637,7 @@ function renderToShippedItems() {
                     : (item.new_cost != null ? formatCurrencyValue(item.new_cost, item.currency_code) : '—')}
             </td>
             <td class="py-3 px-4 text-center ${isClickable && isSelected ? 'text-maroon font-semibold' : 'text-slate-600'}">
-                ${toShippedTab === 'ready'
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
                     ? `<input type="number" min="0" step="any"
                         value="${item.order_qty != null ? Number(item.order_qty) : 0}"
                         data-ready-item-id="${item.id}"
@@ -653,7 +651,7 @@ function renderToShippedItems() {
                     : (item.order_qty != null ? parseFloat(item.order_qty) : '—')}
             </td>
             <td class="py-3 px-4 ${textClass}">
-                ${toShippedTab === 'ready'
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
                     ? `<input type="text" maxlength="50"
                         value="${escapePrintValue(item.unit || item.oum_unit || '')}"
                         data-ready-item-id="${item.id}"
