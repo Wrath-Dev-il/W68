@@ -91,6 +91,7 @@ function initializeDatabaseUsers() {
             middleName: u.User_Middle_Name || "",
             lastName: u.User_Last_Name,
             password: u.Password || "",
+            isCustomerPortal: u.account_type === 5,
             accountType: acctTypeMap[u.account_type] || 'customer',
             lastChange: dateStr,
             status: status,
@@ -293,19 +294,18 @@ function renderTables() {
                 const tr = document.createElement("tr");
                 tr.className = "hover:bg-slate-50/60 table-row-animate transition-colors divide-x divide-slate-100";
                 
-                const isPasswordVisible = passwordVisibility[user.userId] === true;
-                const passwordDisplay = isPasswordVisible ? (user.password || "No password set") : "••••••••";
-                const eyeIcon = isPasswordVisible ? "eye-off" : "eye";
+                const isCustomerPortal = user.isCustomerPortal === true;
+                const isPasswordVisible = !isCustomerPortal && passwordVisibility[user.userId] === true;
+                const passwordDisplay = isCustomerPortal ? "Encrypted" : (isPasswordVisible ? (user.password || "No password set") : "••••••••");
+                const eyeIcon = isPasswordVisible ? "eye-off" : (isCustomerPortal ? "lock" : "eye");
 
                 tr.innerHTML = `
                     <td class="py-4 px-5 font-mono font-bold text-slate-800 text-xs">${user.userId}</td>
                     <td class="py-4 px-5 text-slate-700 font-medium">${user.firstName} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName}</td>
                     <td class="py-4 px-5">
                         <div class="password-toggle-container">
-                            <span class="font-mono text-xs text-slate-500 block min-w-[80px]">${passwordDisplay}</span>
-                            <span onclick="togglePasswordReveal('${user.userId}')" class="password-toggle-btn">
-                                <i data-lucide="${eyeIcon}" class="w-4 h-4"></i>
-                            </span>
+                            <span class="font-mono text-xs ${isCustomerPortal ? 'text-amber-600 font-semibold' : 'text-slate-500'} block min-w-[80px]">${passwordDisplay}</span>
+                            ${isCustomerPortal ? `<span class="password-toggle-btn opacity-50 cursor-not-allowed" title="Customer portal passwords are encrypted and cannot be revealed"><i data-lucide="lock" class="w-4 h-4"></i></span>` : `<span onclick="togglePasswordReveal('${user.userId}')" class="password-toggle-btn"><i data-lucide="${eyeIcon}" class="w-4 h-4"></i></span>`}
                         </div>
                     </td>
                     <td class="py-4 px-5 text-slate-500 text-xs">${user.lastChange}</td>
@@ -344,19 +344,18 @@ function renderTables() {
                 const tr = document.createElement("tr");
                 tr.className = "hover:bg-slate-50/60 table-row-animate transition-colors divide-x divide-slate-100";
                 
-                const isPasswordVisible = passwordVisibility[user.userId] === true;
-                const passwordDisplay = isPasswordVisible ? (user.password || "No password set") : "••••••••";
-                const eyeIcon = isPasswordVisible ? "eye-off" : "eye";
+                const isCustomerPortal = user.isCustomerPortal === true;
+                const isPasswordVisible = !isCustomerPortal && passwordVisibility[user.userId] === true;
+                const passwordDisplay = isCustomerPortal ? "Encrypted" : (isPasswordVisible ? (user.password || "No password set") : "••••••••");
+                const eyeIcon = isPasswordVisible ? "eye-off" : (isCustomerPortal ? "lock" : "eye");
 
                 tr.innerHTML = `
                     <td class="py-4 px-5 font-mono font-bold text-slate-800 text-xs">${user.userId}</td>
                     <td class="py-4 px-5 text-slate-700 font-medium">${user.firstName} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName}</td>
                     <td class="py-4 px-5">
                         <div class="password-toggle-container">
-                            <span class="font-mono text-xs text-slate-500 block min-w-[80px]">${passwordDisplay}</span>
-                            <span onclick="togglePasswordReveal('${user.userId}')" class="password-toggle-btn">
-                                <i data-lucide="${eyeIcon}" class="w-4 h-4"></i>
-                            </span>
+                            <span class="font-mono text-xs ${isCustomerPortal ? 'text-amber-600 font-semibold' : 'text-slate-500'} block min-w-[80px]">${passwordDisplay}</span>
+                            ${isCustomerPortal ? `<span class="password-toggle-btn opacity-50 cursor-not-allowed" title="Customer portal passwords are encrypted and cannot be revealed"><i data-lucide="lock" class="w-4 h-4"></i></span>` : `<span onclick="togglePasswordReveal('${user.userId}')" class="password-toggle-btn"><i data-lucide="${eyeIcon}" class="w-4 h-4"></i></span>`}
                         </div>
                     </td>
                     <td class="py-4 px-5 text-slate-500 text-xs">${user.lastChange}</td>

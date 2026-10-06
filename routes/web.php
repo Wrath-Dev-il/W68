@@ -807,9 +807,9 @@ if (!function_exists('hatdogLoginSessionColumns')) {
         try {
             $columns = Schema::getColumnListing('logins');
 
-            if (in_array('profile_picture', $columns, true)) {
-                $columns = array_values(array_filter($columns, fn ($column) => $column !== 'profile_picture'));
-            }
+            // Strip sensitive and large columns – these must never be stored in the session.
+            $exclude = ['profile_picture', 'Password', 'Otp_Code', 'OTP_CODE'];
+            $columns = array_values(array_filter($columns, fn ($column) => !in_array($column, $exclude, true)));
 
             return $columns ?: ['*'];
         } catch (\Throwable $e) {
@@ -1376,13 +1376,16 @@ Route::post('/login', function (Request $request) use ($recordSuspiciousAttempt,
     $user = Login::select(hatdogLoginSessionColumns())->where('User_ID', $userId)->first();
 
     if ($user) {
+        // Fetch Password separately – it is deliberately excluded from session columns.
+        $storedPassword = DB::table('logins')->where('login_ID', $user->login_ID)->value('Password');
+
         // Safe check for plain-text or Bcrypt hashed passwords
         $passwordMatches = false;
-        if ($password === $user->Password) {
+        if ($storedPassword && $password === $storedPassword) {
             $passwordMatches = true;
         } else {
             try {
-                if (Hash::check($password, $user->Password)) {
+                if ($storedPassword && Hash::check($password, $storedPassword)) {
                     $passwordMatches = true;
                 }
             } catch (\Throwable $e) {
@@ -5258,7 +5261,22 @@ Route::get('/admin/usm', function () {
     }
 
     // Fetch all login records ordered by newest first
-    $dbUsers = Login::select(hatdogLoginSessionColumns())->orderBy('created_at', 'desc')->get()->each->makeVisible('Password');
+    // Password is excluded from hatdogLoginSessionColumns() for security.
+    // For the USM admin panel, fetch it separately and attach only for non-customer accounts.
+    $dbUsers = Login::select(hatdogLoginSessionColumns())->orderBy('created_at', 'desc')->get();
+
+    // Fetch passwords for staff accounts only (not customer portal type 5)
+    $staffPasswords = DB::table('logins')
+        ->where('account_type', '!=', 5)
+        ->pluck('Password', 'login_ID');
+
+    $dbUsers->each(function ($login) use ($staffPasswords) {
+        $loginId = $login->login_ID;
+        if (isset($staffPasswords[$loginId])) {
+            $login->setAttribute('Password', $staffPasswords[$loginId]);
+            $login->makeVisible('Password');
+        }
+    });
 
     $sessionTable = config('session.table', 'sessions');
     $sessionLifetimeSeconds = max(1, (int) config('session.lifetime', 120)) * 60;
