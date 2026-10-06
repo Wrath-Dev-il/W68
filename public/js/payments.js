@@ -1015,7 +1015,12 @@ window.printSelectedPayorHistory = async function() {
         if (!data.success) throw new Error(data.message || 'Failed to load receipts.');
         const receipts = data.receipts || [];
         if (!receipts.length) throw new Error('No printable receipt data was returned.');
-        receipts.forEach(receipt => { openPrintablePaymentLayout(paymentDetailToPrintable(receipt)); });
+        receipts.forEach(receipt => {
+            openPrintablePaymentLayout({
+                ...paymentDetailToPrintable(receipt),
+                paymentHistoryPrint: true
+            });
+        });
     } catch (error) {
         showNotification(error.message || 'Failed to print selected invoices.', 'error');
     } finally {
@@ -2779,7 +2784,8 @@ function formatPrintPercent(value) {
 function openPrintablePaymentLayout({
     customer = {}, collectionNo = '---', paymentDate = '', invoices = [], checks = [], returns = [],
     isGroupPayment = false, groupOnlinePercent = 0, groupOnlinePayment = 0, groupRetotalAmount = null,
-    groupDiscountPercent = 0, groupDiscountAmount = 0, groupDiscountEmbeddedInAdjustments = false
+    groupDiscountPercent = 0, groupDiscountAmount = 0, groupDiscountEmbeddedInAdjustments = false,
+    paymentHistoryPrint = false
 }) {
     const legacyPercent = Math.max(0, Math.min(100, Number(groupDiscountPercent || 0)));
     const printableInvoices = invoices.map(inv => {
@@ -2843,6 +2849,14 @@ function openPrintablePaymentLayout({
     // W68_PAYMENTS_GROUP_EDITABLE_PRINT_20260909
     // Group prints open as an editable browser-only report. Users can change any
     // visible report text/amount before printing. Nothing here is saved to DB.
+    // W68_SPECIAL_PAYMENT_HISTORY_PRINT_FONT_20261006
+    // Only Special User > Accounting > Payments > Payment History prints use
+    // 10px for all normal text, 11px for table column heads and Customer.
+    const specialPaymentHistoryPrintFontCss = paymentHistoryPrint
+        && window.location.pathname.includes('/special/accounting/payments')
+        ? 'body *{font-size:10px!important}th{font-size:11px!important}.meta-row:first-child,.meta-row:first-child *{font-size:11px!important}'
+        : '';
+
     const groupEditablePreview = isGroupPayment;
     const groupEditToolbar = groupEditablePreview ? `
         <div class="w68-group-edit-toolbar" contenteditable="false">
@@ -2893,6 +2907,7 @@ th{font-size:8.5px;font-weight:800;text-align:left}
 .w68-group-edit-actions button{border:0;border-radius:7px;padding:8px 12px;font-size:9px;font-weight:900;cursor:pointer;background:#FFD700;color:#4A0E0E}
 #w68-group-editable-report{outline:2px dashed rgba(122,92,0,.42);outline-offset:5px;min-height:240px}
 #w68-group-editable-report:focus{outline:2px dashed #9A7200}
+${specialPaymentHistoryPrintFontCss}
 @media print{
   .w68-group-edit-toolbar{display:none!important}
   #w68-group-editable-report{outline:none!important}
@@ -3357,6 +3372,11 @@ function openWholePaymentHistoryLayout(detail, printWindow = null) {
 
     const totalAmount = Number(payment.total_paid ?? invoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0));
 
+    // W68_SPECIAL_PAYMENT_HISTORY_PRINT_FONT_20261006
+    const specialPaymentHistoryPrintFontCss = window.location.pathname.includes('/special/accounting/payments')
+        ? 'body *{font-size:10px!important}th{font-size:11px!important}.customer-box,.customer-box *{font-size:11px!important}'
+        : '';
+
     const transactionRows = invoices.length ? invoices.map(inv => {
         const rowDate = inv.date || inv.date_created || inv.invoice_date || printable.paymentDate || '---';
         return `<tr>
@@ -3404,6 +3424,7 @@ th{font-size:13px;font-weight:900;text-transform:uppercase;background:#fff;line-
 .total{margin:14px 0 0 auto;width:360px;border:2px solid #111;display:grid;grid-template-columns:1fr 155px;align-items:center;font-size:13px;font-weight:900}
 .total.paid-summary{margin-top:10px;margin-bottom:12px}
 .total span{padding:8px 10px}.total .amount{text-align:right;border-left:2px solid #111;font-size:13px}
+${specialPaymentHistoryPrintFontCss}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.customer-box,.total{break-inside:avoid;page-break-inside:avoid}}
 </style></head><body><div class="page">
 <div class="doc-title">Payment History</div>
