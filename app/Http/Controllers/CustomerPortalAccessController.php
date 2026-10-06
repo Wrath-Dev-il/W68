@@ -115,6 +115,10 @@ class CustomerPortalAccessController extends Controller
 
     public function updateValidity(Request $request, int $customerId): JsonResponse
     {
+        if ((string) $request->input('action', '') === 'reset_password') {
+            return $this->resetLinkedAccountPassword($request, $customerId);
+        }
+
         $this->assertSignedInUser();
         Customer::query()->findOrFail($customerId);
         $validated = $this->validateValidity($request);
@@ -159,8 +163,12 @@ class CustomerPortalAccessController extends Controller
         ]);
     }
 
-    public function delete(int $customerId): JsonResponse
+    public function delete(Request $request, int $customerId): JsonResponse
     {
+        if ((string) $request->input('target', '') === 'account') {
+            return $this->deleteLinkedAccount($customerId);
+        }
+
         $this->assertSignedInUser();
         Customer::query()->findOrFail($customerId);
 
@@ -177,14 +185,14 @@ class CustomerPortalAccessController extends Controller
         ]);
     }
 
-    /* W68_SPECIAL_PORTAL_ACCOUNT_MANAGEMENT_20261006 */
-    public function resetLinkedAccountPassword(Request $request, int $customerId): JsonResponse
+    /* W68_PORTAL_ACCOUNT_MANAGEMENT_ALL_STAFF_20261006 */
+    private function resetLinkedAccountPassword(Request $request, int $customerId): JsonResponse
     {
-        $this->assertSpecialCustomerManager();
+        $this->assertPortalAccountManager();
         Customer::query()->findOrFail($customerId);
 
         $validated = $request->validate([
-            'password' => ['required', 'string', 'min:4', 'max:255'],
+            'password' => ['required', 'string', 'max:255'],
         ]);
 
         if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
@@ -233,7 +241,6 @@ class CustomerPortalAccessController extends Controller
             ->where('account_type', 5)
             ->update($updates);
 
-        // Revoke active portal sessions after an administrator resets the password.
         if (
             Schema::connection('mysql')->hasTable('sessions')
             && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
@@ -246,14 +253,14 @@ class CustomerPortalAccessController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Pricelist account password reset successfully. Existing sessions were signed out.',
+            'message' => 'Pricelist account password reset successfully. Existing portal sessions were signed out.',
             'linked_account' => $this->linkedAccountPayload($customerId),
         ]);
     }
 
-    public function deleteLinkedAccount(int $customerId): JsonResponse
+    private function deleteLinkedAccount(int $customerId): JsonResponse
     {
-        $this->assertSpecialCustomerManager();
+        $this->assertPortalAccountManager();
         Customer::query()->findOrFail($customerId);
 
         if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
@@ -295,7 +302,10 @@ class CustomerPortalAccessController extends Controller
                 Schema::connection('mysql')->hasTable('sessions')
                 && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
             ) {
-                DB::connection('mysql')->table('sessions')->where('user_id', $loginId)->delete();
+                DB::connection('mysql')
+                    ->table('sessions')
+                    ->where('user_id', $loginId)
+                    ->delete();
             }
 
             if (
@@ -326,17 +336,18 @@ class CustomerPortalAccessController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Pricelist account deleted. The Customer Master record and portal authorization were kept.',
+            'message' => 'Pricelist account deleted. Customer Master and portal authorization were kept so the customer can register again.',
             'linked_account' => null,
         ]);
     }
 
-    private function assertSpecialCustomerManager(): object
+    private function assertPortalAccountManager(): object
     {
         $user = $this->assertSignedInUser();
+        $accountType = (int) ($user->account_type ?? 0);
 
-        if ((int) ($user->account_type ?? 0) !== 3) {
-            abort(403, 'Only Special Users can manage customer portal accounts from this page.');
+        if (!in_array($accountType, [1, 2, 3], true)) {
+            abort(403, 'This user is not allowed to manage customer portal accounts.');
         }
 
         return $user;
@@ -396,6 +407,10 @@ class CustomerPortalAccessController extends Controller
                 ->where('login_ID', $link->login_id)
                 ->first(['login_ID', 'User_ID', 'Email']);
 
+            if (!$login) {
+                return null;
+            }
+
             return [
                 'login_id' => (int) $link->login_id,
                 'username' => (string) ($login->User_ID ?? ''),
@@ -405,6 +420,7 @@ class CustomerPortalAccessController extends Controller
                     : null,
                 'password_protected' => true,
                 'password_can_reset' => true,
+                'account_can_delete' => true,
             ];
         } catch (Throwable $exception) {
             report($exception);
