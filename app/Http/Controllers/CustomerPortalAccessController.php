@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -176,6 +177,171 @@ class CustomerPortalAccessController extends Controller
         ]);
     }
 
+    /* W68_SPECIAL_PORTAL_ACCOUNT_MANAGEMENT_20261006 */
+    public function resetLinkedAccountPassword(Request $request, int $customerId): JsonResponse
+    {
+        $this->assertSpecialCustomerManager();
+        Customer::query()->findOrFail($customerId);
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:4', 'max:255'],
+        ]);
+
+        if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer portal account linking is not configured.',
+            ], 503);
+        }
+
+        $link = DB::connection('mysql')
+            ->table('customer_portal_accounts')
+            ->where('customer_id', $customerId)
+            ->first();
+
+        if (!$link) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This customer does not have a linked Pricelist account.',
+            ], 404);
+        }
+
+        $login = DB::connection('mysql')
+            ->table('logins')
+            ->where('login_ID', (int) $link->login_id)
+            ->first();
+
+        if (!$login || (int) ($login->account_type ?? 0) !== 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The linked customer login could not be found.',
+            ], 404);
+        }
+
+        $updates = [
+            'Password' => Hash::make((string) $validated['password']),
+            'updated_at' => now(),
+        ];
+
+        if (Schema::connection('mysql')->hasColumn('logins', 'OTP_CODE')) {
+            $updates['OTP_CODE'] = null;
+        }
+
+        DB::connection('mysql')
+            ->table('logins')
+            ->where('login_ID', (int) $link->login_id)
+            ->where('account_type', 5)
+            ->update($updates);
+
+        // Revoke active portal sessions after an administrator resets the password.
+        if (
+            Schema::connection('mysql')->hasTable('sessions')
+            && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
+        ) {
+            DB::connection('mysql')
+                ->table('sessions')
+                ->where('user_id', (int) $link->login_id)
+                ->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pricelist account password reset successfully. Existing sessions were signed out.',
+            'linked_account' => $this->linkedAccountPayload($customerId),
+        ]);
+    }
+
+    public function deleteLinkedAccount(int $customerId): JsonResponse
+    {
+        $this->assertSpecialCustomerManager();
+        Customer::query()->findOrFail($customerId);
+
+        if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer portal account linking is not configured.',
+            ], 503);
+        }
+
+        $link = DB::connection('mysql')
+            ->table('customer_portal_accounts')
+            ->where('customer_id', $customerId)
+            ->first();
+
+        if (!$link) {
+            return response()->json([
+                'success' => true,
+                'message' => 'This customer does not have a linked Pricelist account.',
+                'linked_account' => null,
+            ]);
+        }
+
+        $login = DB::connection('mysql')
+            ->table('logins')
+            ->where('login_ID', (int) $link->login_id)
+            ->first();
+
+        if ($login && (int) ($login->account_type ?? 0) !== 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Delete stopped because the linked login is not a customer portal account.',
+            ], 409);
+        }
+
+        DB::connection('mysql')->transaction(function () use ($link, $login): void {
+            $loginId = (int) $link->login_id;
+
+            if (
+                Schema::connection('mysql')->hasTable('sessions')
+                && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
+            ) {
+                DB::connection('mysql')->table('sessions')->where('user_id', $loginId)->delete();
+            }
+
+            if (
+                $login
+                && !empty($login->Email)
+                && Schema::connection('mysql')->hasTable('password_reset_tokens')
+                && Schema::connection('mysql')->hasColumn('password_reset_tokens', 'email')
+            ) {
+                DB::connection('mysql')
+                    ->table('password_reset_tokens')
+                    ->where('email', (string) $login->Email)
+                    ->delete();
+            }
+
+            DB::connection('mysql')
+                ->table('customer_portal_accounts')
+                ->where('id', (int) $link->id)
+                ->delete();
+
+            if ($login) {
+                DB::connection('mysql')
+                    ->table('logins')
+                    ->where('login_ID', $loginId)
+                    ->where('account_type', 5)
+                    ->delete();
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pricelist account deleted. The Customer Master record and portal authorization were kept.',
+            'linked_account' => null,
+        ]);
+    }
+
+    private function assertSpecialCustomerManager(): object
+    {
+        $user = $this->assertSignedInUser();
+
+        if ((int) ($user->account_type ?? 0) !== 3) {
+            abort(403, 'Only Special Users can manage customer portal accounts from this page.');
+        }
+
+        return $user;
+    }
+
     private function authorizationPayload(?object $authorization): ?array
     {
         if (!$authorization) {
@@ -237,6 +403,8 @@ class CustomerPortalAccessController extends Controller
                 'linked_at' => $link->linked_at
                     ? Carbon::parse($link->linked_at)->toIso8601String()
                     : null,
+                'password_protected' => true,
+                'password_can_reset' => true,
             ];
         } catch (Throwable $exception) {
             report($exception);
