@@ -1039,6 +1039,14 @@ function renderPortalLinkedAccount(account) {
         toggleBtn.disabled = !currentPortalLinkedPasswordRaw;
     }
 
+    const tempPassInput = document.getElementById('portal-linked-temp-password-input');
+    if (tempPassInput) tempPassInput.value = '';
+    const tempPassError = document.getElementById('portal-linked-temp-password-error');
+    if (tempPassError) {
+        tempPassError.textContent = '';
+        tempPassError.classList.add('hidden');
+    }
+
     box.classList.remove('hidden');
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -1079,6 +1087,71 @@ window.copyPortalLinkedPasswordText = async function() {
             sel.addRange(range);
         }
         alert('Password selected. Press Ctrl+C to copy.');
+    }
+};
+
+/* W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 */
+window.submitPortalLinkedPasswordChange = async function() {
+    const customerId = Number(currentPortalCustomerId || 0);
+    const input = document.getElementById('portal-linked-temp-password-input');
+    const btn = document.getElementById('portal-linked-temp-password-btn');
+    const err = document.getElementById('portal-linked-temp-password-error');
+    const newPassword = String(input?.value ?? '').trim();
+
+    if (!customerId) return;
+
+    if (!newPassword) {
+        if (err) {
+            err.textContent = 'Please enter a new password first.';
+            err.classList.remove('hidden');
+        }
+        input?.focus();
+        return;
+    }
+
+    if (err) err.classList.add('hidden');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.portalValidity(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                action: 'reset_password',
+                password: newPassword
+            })
+        });
+
+        const body = await readPortalJson(response);
+
+        if (input) input.value = '';
+        if (typeof showSuccessModal === 'function') {
+            showSuccessModal('Password Updated', body.message || 'Password updated as plain text.');
+        } else {
+            alert(body.message || 'Password updated as plain text.');
+        }
+
+        currentPortalLoadId = null;
+        await loadPortalAccess(customerId);
+    } catch (e) {
+        if (err) {
+            err.textContent = e.message || 'Failed to update customer password.';
+            err.classList.remove('hidden');
+        } else {
+            alert(e.message || 'Failed to update customer password.');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Update';
+        }
     }
 };
 

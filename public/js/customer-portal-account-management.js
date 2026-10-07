@@ -1,4 +1,4 @@
-/* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
+/* W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 */
 (function () {
     'use strict';
 
@@ -18,6 +18,7 @@
         try {
             return {
                 status: CUSTOMER_ENDPOINTS.portalStatus(id),
+                reset: CUSTOMER_ENDPOINTS.portalValidity(id),
                 deleteAccount: CUSTOMER_ENDPOINTS.portalDelete(id)
             };
         } catch (_) {
@@ -164,6 +165,22 @@
                 </div>
             </div>
 
+            <!-- W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 -->
+            <div class="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-3">
+                <div class="flex items-center justify-between">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-amber-800">Temporary: Set Plain Text Password</p>
+                    <span class="rounded bg-amber-200/80 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-amber-900">Plain Text</span>
+                </div>
+                <p class="mt-1 text-[8px] font-medium leading-relaxed text-amber-700">Enter a new password below. It will be saved directly in plain text (no hash).</p>
+                <div class="mt-2 flex gap-2">
+                    <input id="portal-account-temp-password" type="text" placeholder="Enter new plain text password" class="min-w-0 flex-1 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-mono font-bold text-slate-800 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200">
+                    <button id="portal-account-temp-save-btn" type="button" class="shrink-0 rounded-xl bg-amber-600 px-3.5 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-sm hover:bg-amber-700 disabled:opacity-50">
+                        Update
+                    </button>
+                </div>
+                <p id="portal-account-temp-error" class="mt-1.5 hidden text-[8px] font-bold text-red-600"></p>
+            </div>
+
             <p id="portal-account-action-error" class="mt-2 hidden rounded-lg bg-red-50 px-3 py-2 text-[9px] font-bold text-red-600"></p>
 
             <button id="portal-account-delete" type="button" class="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">
@@ -176,6 +193,9 @@
         const remove = document.getElementById('portal-account-delete');
         const passView = document.getElementById('portal-account-password-view');
         const toggleLabel = document.getElementById('portal-account-toggle-label');
+        const tempPassInput = document.getElementById('portal-account-temp-password');
+        const tempSaveBtn = document.getElementById('portal-account-temp-save-btn');
+        const tempError = document.getElementById('portal-account-temp-error');
 
         let isShowing = false;
 
@@ -212,6 +232,64 @@
                     sel.addRange(range);
                 }
                 alert('Password selected. Press Ctrl+C to copy.');
+            }
+        });
+
+        tempSaveBtn?.addEventListener('click', async () => {
+            const newPassword = String(tempPassInput?.value ?? '').trim();
+            if (!newPassword) {
+                if (tempError) {
+                    tempError.textContent = 'Please enter a new password first.';
+                    tempError.classList.remove('hidden');
+                }
+                tempPassInput?.focus();
+                return;
+            }
+            if (tempError) tempError.classList.add('hidden');
+            tempSaveBtn.disabled = true;
+            tempSaveBtn.textContent = 'Saving...';
+
+            try {
+                const endpoints = endpointsFor(customerId());
+                if (!endpoints) throw new Error('Missing endpoints.');
+
+                const response = await fetch(endpoints.reset, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken()
+                    },
+                    body: JSON.stringify({
+                        action: 'reset_password',
+                        password: newPassword
+                    })
+                });
+                const body = await readJson(response);
+                if (typeof showSuccessModal === 'function') {
+                    showSuccessModal('Password Updated', body.message || 'Password updated as plain text.');
+                } else {
+                    alert(body.message || 'Password updated as plain text.');
+                }
+                await loadAccount();
+                try {
+                    if (typeof currentPortalLoadId !== 'undefined') {
+                        currentPortalLoadId = null;
+                    }
+                    if (typeof loadPortalAccess === 'function') {
+                        await loadPortalAccess(customerId());
+                    }
+                } catch (_) {}
+            } catch (err) {
+                if (tempError) {
+                    tempError.textContent = err.message || 'Failed to update password.';
+                    tempError.classList.remove('hidden');
+                } else {
+                    alert(err.message || 'Failed to update password.');
+                }
+            } finally {
+                tempSaveBtn.disabled = false;
+                tempSaveBtn.textContent = 'Update';
             }
         });
 

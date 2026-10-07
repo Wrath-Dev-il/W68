@@ -282,6 +282,22 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <!-- W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 -->
+                                    <div class="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-3">
+                                        <div class="flex items-center justify-between">
+                                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800">Temporary: Set Plain Text Password</p>
+                                            <span class="rounded bg-amber-200/80 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-amber-900">Plain Text</span>
+                                        </div>
+                                        <p class="mt-1 text-[8px] font-medium leading-relaxed text-amber-700">Enter a new password below. It will be saved directly in plain text (no hash).</p>
+                                        <div class="mt-2 flex gap-2">
+                                            <input id="portal-linked-temp-password-input" type="text" placeholder="Enter new plain text password" class="min-w-0 flex-1 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-mono font-bold text-slate-800 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200">
+                                            <button id="portal-linked-temp-password-btn" type="button" onclick="submitPortalLinkedPasswordChange()" class="shrink-0 rounded-xl bg-amber-600 px-3.5 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-sm hover:bg-amber-700 disabled:opacity-50">
+                                                Update
+                                            </button>
+                                        </div>
+                                        <p id="portal-linked-temp-password-error" class="mt-1.5 hidden text-[8px] font-bold text-red-600"></p>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-1 gap-2">
