@@ -1039,14 +1039,6 @@ function renderPortalLinkedAccount(account) {
         toggleBtn.disabled = !currentPortalLinkedPasswordRaw;
     }
 
-    const tempPassInput = document.getElementById('portal-linked-temp-password-input');
-    if (tempPassInput) tempPassInput.value = '';
-    const tempPassError = document.getElementById('portal-linked-temp-password-error');
-    if (tempPassError) {
-        tempPassError.textContent = '';
-        tempPassError.classList.add('hidden');
-    }
-
     box.classList.remove('hidden');
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -1090,68 +1082,49 @@ window.copyPortalLinkedPasswordText = async function() {
     }
 };
 
-/* W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 */
-window.submitPortalLinkedPasswordChange = async function() {
+/* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
+window.deletePortalLinkedAccount = function() {
     const customerId = Number(currentPortalCustomerId || 0);
-    const input = document.getElementById('portal-linked-temp-password-input');
-    const btn = document.getElementById('portal-linked-temp-password-btn');
-    const err = document.getElementById('portal-linked-temp-password-error');
-    const newPassword = String(input?.value ?? '').trim();
-
     if (!customerId) return;
 
-    if (!newPassword) {
-        if (err) {
-            err.textContent = 'Please enter a new password first.';
-            err.classList.remove('hidden');
+    const runDelete = async () => {
+        const button = document.getElementById('portal-linked-account-delete');
+        if (button) button.disabled = true;
+
+        try {
+            const response = await fetch(CUSTOMER_ENDPOINTS.portalDelete(customerId), {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ target: 'account' })
+            });
+            const body = await readPortalJson(response);
+
+            if (typeof showSuccessModal === 'function') {
+                showSuccessModal('Portal Account Deleted', body.message || 'The registered portal account was deleted.');
+            } else {
+                alert(body.message || 'The registered portal account was deleted.');
+            }
+
+            currentPortalLoadId = null;
+            await loadPortalAccess(customerId);
+        } catch (error) {
+            alert(error.message || 'Unable to delete the portal account.');
+            if (button) button.disabled = false;
         }
-        input?.focus();
-        return;
-    }
+    };
 
-    if (err) err.classList.add('hidden');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-    }
-
-    try {
-        const response = await fetch(CUSTOMER_ENDPOINTS.portalValidity(customerId), {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': getCsrfToken()
-            },
-            body: JSON.stringify({
-                action: 'reset_password',
-                password: newPassword
-            })
-        });
-
-        const body = await readPortalJson(response);
-
-        if (input) input.value = '';
-        if (typeof showSuccessModal === 'function') {
-            showSuccessModal('Password Updated', body.message || 'Password updated as plain text.');
-        } else {
-            alert(body.message || 'Password updated as plain text.');
-        }
-
-        currentPortalLoadId = null;
-        await loadPortalAccess(customerId);
-    } catch (e) {
-        if (err) {
-            err.textContent = e.message || 'Failed to update customer password.';
-            err.classList.remove('hidden');
-        } else {
-            alert(e.message || 'Failed to update customer password.');
-        }
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Update';
-        }
+    if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+            'Delete Portal Account?',
+            'Delete this customer\'s registered Pricelist login? This will NOT delete the Customer Master record or the authorization/QR code. The customer may register a new account afterward.',
+            runDelete
+        );
+    } else if (window.confirm('Delete this registered Pricelist account? Customer Master and QR authorization will be kept.')) {
+        runDelete();
     }
 };
 

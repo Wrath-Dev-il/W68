@@ -258,7 +258,7 @@
 
                                 <div id="portal-linked-account" class="hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                                     <div class="flex items-center justify-between">
-                                        <p class="text-[9px] font-black uppercase tracking-widest text-blue-700">Linked Pricelist Account</p>
+                                        <p class="text-[9px] font-black uppercase tracking-widest text-blue-700">Registered Pricelist Account</p>
                                         <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-700">Registered</span>
                                     </div>
                                     <p id="portal-linked-username" class="mt-2 text-xs font-extrabold text-slate-700"></p>
@@ -283,21 +283,10 @@
                                         </div>
                                     </div>
 
-                                    <!-- W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 -->
-                                    <div class="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-3">
-                                        <div class="flex items-center justify-between">
-                                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800">Temporary: Set Plain Text Password</p>
-                                            <span class="rounded bg-amber-200/80 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-amber-900">Plain Text</span>
-                                        </div>
-                                        <p class="mt-1 text-[8px] font-medium leading-relaxed text-amber-700">Enter a new password below. It will be saved directly in plain text (no hash).</p>
-                                        <div class="mt-2 flex gap-2">
-                                            <input id="portal-linked-temp-password-input" type="text" placeholder="Enter new plain text password" class="min-w-0 flex-1 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-mono font-bold text-slate-800 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200">
-                                            <button id="portal-linked-temp-password-btn" type="button" onclick="submitPortalLinkedPasswordChange()" class="shrink-0 rounded-xl bg-amber-600 px-3.5 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-sm hover:bg-amber-700 disabled:opacity-50">
-                                                Update
-                                            </button>
-                                        </div>
-                                        <p id="portal-linked-temp-password-error" class="mt-1.5 hidden text-[8px] font-bold text-red-600"></p>
-                                    </div>
+                                    <button id="portal-linked-account-delete" type="button" onclick="deletePortalLinkedAccount()" class="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">
+                                        Delete Portal Account
+                                    </button>
+                                    <p class="mt-1.5 text-[8px] font-semibold leading-relaxed text-slate-400">Deleting the portal account removes only the registered Pricelist login/link. The Customer Master record and authorization/QR are kept so the customer can re-register.</p>
                                 </div>
 
                                 <div class="grid grid-cols-1 gap-2">

@@ -115,7 +115,7 @@ class CustomerPortalAccessController extends Controller
 
     public function updateValidity(Request $request, int $customerId): JsonResponse
     {
-        /* W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 */
+        /* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
         if ((string) $request->input('action', '') === 'reset_password') {
             return $this->resetLinkedAccountPassword($request, $customerId);
         }
@@ -186,81 +186,13 @@ class CustomerPortalAccessController extends Controller
         ]);
     }
 
-    /* W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007 */
+    /* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
     private function resetLinkedAccountPassword(Request $request, int $customerId): JsonResponse
     {
-        $this->assertPortalAccountManager();
-        Customer::query()->findOrFail($customerId);
-
-        $validated = $request->validate([
-            'password' => ['required', 'string', 'max:255'],
-        ]);
-
-        if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Customer portal account linking is not configured.',
-            ], 503);
-        }
-
-        $link = DB::connection('mysql')
-            ->table('customer_portal_accounts')
-            ->where('customer_id', $customerId)
-            ->first();
-
-        if (!$link) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This customer does not have a linked Pricelist account.',
-            ], 404);
-        }
-
-        $login = DB::connection('mysql')
-            ->table('logins')
-            ->where('login_ID', (int) $link->login_id)
-            ->first();
-
-        if (!$login || (int) ($login->account_type ?? 0) !== 5) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The linked customer login could not be found.',
-            ], 404);
-        }
-
-        /*
-         * W68_CUSTOMER_PORTAL_CHANGE_PASSWORD_TEMP_20261007
-         * Insert plain text password directly (NO HASHING)
-         */
-        $updates = [
-            'Password' => (string) $validated['password'],
-            'updated_at' => now(),
-        ];
-
-        if (Schema::connection('mysql')->hasColumn('logins', 'OTP_CODE')) {
-            $updates['OTP_CODE'] = null;
-        }
-
-        DB::connection('mysql')
-            ->table('logins')
-            ->where('login_ID', (int) $link->login_id)
-            ->where('account_type', 5)
-            ->update($updates);
-
-        if (
-            Schema::connection('mysql')->hasTable('sessions')
-            && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
-        ) {
-            DB::connection('mysql')
-                ->table('sessions')
-                ->where('user_id', (int) $link->login_id)
-                ->delete();
-        }
-
         return response()->json([
-            'success' => true,
-            'message' => 'Customer password updated successfully as plain text.',
-            'linked_account' => $this->linkedAccountPayload($customerId),
-        ]);
+            'success' => false,
+            'message' => 'Customer passwords cannot be changed. Customer passwords can only be viewed in the portal access tab.',
+        ], 403);
     }
 
     private function deleteLinkedAccount(int $customerId): JsonResponse

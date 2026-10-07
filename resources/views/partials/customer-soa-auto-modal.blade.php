@@ -93,6 +93,3 @@
         </div>
     </div>
 </div>
-
-<!-- W68_PORTAL_ACCOUNT_MANAGEMENT_ALL_STAFF_20261006 -->
-<script src="{{ asset('js/customer-portal-account-management.js') }}?v={{ time() }}"></script>
