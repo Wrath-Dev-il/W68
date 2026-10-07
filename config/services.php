@@ -9,8 +9,8 @@ return [
     |
     | This file is for storing the credentials for third party services such
     | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
+    | location for this type of information, allowing packages to have a
+    | conventional file to locate the various service credentials.
     |
     */
 
@@ -42,6 +42,7 @@ return [
         'refresh_token' => env('SHOPEE_REFRESH_TOKEN'),
         'shop_id' => env('SHOPEE_SHOP_ID'),
         'base_url' => env('SHOPEE_BASE_URL', 'https://partner.shopeemobile.com'),
+        'redirect_url' => env('SHOPEE_REDIRECT_URL'),
         'webhook_secret' => env('SHOPEE_WEBHOOK_SECRET', env('SHOPEE_PARTNER_KEY')),
         'auto_stock_sync' => env('SHOPEE_AUTO_STOCK_SYNC', false),
     ],
