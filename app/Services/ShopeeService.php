@@ -7,14 +7,6 @@ use Illuminate\Support\Facades\Log;
 
 class ShopeeService
 {
-    // W68_SHOPEE_503_TIMEOUT_GUARD_20261007
-    // HostForge serves the Online Product tab through a normal web request.
-    // Keep each Shopee network call well below the web-request timeout so an
-    // unreachable/slow Shopee endpoint returns a controlled JSON error instead
-    // of letting the platform terminate the request as HTTP 503.
-    private const HTTP_TIMEOUT_SECONDS = 8;
-    private const CONNECT_TIMEOUT_SECONDS = 4;
-
     protected string $partnerId;
     protected string $partnerKey;
     protected string $accessToken;
@@ -24,37 +16,27 @@ class ShopeeService
 
     public function __construct()
     {
-        $this->partnerId = (string) config('services.shopee.partner_id', '');
-        $this->partnerKey = (string) config('services.shopee.partner_key', '');
-        $this->accessToken = (string) config('services.shopee.access_token', '');
-        $this->refreshToken = (string) config('services.shopee.refresh_token', '');
-        $this->shopId = (string) config('services.shopee.shop_id', '');
-        $this->baseUrl = (string) config('services.shopee.base_url', 'https://partner.shopeemobile.com');
+        $this->partnerId = config('services.shopee.partner_id');
+        $this->partnerKey = config('services.shopee.partner_key');
+        $this->accessToken = config('services.shopee.access_token');
+        $this->refreshToken = config('services.shopee.refresh_token');
+        $this->shopId = config('services.shopee.shop_id');
+        $this->baseUrl = config('services.shopee.base_url', 'https://partner.shopeemobile.com');
     }
 
     public function isReady(): bool
     {
-        return $this->partnerId !== ''
-            && $this->partnerKey !== ''
-            && $this->accessToken !== ''
-            && $this->shopId !== '';
+        return !empty($this->partnerId) && !empty($this->partnerKey) && !empty($this->accessToken) && !empty($this->shopId);
     }
 
     public function getMissingCredentials(): array
     {
         $missing = [];
-        if ($this->partnerId === '') $missing[] = 'partner_id';
-        if ($this->partnerKey === '') $missing[] = 'partner_key';
-        if ($this->accessToken === '') $missing[] = 'access_token';
-        if ($this->shopId === '') $missing[] = 'shop_id';
+        if (empty($this->partnerId)) $missing[] = 'partner_id';
+        if (empty($this->partnerKey)) $missing[] = 'partner_key';
+        if (empty($this->accessToken)) $missing[] = 'access_token';
+        if (empty($this->shopId)) $missing[] = 'shop_id';
         return $missing;
-    }
-
-    private function httpClient()
-    {
-        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
-            ->timeout(self::HTTP_TIMEOUT_SECONDS)
-            ->withOptions(['verify' => false]);
     }
 
     private function enrichItems(array $itemIds): array
@@ -66,38 +48,30 @@ class ShopeeService
             'item_id_list' => array_slice($itemIds, 0, 50),
         ]);
 
-        if (($baseResult['success'] ?? false) !== true) {
-            Log::warning('Shopee item enrichment failed.', [
-                'item_count' => count($itemIds),
-                'error' => $baseResult['error'] ?? 'Unknown Shopee error',
-            ]);
-            return [];
-        }
-
-        $detailedItems = $baseResult['data']['item_list'] ?? [];
-        $idMap = [];
-        foreach ($detailedItems as $d) {
-            if (isset($d['item_id'])) {
-                $idMap[(string) $d['item_id']] = $d;
+        if ($baseResult['success']) {
+            $detailedItems = $baseResult['data']['item_list'] ?? [];
+            $idMap = [];
+            foreach ($detailedItems as $d) {
+                $idMap[$d['item_id']] = $d;
             }
-        }
 
-        foreach ($itemIds as $id) {
-            $d = $idMap[(string) $id] ?? [];
-            $price = $d['price_info'][0] ?? [];
-            $image = $d['image'] ?? [];
-            $products[] = [
-                'id' => $id,
-                'name' => $d['item_name'] ?? '',
-                'description' => $d['description'] ?? '',
-                'price' => $price['current_price'] ?? $price['original_price'] ?? 0,
-                'currency' => $price['currency'] ?? 'PHP',
-                'stock' => $d['stock_info_v2']['summary_info']['total_available_stock'] ?? $d['stock'] ?? 0,
-                'image_url' => $image['image_url_list'][0] ?? '',
-                'category_id' => $d['category_id'] ?? null,
-                'status' => $d['item_status'] ?? 'NORMAL',
-                'sku' => $d['item_sku'] ?? '',
-            ];
+            foreach ($itemIds as $id) {
+                $d = $idMap[$id] ?? [];
+                $price = $d['price_info'][0] ?? [];
+                $image = $d['image'] ?? [];
+                $products[] = [
+                    'id' => $id,
+                    'name' => $d['item_name'] ?? '',
+                    'description' => $d['description'] ?? '',
+                    'price' => $price['current_price'] ?? $price['original_price'] ?? 0,
+                    'currency' => $price['currency'] ?? 'PHP',
+                    'stock' => $d['stock_info_v2']['summary_info']['total_available_stock'] ?? $d['stock'] ?? 0,
+                    'image_url' => $image['image_url_list'][0] ?? '',
+                    'category_id' => $d['category_id'] ?? null,
+                    'status' => $d['item_status'] ?? 'NORMAL',
+                    'sku' => $d['item_sku'] ?? '',
+                ];
+            }
         }
 
         return $products;
@@ -199,17 +173,13 @@ class ShopeeService
     {
         $path = base_path('.env');
         if (!file_exists($path)) return;
-
         $content = file_get_contents($path);
-        if ($content === false) return;
-
         $escapedValue = str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
         if (str_contains($content, $key . '=')) {
             $content = preg_replace("/^{$key}=.*/m", "{$key}={$escapedValue}", $content);
         } else {
             $content .= "\n{$key}={$escapedValue}";
         }
-
         file_put_contents($path, $content);
     }
 
@@ -239,11 +209,6 @@ class ShopeeService
 
     public function refreshAccessToken(): bool
     {
-        if ($this->refreshToken === '') {
-            Log::warning('Shopee token refresh skipped because refresh_token is missing.');
-            return false;
-        }
-
         $path = '/api/v2/auth/access_token/get';
         $timestamp = time();
         $baseString = $this->partnerId . $path . $timestamp;
@@ -256,7 +221,7 @@ class ShopeeService
         ]);
 
         try {
-            $response = $this->httpClient()->asJson()->post($url, [
+            $response = Http::timeout(30)->withOptions(['verify' => false])->post($url, [
                 'refresh_token' => $this->refreshToken,
                 'partner_id' => (int) $this->partnerId,
                 'shop_id' => (int) $this->shopId,
@@ -268,43 +233,27 @@ class ShopeeService
             }
 
             $data = $response->json();
-            if (!is_array($data)) {
-                Log::error('Shopee token refresh returned an invalid response.');
-                return false;
-            }
-
             if (!empty($data['error'])) {
                 Log::error('Shopee token refresh error: ' . $data['error'] . ' - ' . ($data['message'] ?? ''));
                 return false;
             }
 
-            $newAccessToken = trim((string) ($data['access_token'] ?? ''));
-            $newRefreshToken = trim((string) ($data['refresh_token'] ?? ''));
-            if ($newAccessToken === '' || $newRefreshToken === '') {
-                Log::error('Shopee token refresh response did not contain complete tokens.');
-                return false;
-            }
-
-            $this->accessToken = $newAccessToken;
-            $this->refreshToken = $newRefreshToken;
+            $this->accessToken = $data['access_token'];
+            $this->refreshToken = $data['refresh_token'];
 
             $this->updateEnvValue('SHOPEE_ACCESS_TOKEN', $this->accessToken);
             $this->updateEnvValue('SHOPEE_REFRESH_TOKEN', $this->refreshToken);
 
             Log::info('Shopee tokens refreshed successfully');
             return true;
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
             Log::error('Shopee token refresh exception: ' . $e->getMessage());
             return false;
         }
     }
 
-    private function signedRequest(
-        string $path,
-        array $params = [],
-        string $method = 'GET',
-        bool $allowTokenRefresh = true
-    ): array {
+    private function signedRequest(string $path, array $params = [], string $method = 'GET'): array
+    {
         $timestamp = time();
         $baseString = $this->partnerId . $path . $timestamp . $this->accessToken . $this->shopId;
         $sign = hash_hmac('sha256', $baseString, $this->partnerKey, false);
@@ -334,58 +283,35 @@ class ShopeeService
         $url = $this->baseUrl . $path . '?' . $queryStr;
 
         try {
-            $client = $this->httpClient();
+            $client = Http::timeout(30)->withOptions(['verify' => false]);
             $response = $method === 'POST'
                 ? $client->asJson()->post($url, $params)
                 : $client->get($url);
             $data = $response->json();
-            $data = is_array($data) ? $data : [];
 
             if (!$response->successful()) {
-                $errorCode = (string) ($data['error'] ?? '');
-                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode) && $this->refreshAccessToken()) {
-                    return $this->signedRequest($path, $params, $method, false);
+                $errorCode = is_array($data) ? ($data['error'] ?? '') : '';
+                if ($this->isInvalidAccessTokenError($errorCode) && $this->refreshAccessToken()) {
+                    return $this->signedRequest($path, $params, $method);
                 }
 
-                return [
-                    'success' => false,
-                    'error' => 'Shopee API error: ' . $this->safeResponseError($response->body()),
-                    'data' => [],
-                ];
+                return ['success' => false, 'error' => 'Shopee API error: ' . $response->body(), 'data' => []];
             }
 
             if (!empty($data['error'])) {
-                $errorCode = (string) $data['error'];
-                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode) && $this->refreshAccessToken()) {
-                    return $this->signedRequest($path, $params, $method, false);
+                if ($this->isInvalidAccessTokenError($data['error'])) {
+                    if ($this->refreshAccessToken()) {
+                        return $this->signedRequest($path, $params, $method);
+                    }
                 }
-
-                return [
-                    'success' => false,
-                    'error' => 'Shopee API: ' . $errorCode . ' - ' . (string) ($data['message'] ?? ''),
-                    'data' => [],
-                ];
+                return ['success' => false, 'error' => 'Shopee API: ' . $data['error'] . ' - ' . ($data['message'] ?? ''), 'data' => []];
             }
 
             return ['success' => true, 'data' => $data['response'] ?? []];
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
             Log::error("Shopee API request failed ({$path}): " . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => 'Connection to Shopee failed: ' . $e->getMessage(),
-                'data' => [],
-            ];
+            return ['success' => false, 'error' => 'Connection to Shopee failed: ' . $e->getMessage(), 'data' => []];
         }
-    }
-
-    private function safeResponseError(string $body): string
-    {
-        $body = trim(preg_replace('/\s+/', ' ', $body) ?? '');
-        if ($body === '') {
-            return 'HTTP request failed';
-        }
-
-        return mb_substr($body, 0, 500);
     }
 
     private function isInvalidAccessTokenError(?string $errorCode): bool
@@ -399,16 +325,10 @@ class ShopeeService
             return [
                 'success' => false,
                 'error' => 'Shopee API not configured. Missing: ' . implode(', ', $this->getMissingCredentials()),
-                'products' => [],
-                'total' => 0,
-                'per_page' => $pageSize,
-                'current_page' => $page,
-                'last_page' => 1,
+                'products' => [], 'total' => 0, 'per_page' => $pageSize, 'current_page' => $page, 'last_page' => 1,
             ];
         }
 
-        $page = max(1, $page);
-        $pageSize = max(1, min(50, $pageSize));
         $offset = ($page - 1) * $pageSize;
 
         $result = $this->signedRequest('/api/v2/product/get_item_list', [
@@ -417,25 +337,18 @@ class ShopeeService
             'item_status' => 'NORMAL',
         ]);
 
-        if (($result['success'] ?? false) !== true) {
+        if (!$result['success']) {
             return [
-                'success' => false,
-                'error' => $result['error'] ?? 'Shopee product request failed.',
-                'products' => [],
-                'total' => 0,
-                'per_page' => $pageSize,
-                'current_page' => $page,
-                'last_page' => 1,
+                'success' => false, 'error' => $result['error'],
+                'products' => [], 'total' => 0, 'per_page' => $pageSize, 'current_page' => $page, 'last_page' => 1,
             ];
         }
 
-        $items = is_array($result['data']['item'] ?? null) ? $result['data']['item'] : [];
-        $totalCount = max(0, (int) ($result['data']['total_count'] ?? 0));
+        $items = $result['data']['item'] ?? [];
+        $totalCount = $result['data']['total_count'] ?? 0;
 
-        $itemIds = array_values(array_filter(array_map(
-            fn ($item) => is_array($item) ? ($item['item_id'] ?? null) : null,
-            $items
-        )));
+        $itemIds = array_map(fn($i) => $i['item_id'], $items);
+        $itemIds = array_values(array_filter($itemIds));
 
         $products = $this->enrichItems($itemIds);
 
@@ -490,16 +403,11 @@ class ShopeeService
             return [
                 'success' => false,
                 'error' => 'Shopee API not configured. Missing: ' . implode(', ', $this->getMissingCredentials()),
-                'products' => [],
-                'total' => 0,
-                'per_page' => $pageSize,
-                'next_offset' => '',
+                'products' => [], 'total' => 0, 'per_page' => $pageSize, 'next_offset' => '',
             ];
         }
 
-        $keyword = trim($keyword);
-        $pageSize = max(1, min(50, $pageSize));
-        if ($keyword === '') {
+        if (empty(trim($keyword))) {
             return $this->searchProducts(1, $pageSize);
         }
 
@@ -514,22 +422,16 @@ class ShopeeService
 
         $result = $this->signedRequest('/api/v2/product/search_item', $params);
 
-        if (($result['success'] ?? false) !== true) {
+        if (!$result['success']) {
             return [
-                'success' => false,
-                'error' => $result['error'] ?? 'Shopee product search failed.',
-                'products' => [],
-                'total' => 0,
-                'per_page' => $pageSize,
-                'next_offset' => '',
+                'success' => false, 'error' => $result['error'],
+                'products' => [], 'total' => 0, 'per_page' => $pageSize, 'next_offset' => '',
             ];
         }
 
-        $itemIds = is_array($result['data']['item_id_list'] ?? null)
-            ? array_values(array_filter($result['data']['item_id_list']))
-            : [];
-        $totalCount = max(0, (int) ($result['data']['total_count'] ?? 0));
-        $nextOffset = (string) ($result['data']['next_offset'] ?? '');
+        $itemIds = $result['data']['item_id_list'] ?? [];
+        $totalCount = $result['data']['total_count'] ?? 0;
+        $nextOffset = $result['data']['next_offset'] ?? '';
 
         $products = $this->enrichItems($itemIds);
 
@@ -538,7 +440,7 @@ class ShopeeService
             'products' => $products,
             'total' => $totalCount,
             'per_page' => $pageSize,
-            'next_offset' => $nextOffset,
+            'next_offset' => (string) $nextOffset,
         ];
     }
 }
