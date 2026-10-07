@@ -64,16 +64,19 @@ class ShopeeAuthController extends Controller
                 ->with('shopee_error', 'SHOPEE_PARTNER_ID or SHOPEE_PARTNER_KEY is missing from the server configuration.');
         }
 
-        $path = '/api/v2/shop/auth_partner';
-        $timestamp = time();
-        $baseString = $this->partnerId . $path . $timestamp;
-        $sign = hash_hmac('sha256', $baseString, $this->partnerKey, false);
+        // Shopee's current authorization flow uses the fixed Open Platform
+        // authorization URL. The legacy /api/v2/shop/auth_partner link is still
+        // documented for compatibility, but redirect-domain validation is more
+        // reliable with the current redirect_uri based flow.
+        $state = bin2hex(random_bytes(24));
+        $request->session()->put('shopee_oauth_state', $state);
 
-        $authUrl = $this->baseUrl . $path . '?' . http_build_query([
+        $authUrl = 'https://open.shopee.com/auth?' . http_build_query([
             'partner_id' => (int) $this->partnerId,
-            'timestamp' => $timestamp,
-            'sign' => $sign,
-            'redirect' => $this->redirectUrl($request),
+            'auth_type' => 'seller',
+            'redirect_uri' => $this->redirectUrl($request),
+            'response_type' => 'code',
+            'state' => $state,
         ]);
 
         return redirect()->away($authUrl);
@@ -85,6 +88,14 @@ class ShopeeAuthController extends Controller
 
         $code = trim((string) $request->query('code', ''));
         $shopId = trim((string) $request->query('shop_id', ''));
+
+        $expectedState = (string) $request->session()->pull('shopee_oauth_state', '');
+        $returnedState = trim((string) $request->query('state', ''));
+        if ($expectedState !== '' && ($returnedState === '' || !hash_equals($expectedState, $returnedState))) {
+            return redirect()
+                ->route('w68.shopee.authorization')
+                ->with('shopee_error', 'Shopee authorization state validation failed. Please start authorization again from W68.');
+        }
 
         if ($code === '' || $shopId === '') {
             return redirect()
