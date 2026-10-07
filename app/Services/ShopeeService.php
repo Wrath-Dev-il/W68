@@ -2,18 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\ShopeeCredential;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ShopeeService
 {
-    // W68_SHOPEE_503_TIMEOUT_GUARD_20261007
-    // HostForge serves the Online Product tab through a normal web request.
-    // Keep each Shopee network call well below the web-request timeout so an
-    // unreachable/slow Shopee endpoint returns a controlled JSON error instead
-    // of letting the platform terminate the request as HTTP 503.
     private const HTTP_TIMEOUT_SECONDS = 8;
     private const CONNECT_TIMEOUT_SECONDS = 4;
+    private const REFRESH_EARLY_SECONDS = 600;
 
     protected string $partnerId;
     protected string $partnerKey;
@@ -21,15 +19,20 @@ class ShopeeService
     protected string $refreshToken;
     protected string $shopId;
     protected string $baseUrl;
+    protected ?ShopeeCredential $credential = null;
+    protected ?string $lastAuthError = null;
+    protected bool $reauthorizationRequired = false;
 
     public function __construct()
     {
-        $this->partnerId = (string) config('services.shopee.partner_id', '');
-        $this->partnerKey = (string) config('services.shopee.partner_key', '');
-        $this->accessToken = (string) config('services.shopee.access_token', '');
-        $this->refreshToken = (string) config('services.shopee.refresh_token', '');
-        $this->shopId = (string) config('services.shopee.shop_id', '');
-        $this->baseUrl = (string) config('services.shopee.base_url', 'https://partner.shopeemobile.com');
+        $this->partnerId = trim((string) config('services.shopee.partner_id', ''));
+        $this->partnerKey = trim((string) config('services.shopee.partner_key', ''));
+        $this->accessToken = trim((string) config('services.shopee.access_token', ''));
+        $this->refreshToken = trim((string) config('services.shopee.refresh_token', ''));
+        $this->shopId = trim((string) config('services.shopee.shop_id', ''));
+        $this->baseUrl = rtrim((string) config('services.shopee.base_url', 'https://partner.shopeemobile.com'), '/');
+
+        $this->reloadStoredCredential();
     }
 
     public function isReady(): bool
@@ -48,6 +51,114 @@ class ShopeeService
         if ($this->accessToken === '') $missing[] = 'access_token';
         if ($this->shopId === '') $missing[] = 'shop_id';
         return $missing;
+    }
+
+    public function requiresReauthorization(): bool
+    {
+        return $this->reauthorizationRequired
+            || (bool) ($this->credential?->reauthorization_required ?? false);
+    }
+
+    public function getLastAuthError(): ?string
+    {
+        return $this->lastAuthError ?: ($this->credential?->last_error ?: null);
+    }
+
+    public function getAuthorizationStatus(): array
+    {
+        $this->reloadStoredCredential();
+
+        return [
+            'partner_configured' => $this->partnerId !== '' && $this->partnerKey !== '',
+            'stored' => $this->credential !== null,
+            'shop_id' => $this->credential?->shop_id ?: ($this->shopId !== '' ? $this->shopId : null),
+            'access_token_expires_at' => $this->credential?->access_token_expires_at?->toIso8601String(),
+            'refresh_token_expires_at' => $this->credential?->refresh_token_expires_at?->toIso8601String(),
+            'authorization_expires_at' => $this->credential?->authorization_expires_at?->toIso8601String(),
+            'authorized_at' => $this->credential?->authorized_at?->toIso8601String(),
+            'last_refreshed_at' => $this->credential?->last_refreshed_at?->toIso8601String(),
+            'reauthorization_required' => $this->requiresReauthorization(),
+            'last_error' => $this->getLastAuthError(),
+        ];
+    }
+
+    public function storeAuthorizationTokens(
+        string $shopId,
+        string $accessToken,
+        string $refreshToken,
+        int $accessExpiresIn = 14400,
+        ?int $refreshExpiresIn = null,
+        ?int $authorizationExpiresIn = null
+    ): ShopeeCredential {
+        $shopId = trim($shopId);
+        $accessToken = trim($accessToken);
+        $refreshToken = trim($refreshToken);
+
+        if ($shopId === '' || $accessToken === '' || $refreshToken === '') {
+            throw new \InvalidArgumentException('Shopee authorization response did not contain complete credentials.');
+        }
+
+        $now = now();
+        $credential = ShopeeCredential::query()->updateOrCreate(
+            ['shop_id' => $shopId],
+            [
+                'access_token' => $accessToken,
+                'refresh_token' => $refreshToken,
+                'access_token_expires_at' => $now->copy()->addSeconds(max(60, $accessExpiresIn)),
+                'refresh_token_expires_at' => $refreshExpiresIn && $refreshExpiresIn > 0
+                    ? $now->copy()->addSeconds($refreshExpiresIn)
+                    : null,
+                'authorization_expires_at' => $authorizationExpiresIn && $authorizationExpiresIn > 0
+                    ? $now->copy()->addSeconds($authorizationExpiresIn)
+                    : null,
+                'authorized_at' => $now,
+                'last_refreshed_at' => $now,
+                'reauthorization_required' => false,
+                'last_error' => null,
+            ]
+        );
+
+        $this->credential = $credential;
+        $this->shopId = $shopId;
+        $this->accessToken = $accessToken;
+        $this->refreshToken = $refreshToken;
+        $this->reauthorizationRequired = false;
+        $this->lastAuthError = null;
+
+        return $credential;
+    }
+
+    private function reloadStoredCredential(): void
+    {
+        try {
+            $query = ShopeeCredential::query();
+            $credential = null;
+
+            if ($this->shopId !== '') {
+                $credential = (clone $query)->where('shop_id', $this->shopId)->first();
+            }
+
+            if (!$credential) {
+                $credential = $query->latest('updated_at')->first();
+            }
+
+            if (!$credential) {
+                return;
+            }
+
+            $this->credential = $credential;
+            $this->shopId = trim((string) $credential->shop_id);
+            $this->accessToken = trim((string) $credential->access_token);
+            $this->refreshToken = trim((string) $credential->refresh_token);
+            $this->reauthorizationRequired = (bool) $credential->reauthorization_required;
+            $this->lastAuthError = $credential->last_error ?: null;
+        } catch (\Throwable $e) {
+            // The migration may not have run yet. Keep the .env values as a
+            // temporary fallback so deployment is backwards compatible.
+            Log::debug('Shopee DB credential lookup unavailable; using configured fallback.', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function httpClient()
@@ -195,24 +306,6 @@ class ShopeeService
         ], 'POST');
     }
 
-    private function updateEnvValue(string $key, string $value): void
-    {
-        $path = base_path('.env');
-        if (!file_exists($path)) return;
-
-        $content = file_get_contents($path);
-        if ($content === false) return;
-
-        $escapedValue = str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
-        if (str_contains($content, $key . '=')) {
-            $content = preg_replace("/^{$key}=.*/m", "{$key}={$escapedValue}", $content);
-        } else {
-            $content .= "\n{$key}={$escapedValue}";
-        }
-
-        file_put_contents($path, $content);
-    }
-
     public function updateItemStock(int $itemId, int $stock, ?int $modelId = null): array
     {
         if (!$this->isReady()) {
@@ -237,66 +330,186 @@ class ShopeeService
         ], 'POST');
     }
 
-    public function refreshAccessToken(): bool
+    public function refreshAccessToken(bool $force = false): bool
     {
-        if ($this->refreshToken === '') {
-            Log::warning('Shopee token refresh skipped because refresh_token is missing.');
+        $this->reloadStoredCredential();
+
+        if ($this->partnerId === '' || $this->partnerKey === '' || $this->shopId === '' || $this->refreshToken === '') {
+            $this->lastAuthError = 'Shopee refresh credentials are incomplete. Reauthorization is required.';
+            Log::warning('Shopee token refresh skipped because required credentials are missing.');
             return false;
         }
 
-        $path = '/api/v2/auth/access_token/get';
-        $timestamp = time();
-        $baseString = $this->partnerId . $path . $timestamp;
-        $sign = hash_hmac('sha256', $baseString, $this->partnerKey, false);
-
-        $url = $this->baseUrl . $path . '?' . http_build_query([
-            'partner_id' => (int) $this->partnerId,
-            'timestamp' => $timestamp,
-            'sign' => $sign,
-        ]);
+        $lock = Cache::lock('w68-shopee-token-refresh-' . $this->shopId, 30);
 
         try {
-            $response = $this->httpClient()->asJson()->post($url, [
-                'refresh_token' => $this->refreshToken,
-                'partner_id' => (int) $this->partnerId,
-                'shop_id' => (int) $this->shopId,
-            ]);
+            return (bool) $lock->block(5, function () use ($force) {
+                // Another process may have refreshed while this request waited.
+                $this->reloadStoredCredential();
 
-            if (!$response->successful()) {
-                Log::error('Shopee token refresh failed: ' . $response->body());
-                return false;
-            }
+                if (!$force && $this->credential?->access_token_expires_at) {
+                    if ($this->credential->access_token_expires_at->isAfter(now()->addSeconds(self::REFRESH_EARLY_SECONDS))) {
+                        return true;
+                    }
+                }
 
-            $data = $response->json();
-            if (!is_array($data)) {
-                Log::error('Shopee token refresh returned an invalid response.');
-                return false;
-            }
+                if ($this->refreshToken === '') {
+                    $this->markAuthFailure('missing_refresh_token', 'Shopee refresh token is missing.');
+                    return false;
+                }
 
-            if (!empty($data['error'])) {
-                Log::error('Shopee token refresh error: ' . $data['error'] . ' - ' . ($data['message'] ?? ''));
-                return false;
-            }
+                $path = '/api/v2/auth/access_token/get';
+                $timestamp = time();
+                $baseString = $this->partnerId . $path . $timestamp;
+                $sign = hash_hmac('sha256', $baseString, $this->partnerKey, false);
 
-            $newAccessToken = trim((string) ($data['access_token'] ?? ''));
-            $newRefreshToken = trim((string) ($data['refresh_token'] ?? ''));
-            if ($newAccessToken === '' || $newRefreshToken === '') {
-                Log::error('Shopee token refresh response did not contain complete tokens.');
-                return false;
-            }
+                $url = $this->baseUrl . $path . '?' . http_build_query([
+                    'partner_id' => (int) $this->partnerId,
+                    'timestamp' => $timestamp,
+                    'sign' => $sign,
+                ]);
 
-            $this->accessToken = $newAccessToken;
-            $this->refreshToken = $newRefreshToken;
+                $response = $this->httpClient()->asJson()->post($url, [
+                    'refresh_token' => $this->refreshToken,
+                    'partner_id' => (int) $this->partnerId,
+                    'shop_id' => (int) $this->shopId,
+                ]);
 
-            $this->updateEnvValue('SHOPEE_ACCESS_TOKEN', $this->accessToken);
-            $this->updateEnvValue('SHOPEE_REFRESH_TOKEN', $this->refreshToken);
+                $data = $response->json();
+                $data = is_array($data) ? $data : [];
 
-            Log::info('Shopee tokens refreshed successfully');
-            return true;
+                if (!$response->successful() || !empty($data['error'])) {
+                    $errorCode = trim((string) ($data['error'] ?? 'http_' . $response->status()));
+                    $message = trim((string) ($data['message'] ?? $this->safeResponseError($response->body())));
+                    $this->markAuthFailure($errorCode, $message);
+                    Log::error('Shopee token refresh failed.', [
+                        'error' => $errorCode,
+                        'message' => $message,
+                    ]);
+                    return false;
+                }
+
+                $newAccessToken = trim((string) ($data['access_token'] ?? ''));
+                $newRefreshToken = trim((string) ($data['refresh_token'] ?? ''));
+                if ($newAccessToken === '' || $newRefreshToken === '') {
+                    $this->markAuthFailure('incomplete_token_response', 'Shopee refresh response did not contain complete tokens.');
+                    return false;
+                }
+
+                $accessExpiresIn = max(60, (int) ($data['expire_in'] ?? 14400));
+                $refreshExpiresIn = isset($data['refresh_token_expire_in'])
+                    ? max(60, (int) $data['refresh_token_expire_in'])
+                    : null;
+                $now = now();
+
+                $credential = ShopeeCredential::query()->updateOrCreate(
+                    ['shop_id' => $this->shopId],
+                    [
+                        'access_token' => $newAccessToken,
+                        'refresh_token' => $newRefreshToken,
+                        'access_token_expires_at' => $now->copy()->addSeconds($accessExpiresIn),
+                        'refresh_token_expires_at' => $refreshExpiresIn
+                            ? $now->copy()->addSeconds($refreshExpiresIn)
+                            : null,
+                        'last_refreshed_at' => $now,
+                        'reauthorization_required' => false,
+                        'last_error' => null,
+                    ]
+                );
+
+                $this->credential = $credential;
+                $this->accessToken = $newAccessToken;
+                $this->refreshToken = $newRefreshToken;
+                $this->reauthorizationRequired = false;
+                $this->lastAuthError = null;
+
+                Log::info('Shopee tokens refreshed and rotated successfully.', [
+                    'shop_id' => $this->shopId,
+                    'access_token_expires_at' => $credential->access_token_expires_at?->toIso8601String(),
+                ]);
+
+                return true;
+            });
         } catch (\Throwable $e) {
-            Log::error('Shopee token refresh exception: ' . $e->getMessage());
+            $this->lastAuthError = 'Shopee token refresh failed: ' . $e->getMessage();
+            Log::error('Shopee token refresh exception.', ['error' => $e->getMessage()]);
+            return false;
+        } finally {
+            try {
+                if ($lock->owner()) {
+                    $lock->release();
+                }
+            } catch (\Throwable) {
+                // The block() helper normally releases the lock itself.
+            }
+        }
+    }
+
+    private function ensureAccessTokenFresh(): bool
+    {
+        $this->reloadStoredCredential();
+
+        if ($this->requiresReauthorization()) {
             return false;
         }
+
+        if ($this->accessToken === '') {
+            return false;
+        }
+
+        if ($this->credential?->access_token_expires_at
+            && $this->credential->access_token_expires_at->isBefore(now()->addSeconds(self::REFRESH_EARLY_SECONDS))) {
+            return $this->refreshAccessToken(false);
+        }
+
+        return true;
+    }
+
+    private function markAuthFailure(string $errorCode, string $message): void
+    {
+        $errorCode = trim($errorCode);
+        $message = trim($message);
+        $this->lastAuthError = trim($errorCode . ($message !== '' ? ': ' . $message : ''));
+
+        $reauthorize = in_array($errorCode, [
+            'refresh_token_expired',
+            'invalid_refresh_token',
+            'invalid_refresh_token_error',
+            'missing_refresh_token',
+        ], true);
+
+        if ($reauthorize) {
+            $this->reauthorizationRequired = true;
+        }
+
+        if ($this->credential) {
+            try {
+                $this->credential->forceFill([
+                    'reauthorization_required' => $reauthorize || $this->credential->reauthorization_required,
+                    'last_error' => $this->lastAuthError,
+                ])->save();
+            } catch (\Throwable $e) {
+                Log::warning('Unable to persist Shopee authorization failure state.', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function authorizationFailureResult(): array
+    {
+        $message = 'Shopee authorization has expired. An administrator must reauthorize Shopee at /admin/shopee/authorization.';
+        if ($this->getLastAuthError()) {
+            $message .= ' (' . $this->getLastAuthError() . ')';
+        }
+
+        return [
+            'success' => false,
+            'error' => $message,
+            'data' => [],
+            'reauthorization_required' => true,
+            'reauthorize_url' => '/admin/shopee/authorization',
+        ];
     }
 
     private function signedRequest(
@@ -305,6 +518,18 @@ class ShopeeService
         string $method = 'GET',
         bool $allowTokenRefresh = true
     ): array {
+        if (!$this->ensureAccessTokenFresh()) {
+            if ($this->requiresReauthorization()) {
+                return $this->authorizationFailureResult();
+            }
+
+            return [
+                'success' => false,
+                'error' => 'Shopee access token is unavailable. Reauthorization may be required.',
+                'data' => [],
+            ];
+        }
+
         $timestamp = time();
         $baseString = $this->partnerId . $path . $timestamp . $this->accessToken . $this->shopId;
         $sign = hash_hmac('sha256', $baseString, $this->partnerKey, false);
@@ -343,8 +568,13 @@ class ShopeeService
 
             if (!$response->successful()) {
                 $errorCode = (string) ($data['error'] ?? '');
-                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode) && $this->refreshAccessToken()) {
-                    return $this->signedRequest($path, $params, $method, false);
+                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode)) {
+                    if ($this->refreshAccessToken(true)) {
+                        return $this->signedRequest($path, $params, $method, false);
+                    }
+                    if ($this->requiresReauthorization()) {
+                        return $this->authorizationFailureResult();
+                    }
                 }
 
                 return [
@@ -356,8 +586,13 @@ class ShopeeService
 
             if (!empty($data['error'])) {
                 $errorCode = (string) $data['error'];
-                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode) && $this->refreshAccessToken()) {
-                    return $this->signedRequest($path, $params, $method, false);
+                if ($allowTokenRefresh && $this->isInvalidAccessTokenError($errorCode)) {
+                    if ($this->refreshAccessToken(true)) {
+                        return $this->signedRequest($path, $params, $method, false);
+                    }
+                    if ($this->requiresReauthorization()) {
+                        return $this->authorizationFailureResult();
+                    }
                 }
 
                 return [
@@ -426,6 +661,8 @@ class ShopeeService
                 'per_page' => $pageSize,
                 'current_page' => $page,
                 'last_page' => 1,
+                'reauthorization_required' => $result['reauthorization_required'] ?? false,
+                'reauthorize_url' => $result['reauthorize_url'] ?? null,
             ];
         }
 
@@ -467,6 +704,8 @@ class ShopeeService
                     'products' => $products,
                     'total' => $total,
                     'pages_fetched' => $page - 1,
+                    'reauthorization_required' => $result['reauthorization_required'] ?? false,
+                    'reauthorize_url' => $result['reauthorize_url'] ?? null,
                 ];
             }
 
@@ -522,6 +761,8 @@ class ShopeeService
                 'total' => 0,
                 'per_page' => $pageSize,
                 'next_offset' => '',
+                'reauthorization_required' => $result['reauthorization_required'] ?? false,
+                'reauthorize_url' => $result['reauthorize_url'] ?? null,
             ];
         }
 
