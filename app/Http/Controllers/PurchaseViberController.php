@@ -181,10 +181,16 @@ class PurchaseViberController extends Controller
                 )");
             })
             ->where(function ($q) {
-                // PO checkboxes are not stored as a boolean; unchecked rows are missing PO items under an existing PO header.
-                $q->whereNull('purchase_order_items.id')
-                  ->orWhereRaw('COALESCE(purchase_order_items.actual_quantity, 0) < COALESCE(purchase_order_items.quantity, 0)')
-                  ->orWhereRaw('COALESCE(purchase_order_items.actual_quantity, 0) != COALESCE(purchase_order_items.quantity, 0)');
+                // An unchecked row is Not Arrived only when it had an actual
+                // ordered quantity. Zero-QTY inquiry/reference rows were never
+                // ordered and must never appear in Not Arrived.
+                $q->where(function ($unchecked) {
+                    $unchecked->whereNull('purchase_order_items.id')
+                        ->where('viber_list_items.order_qty', '>', 0);
+                })->orWhere(function ($poItem) {
+                    $poItem->whereNotNull('purchase_order_items.id')
+                        ->whereRaw('COALESCE(purchase_order_items.actual_quantity, 0) != COALESCE(purchase_order_items.quantity, 0)');
+                });
             });
 
         if ($viberListId !== null) {
