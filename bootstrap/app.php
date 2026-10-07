@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -38,6 +39,16 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('web')->group(base_path('routes/w68_overrides.php'));
         },
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        // W68_SHOPEE_TOKEN_ROTATION_20261007
+        // Shopee issues short-lived access tokens and rotates refresh tokens.
+        // Refreshing every three hours keeps the latest pair persisted in the
+        // database before the normal access-token lifetime is reached.
+        $schedule->command('shopee:refresh-token')
+            ->cron('0 */3 * * *')
+            ->timezone('Asia/Manila')
+            ->withoutOverlapping(20);
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
             'api/shopee/webhook',
