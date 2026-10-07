@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ShopeeAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 | W68_ONLINE_PRODUCT_DIRECT_FETCH_20261007
 | W68_ONLINE_PRODUCT_ZERO_UNCONVERTED_FAST_PATH_20261007
 | W68_ONLINE_PRODUCT_REMOVE_ROUTE_FALLBACK_20261007
+| W68_SHOPEE_REAUTHORIZATION_20261007
 |
 | The Online Product tab must not boot a nested Laravel request or resolve and
 | execute another named route. On HostForge those paths produced 503/500
@@ -20,6 +22,20 @@ use Illuminate\Support\Facades\Route;
 | and Special users.
 |
 */
+
+// Admin-only Shopee authorization management. The callback is intentionally
+// under /admin and the controller verifies the active W68 Admin session.
+Route::get('/admin/shopee/authorization', [ShopeeAuthController::class, 'status'])
+    ->name('w68.shopee.authorization');
+Route::get('/admin/shopee/authorization/status', [ShopeeAuthController::class, 'statusJson'])
+    ->name('w68.shopee.status');
+Route::get('/admin/shopee/authorize', [ShopeeAuthController::class, 'redirectToShopee'])
+    ->name('w68.shopee.authorize');
+Route::get('/admin/shopee/callback', [ShopeeAuthController::class, 'handleCallback'])
+    ->name('w68.shopee.callback');
+Route::post('/admin/shopee/refresh', [ShopeeAuthController::class, 'manualRefresh'])
+    ->name('w68.shopee.refresh');
+
 $w68DirectOnlineProductFetch = function (Request $request) {
     try {
         $user = session('user');
@@ -92,6 +108,8 @@ $w68DirectOnlineProductFetch = function (Request $request) {
                 'per_page' => $perPage,
                 'current_page' => $page,
                 'last_page' => 1,
+                'reauthorization_required' => (bool) ($probe['reauthorization_required'] ?? false),
+                'reauthorize_url' => $probe['reauthorize_url'] ?? null,
                 'w68_direct_fetch' => true,
             ]);
         }
@@ -130,6 +148,8 @@ $w68DirectOnlineProductFetch = function (Request $request) {
                 'per_page' => $perPage,
                 'current_page' => $page,
                 'last_page' => max(1, (int) ceil(max(0, $catalogTotal - $convertedCount) / $perPage)),
+                'reauthorization_required' => (bool) ($result['reauthorization_required'] ?? false),
+                'reauthorize_url' => $result['reauthorize_url'] ?? null,
                 'w68_direct_fetch' => true,
             ]);
         }
