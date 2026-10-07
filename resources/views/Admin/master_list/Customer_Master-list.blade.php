@@ -255,9 +255,31 @@
                                 </div>
 
                                 <div id="portal-linked-account" class="hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                                    <p class="text-[9px] font-black uppercase tracking-widest text-blue-700">Linked Pricelist Account</p>
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-[9px] font-black uppercase tracking-widest text-blue-700">Linked Pricelist Account</p>
+                                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-700">Registered</span>
+                                    </div>
                                     <p id="portal-linked-username" class="mt-2 text-xs font-extrabold text-slate-700"></p>
                                     <p id="portal-linked-email" class="mt-1 break-all text-[9px] font-semibold text-slate-500"></p>
+
+                                    <!-- W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 -->
+                                    <div class="mt-3 pt-3 border-t border-blue-100/80">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-1.5">
+                                                <i data-lucide="key" class="h-3.5 w-3.5 text-slate-500"></i>
+                                                <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Customer Password</p>
+                                            </div>
+                                            <span id="portal-linked-pwd-badge" class="text-[8px] font-bold uppercase tracking-widest text-slate-400"></span>
+                                        </div>
+                                        <p id="portal-linked-pwd-hint" class="mt-1 text-[8px] font-medium text-amber-700 hidden"></p>
+                                        <div class="mt-1.5 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-2">
+                                            <span id="portal-linked-password-val" class="font-mono text-xs font-bold text-slate-700 break-all select-all">••••••••</span>
+                                            <div class="flex items-center gap-1 shrink-0 ml-2">
+                                                <button type="button" id="portal-linked-pwd-toggle" onclick="togglePortalLinkedPasswordDisplay()" class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-bold text-slate-600 hover:bg-slate-100">Show</button>
+                                                <button type="button" onclick="copyPortalLinkedPasswordText()" class="rounded-lg bg-slate-800 px-2 py-1 text-[9px] font-bold text-white hover:bg-slate-700">Copy</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-1 gap-2">

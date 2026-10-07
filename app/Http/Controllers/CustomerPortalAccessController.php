@@ -115,8 +115,12 @@ class CustomerPortalAccessController extends Controller
 
     public function updateValidity(Request $request, int $customerId): JsonResponse
     {
+        /* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
         if ((string) $request->input('action', '') === 'reset_password') {
-            return $this->resetLinkedAccountPassword($request, $customerId);
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer passwords cannot be changed. Customer passwords can only be viewed in the portal access tab.',
+            ], 403);
         }
 
         $this->assertSignedInUser();
@@ -185,77 +189,13 @@ class CustomerPortalAccessController extends Controller
         ]);
     }
 
-    /* W68_PORTAL_ACCOUNT_MANAGEMENT_ALL_STAFF_20261006 */
+    /* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
     private function resetLinkedAccountPassword(Request $request, int $customerId): JsonResponse
     {
-        $this->assertPortalAccountManager();
-        Customer::query()->findOrFail($customerId);
-
-        $validated = $request->validate([
-            'password' => ['required', 'string', 'max:255'],
-        ]);
-
-        if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Customer portal account linking is not configured.',
-            ], 503);
-        }
-
-        $link = DB::connection('mysql')
-            ->table('customer_portal_accounts')
-            ->where('customer_id', $customerId)
-            ->first();
-
-        if (!$link) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This customer does not have a linked Pricelist account.',
-            ], 404);
-        }
-
-        $login = DB::connection('mysql')
-            ->table('logins')
-            ->where('login_ID', (int) $link->login_id)
-            ->first();
-
-        if (!$login || (int) ($login->account_type ?? 0) !== 5) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The linked customer login could not be found.',
-            ], 404);
-        }
-
-        $updates = [
-            'Password' => Hash::make((string) $validated['password']),
-            'updated_at' => now(),
-        ];
-
-        if (Schema::connection('mysql')->hasColumn('logins', 'OTP_CODE')) {
-            $updates['OTP_CODE'] = null;
-        }
-
-        DB::connection('mysql')
-            ->table('logins')
-            ->where('login_ID', (int) $link->login_id)
-            ->where('account_type', 5)
-            ->update($updates);
-
-        if (
-            Schema::connection('mysql')->hasTable('sessions')
-            && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
-        ) {
-            DB::connection('mysql')
-                ->table('sessions')
-                ->where('user_id', (int) $link->login_id)
-                ->delete();
-        }
-
         return response()->json([
-            'success' => true,
-            'message' => 'Pricelist account password reset successfully. Existing portal sessions were signed out.',
-            'linked_account' => $this->linkedAccountPayload($customerId),
-        ]);
+            'success' => false,
+            'message' => 'Customer passwords cannot be changed. Customer passwords can only be viewed in the portal access tab.',
+        ], 403);
     }
 
     private function deleteLinkedAccount(int $customerId): JsonResponse
@@ -386,6 +326,7 @@ class CustomerPortalAccessController extends Controller
         ];
     }
 
+    /* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
     private function linkedAccountPayload(int $customerId): ?array
     {
         try {
@@ -405,21 +346,30 @@ class CustomerPortalAccessController extends Controller
             $login = DB::connection('mysql')
                 ->table('logins')
                 ->where('login_ID', $link->login_id)
-                ->first(['login_ID', 'User_ID', 'Email']);
+                ->first(['login_ID', 'User_ID', 'Email', 'Password', 'account_type']);
 
             if (!$login) {
                 return null;
             }
 
+            $rawPassword = (string) ($login->Password ?? '');
+            $isHashed = str_starts_with($rawPassword, '$2y$')
+                || str_starts_with($rawPassword, '$2a$')
+                || str_starts_with($rawPassword, '$2b$')
+                || str_starts_with($rawPassword, '$argon2')
+                || (str_starts_with($rawPassword, '$') && strlen($rawPassword) >= 30);
+
             return [
                 'login_id' => (int) $link->login_id,
                 'username' => (string) ($login->User_ID ?? ''),
                 'email' => (string) ($login->Email ?? ''),
+                'password' => $rawPassword,
+                'is_hashed' => $isHashed,
                 'linked_at' => $link->linked_at
                     ? Carbon::parse($link->linked_at)->toIso8601String()
                     : null,
                 'password_protected' => true,
-                'password_can_reset' => true,
+                'password_can_reset' => false,
                 'account_can_delete' => true,
             ];
         } catch (Throwable $exception) {

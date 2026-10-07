@@ -1,4 +1,4 @@
-/* W68_PORTAL_ACCOUNT_MANAGEMENT_ALL_STAFF_20261006 */
+/* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
 (function () {
     'use strict';
 
@@ -18,7 +18,6 @@
         try {
             return {
                 status: CUSTOMER_ENDPOINTS.portalStatus(id),
-                reset: CUSTOMER_ENDPOINTS.portalValidity(id),
                 deleteAccount: CUSTOMER_ENDPOINTS.portalDelete(id)
             };
         } catch (_) {
@@ -110,6 +109,25 @@
 
         const username = escapeHtml(account?.username || `Login #${account?.login_id || ''}`);
         const email = escapeHtml(account?.email || 'No email');
+        const rawPassword = String(account?.password ?? '');
+        const isHashed = Boolean(account?.is_hashed) || (
+            rawPassword.startsWith('$2y$') ||
+            rawPassword.startsWith('$2a$') ||
+            rawPassword.startsWith('$2b$') ||
+            rawPassword.startsWith('$argon2') ||
+            (rawPassword.startsWith('$') && rawPassword.length >= 30)
+        );
+
+        let passwordTypeBadge = '';
+        let passwordHint = '';
+        if (!rawPassword) {
+            passwordTypeBadge = '<span class="text-[8px] font-bold uppercase tracking-widest text-slate-400">None</span>';
+        } else if (isHashed) {
+            passwordTypeBadge = '<span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700">Hashed Account</span>';
+            passwordHint = '<p class="mt-1 text-[9px] font-semibold leading-relaxed text-amber-700">This account was registered with password hashing in the database.</p>';
+        } else {
+            passwordTypeBadge = '<span class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-blue-700">Plain Text</span>';
+        }
 
         card.innerHTML = `
             <div class="flex items-start justify-between gap-3">
@@ -122,44 +140,81 @@
             </div>
 
             <div class="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-                <div class="flex items-start gap-2">
-                    <i data-lucide="shield-check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"></i>
-                    <div>
-                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Password</p>
-                        <p class="mt-1 text-[9px] font-semibold leading-relaxed text-slate-500">Securely hashed. The customer's existing password cannot be displayed or recovered. You can set a new password below.</p>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <i data-lucide="key" class="h-3.5 w-3.5 text-slate-500"></i>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Customer Password</p>
+                    </div>
+                    ${passwordTypeBadge}
+                </div>
+                ${passwordHint}
+
+                <div class="mt-2 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                    <span id="portal-account-password-view" class="font-mono text-xs font-bold text-slate-700 break-all select-all">${rawPassword ? '••••••••' : 'No password set'}</span>
+                    <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                        <button id="portal-account-toggle-view" type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-bold text-slate-600 hover:bg-slate-100 flex items-center gap-1 ${!rawPassword ? 'opacity-50 cursor-not-allowed' : ''}">
+                            <i data-lucide="eye" class="h-3 w-3"></i>
+                            <span id="portal-account-toggle-label">Show</span>
+                        </button>
+                        <button id="portal-account-copy-view" type="button" class="rounded-lg bg-slate-800 px-2.5 py-1 text-[9px] font-bold text-white hover:bg-slate-700 flex items-center gap-1 ${!rawPassword ? 'opacity-50 cursor-not-allowed' : ''}">
+                            <i data-lucide="copy" class="h-3 w-3"></i>
+                            <span>Copy</span>
+                        </button>
                     </div>
                 </div>
-
-                <div class="mt-3 flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-maroon">
-                    <input id="portal-account-new-password" type="password" autocomplete="new-password" placeholder="Enter new password" class="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-xs font-bold text-slate-700 outline-none">
-                    <button id="portal-account-toggle-password" type="button" class="border-l border-slate-200 px-3 text-[9px] font-black uppercase text-slate-500 hover:bg-white">Show</button>
-                </div>
-
-                <p id="portal-account-action-error" class="mt-2 hidden rounded-lg bg-red-50 px-3 py-2 text-[9px] font-bold text-red-600"></p>
-
-                <button id="portal-account-reset-password" type="button" class="mt-3 w-full rounded-xl bg-maroon px-3 py-2.5 text-[9px] font-black uppercase tracking-widest text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-                    Set New Password
-                </button>
             </div>
 
-            <button id="portal-account-delete" type="button" class="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[9px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">
+            <p id="portal-account-action-error" class="mt-2 hidden rounded-lg bg-red-50 px-3 py-2 text-[9px] font-bold text-red-600"></p>
+
+            <button id="portal-account-delete" type="button" class="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">
                 Delete Portal Account
             </button>
-            <p class="mt-2 text-[8px] font-semibold leading-relaxed text-slate-400">Deleting the portal account removes only the registered Pricelist login/link. The Customer Master record and authorization/QR are kept.</p>`;
+            <p class="mt-1.5 text-[8px] font-semibold leading-relaxed text-slate-400">Deleting the portal account removes only the registered Pricelist login/link. The Customer Master record and authorization/QR are kept so the customer can re-register.</p>`;
 
-        const password = document.getElementById('portal-account-new-password');
-        const toggle = document.getElementById('portal-account-toggle-password');
-        const reset = document.getElementById('portal-account-reset-password');
+        const toggleBtn = document.getElementById('portal-account-toggle-view');
+        const copyBtn = document.getElementById('portal-account-copy-view');
         const remove = document.getElementById('portal-account-delete');
+        const passView = document.getElementById('portal-account-password-view');
+        const toggleLabel = document.getElementById('portal-account-toggle-label');
 
-        toggle?.addEventListener('click', () => {
-            if (!password) return;
-            const showing = password.type === 'text';
-            password.type = showing ? 'password' : 'text';
-            toggle.textContent = showing ? 'Show' : 'Hide';
+        let isShowing = false;
+
+        toggleBtn?.addEventListener('click', () => {
+            if (!rawPassword || !passView) return;
+            isShowing = !isShowing;
+            passView.textContent = isShowing ? rawPassword : '••••••••';
+            if (toggleLabel) toggleLabel.textContent = isShowing ? 'Hide' : 'Show';
+            const icon = toggleBtn.querySelector('i');
+            if (icon) {
+                icon.setAttribute('data-lucide', isShowing ? 'eye-off' : 'eye');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
         });
 
-        reset?.addEventListener('click', resetPassword);
+        copyBtn?.addEventListener('click', async () => {
+            if (!rawPassword) {
+                alert('No password available to copy.');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(rawPassword);
+                if (typeof showSuccessModal === 'function') {
+                    showSuccessModal('Copied!', 'Customer password copied to clipboard.');
+                } else {
+                    alert('Customer password copied to clipboard.');
+                }
+            } catch (_) {
+                if (passView) {
+                    const range = document.createRange();
+                    range.selectNodeContents(passView);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+                alert('Password selected. Press Ctrl+C to copy.');
+            }
+        });
+
         remove?.addEventListener('click', deleteAccount);
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -195,57 +250,6 @@
         }
     }
 
-    async function resetPassword() {
-        const id = customerId();
-        const endpoints = endpointsFor(id);
-        const input = document.getElementById('portal-account-new-password');
-        const button = document.getElementById('portal-account-reset-password');
-        const password = String(input?.value ?? '');
-
-        if (!id || !endpoints) return;
-        if (password.length === 0) {
-            setError('Enter the new password first.');
-            input?.focus();
-            return;
-        }
-
-        setError('');
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'Saving...';
-        }
-
-        try {
-            const response = await fetch(endpoints.reset, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken()
-                },
-                body: JSON.stringify({
-                    action: 'reset_password',
-                    password
-                })
-            });
-            const body = await readJson(response);
-            if (input) input.value = '';
-            if (typeof showSuccessModal === 'function') {
-                showSuccessModal('Password Updated', body.message || 'The customer portal password was updated.');
-            } else {
-                alert(body.message || 'The customer portal password was updated.');
-            }
-            await loadAccount();
-        } catch (error) {
-            setError(error.message || 'Unable to reset the password.');
-        } finally {
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'Set New Password';
-            }
-        }
-    }
-
     function deleteAccount() {
         const id = customerId();
         const endpoints = endpointsFor(id);
@@ -277,7 +281,9 @@
                 await loadAccount();
 
                 try {
-                    currentPortalLoadId = null;
+                    if (typeof currentPortalLoadId !== 'undefined') {
+                        currentPortalLoadId = null;
+                    }
                     if (typeof loadPortalAccess === 'function') {
                         await loadPortalAccess(id);
                     }

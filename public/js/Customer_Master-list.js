@@ -974,12 +974,18 @@ function formatPortalDate(value) {
     });
 }
 
+/* W68_CUSTOMER_PORTAL_VIEW_PASSWORD_20261007 */
+let currentPortalLinkedPasswordRaw = '';
+let currentPortalLinkedPasswordShowing = false;
+
 function renderPortalLinkedAccount(account) {
     const box = document.getElementById('portal-linked-account');
     if (!box) return;
 
     if (!account) {
         box.classList.add('hidden');
+        currentPortalLinkedPasswordRaw = '';
+        currentPortalLinkedPasswordShowing = false;
         return;
     }
 
@@ -987,8 +993,96 @@ function renderPortalLinkedAccount(account) {
         safeString(account.username) || `Login #${safeString(account.login_id)}`;
     document.getElementById('portal-linked-email').textContent =
         safeString(account.email) || 'No email';
+
+    currentPortalLinkedPasswordRaw = String(account.password ?? '');
+    currentPortalLinkedPasswordShowing = false;
+
+    const passVal = document.getElementById('portal-linked-password-val');
+    const toggleBtn = document.getElementById('portal-linked-pwd-toggle');
+    const typeBadge = document.getElementById('portal-linked-pwd-badge');
+    const hint = document.getElementById('portal-linked-pwd-hint');
+
+    const isHashed = Boolean(account.is_hashed) || (
+        currentPortalLinkedPasswordRaw.startsWith('$2y$') ||
+        currentPortalLinkedPasswordRaw.startsWith('$2a$') ||
+        currentPortalLinkedPasswordRaw.startsWith('$2b$') ||
+        currentPortalLinkedPasswordRaw.startsWith('$argon2') ||
+        (currentPortalLinkedPasswordRaw.startsWith('$') && currentPortalLinkedPasswordRaw.length >= 30)
+    );
+
+    if (typeBadge) {
+        if (!currentPortalLinkedPasswordRaw) {
+            typeBadge.textContent = 'None';
+            typeBadge.className = 'text-[8px] font-bold uppercase tracking-widest text-slate-400';
+        } else if (isHashed) {
+            typeBadge.textContent = 'Hashed Account';
+            typeBadge.className = 'rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700';
+        } else {
+            typeBadge.textContent = 'Plain Text';
+            typeBadge.className = 'rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-blue-700';
+        }
+    }
+
+    if (hint) {
+        if (isHashed) {
+            hint.textContent = 'This account was registered with password hashing in the database.';
+            hint.classList.remove('hidden');
+        } else {
+            hint.textContent = '';
+            hint.classList.add('hidden');
+        }
+    }
+
+    if (passVal) {
+        passVal.textContent = currentPortalLinkedPasswordRaw ? '••••••••' : 'No password set';
+    }
+    if (toggleBtn) {
+        toggleBtn.textContent = 'Show';
+        toggleBtn.disabled = !currentPortalLinkedPasswordRaw;
+    }
+
     box.classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+window.togglePortalLinkedPasswordDisplay = function() {
+    const passVal = document.getElementById('portal-linked-password-val');
+    const toggleBtn = document.getElementById('portal-linked-pwd-toggle');
+    if (!passVal || !currentPortalLinkedPasswordRaw) return;
+
+    currentPortalLinkedPasswordShowing = !currentPortalLinkedPasswordShowing;
+    passVal.textContent = currentPortalLinkedPasswordShowing
+        ? currentPortalLinkedPasswordRaw
+        : '••••••••';
+    if (toggleBtn) {
+        toggleBtn.textContent = currentPortalLinkedPasswordShowing ? 'Hide' : 'Show';
+    }
+};
+
+window.copyPortalLinkedPasswordText = async function() {
+    if (!currentPortalLinkedPasswordRaw) {
+        alert('No password available to copy.');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(currentPortalLinkedPasswordRaw);
+        if (typeof showSuccessModal === 'function') {
+            showSuccessModal('Copied!', 'Customer password copied to clipboard.');
+        } else {
+            alert('Customer password copied to clipboard.');
+        }
+    } catch (_) {
+        const passVal = document.getElementById('portal-linked-password-val');
+        if (passVal) {
+            const range = document.createRange();
+            range.selectNodeContents(passVal);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        alert('Password selected. Press Ctrl+C to copy.');
+    }
+};
 
 function renderPortalQr(url) {
     const qr = document.getElementById('portal-qr-code');
