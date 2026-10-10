@@ -3233,6 +3233,28 @@ window.applyViewPictureManager = function() {
     function aiPartStatusElement(mode) {
         return document.getElementById('ai-part-status-' + mode);
     }
+    const aiPartDefaultMessage = 'AI Search fills Description and all verified vehicle Applications from the Part Number.';
+    const aiPartControllers = {};
+
+    function resetAiPartStatus(mode) {
+        if (aiPartControllers[mode]) {
+            try { aiPartControllers[mode].abort(); } catch (e) {}
+            delete aiPartControllers[mode];
+        }
+
+        const button = document.getElementById('ai-part-search-' + mode);
+        if (button) aiPartSetButtonLoading(button, false);
+
+        const el = aiPartStatusElement(mode);
+        if (el) {
+            el.textContent = aiPartDefaultMessage;
+            el.classList.remove('text-emerald-600', 'text-red-600', 'text-amber-600');
+            el.classList.add('text-slate-400');
+        }
+    }
+
+    window.resetProductPartAiStatus = resetAiPartStatus;
+
 
     function aiPartSetStatus(mode, message, kind) {
         const el = aiPartStatusElement(mode);
@@ -3292,8 +3314,18 @@ window.applyViewPictureManager = function() {
             return;
         }
 
+        if (aiPartControllers[mode]) {
+            try { aiPartControllers[mode].abort(); } catch (e) {}
+        }
+
+        const controller = new AbortController();
+        aiPartControllers[mode] = controller;
+        const editProductId = mode === 'edit'
+            ? String(document.getElementById('edit-product-id')?.value || '')
+            : '';
+
         aiPartSetButtonLoading(button, true);
-        aiPartSetStatus(mode, 'Gemini is searching the exact part number and compatible vehicles...', 'loading');
+        aiPartSetStatus(mode, 'Searching exact part number...', 'loading');
 
         try {
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -3306,8 +3338,24 @@ window.applyViewPictureManager = function() {
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 credentials: 'same-origin',
+                signal: controller.signal,
                 body: JSON.stringify({ part_number: partNumber })
             });
+
+            // The user may have opened another product while Gemini was working.
+            // Never apply an old result to a new Product Master form.
+            const currentPartNumber = String(aiPartFields(mode).part?.value || '').trim();
+            const currentEditProductId = mode === 'edit'
+                ? String(document.getElementById('edit-product-id')?.value || '')
+                : '';
+
+            if (
+                controller.signal.aborted
+                || currentPartNumber !== partNumber
+                || (mode === 'edit' && currentEditProductId !== editProductId)
+            ) {
+                return;
+            }
 
             let result = {};
             try {
@@ -3318,6 +3366,19 @@ window.applyViewPictureManager = function() {
 
             if (!response.ok || !result.success) {
                 throw new Error(result.message || 'Gemini could not verify this part number.');
+            }
+
+            const latestPartNumber = String(aiPartFields(mode).part?.value || '').trim();
+            const latestEditProductId = mode === 'edit'
+                ? String(document.getElementById('edit-product-id')?.value || '')
+                : '';
+
+            if (
+                controller.signal.aborted
+                || latestPartNumber !== partNumber
+                || (mode === 'edit' && latestEditProductId !== editProductId)
+            ) {
+                return;
             }
 
             const description = String(result.description || '').trim().toUpperCase();
@@ -3363,10 +3424,16 @@ window.applyViewPictureManager = function() {
                 incomplete ? 'warning' : 'success'
             );
         } catch (error) {
+            if (error && error.name === 'AbortError') {
+                return;
+            }
             console.error('Product Master AI Search error:', error);
             aiPartSetStatus(mode, error.message || 'AI Search failed.', 'error');
         } finally {
-            aiPartSetButtonLoading(button, false);
+            if (aiPartControllers[mode] === controller) {
+                delete aiPartControllers[mode];
+                aiPartSetButtonLoading(button, false);
+            }
         }
     }
 
@@ -3384,10 +3451,14 @@ window.applyViewPictureManager = function() {
             runProductPartAiSearch(mode, button);
         });
 
+        partInput.addEventListener('input', function () {
+            resetAiPartStatus(mode);
+        });
+
         const status = document.createElement('p');
         status.id = 'ai-part-status-' + mode;
         status.className = 'mt-1.5 text-[10px] font-semibold text-slate-400 leading-relaxed';
-        status.textContent = 'AI Search fills Description and all verified vehicle Applications from the Part Number.';
+        status.textContent = aiPartDefaultMessage;
 
         partInput.insertAdjacentElement('afterend', button);
         button.insertAdjacentElement('afterend', status);
@@ -3396,6 +3467,27 @@ window.applyViewPictureManager = function() {
     function initProductPartAiSearch() {
         injectAiPartButton('add');
         injectAiPartButton('edit');
+
+        ['add', 'edit'].forEach(function (mode) {
+            const modal = document.getElementById(mode + '-product-modal');
+            if (!modal) return;
+
+            let wasOpen = !modal.classList.contains('hidden');
+            const modalObserver = new MutationObserver(function () {
+                const isOpen = !modal.classList.contains('hidden');
+                if (isOpen && !wasOpen) {
+                    resetAiPartStatus(mode);
+                } else if (!isOpen && wasOpen) {
+                    resetAiPartStatus(mode);
+                }
+                wasOpen = isOpen;
+            });
+
+            modalObserver.observe(modal, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        });
 
         const viewPart = document.getElementById('view-prod-part');
         if (viewPart) {
