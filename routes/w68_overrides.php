@@ -36,6 +36,194 @@ Route::get('/admin/shopee/callback', [ShopeeAuthController::class, 'handleCallba
 Route::post('/admin/shopee/refresh', [ShopeeAuthController::class, 'manualRefresh'])
     ->name('w68.shopee.refresh');
 
+
+/*
+|--------------------------------------------------------------------------
+| Overdue invoice navbar notification (Admin + Regular)
+|--------------------------------------------------------------------------
+|
+| W68_OVERDUE_INVOICE_PESO_NOTIFICATION_20261010
+| Uses sales_orders.terms per Sales Order / invoice. A Sales Order generated
+| from the current Proceed flow contains one invoice, so its own terms are the
+| authoritative terms for that invoice.
+|
+*/
+$w68OverdueInvoiceNotifications = function (Request $request) {
+    try {
+        $user = session('user');
+        if (is_array($user)) {
+            $user = (object) $user;
+        }
+
+        if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden',
+                'overdue_invoices' => [],
+                'count' => 0,
+            ], 403);
+        }
+
+        $sales = DB::connection('sales');
+        $schema = $sales->getSchemaBuilder();
+
+        if (!$schema->hasTable('sales_orders') || !$schema->hasColumn('sales_orders', 'terms')) {
+            return response()->json([
+                'success' => true,
+                'overdue_invoices' => [],
+                'count' => 0,
+            ]);
+        }
+
+        $dateColumn = $schema->hasColumn('sales_orders', 'order_date')
+            ? 'order_date'
+            : ($schema->hasColumn('sales_orders', 'date_issue') ? 'date_issue' : 'created_at');
+
+        $select = [
+            'id',
+            'order_number',
+            'customer_id',
+            'customer_name',
+            'invoice_numbers',
+            'terms',
+            'total_amount',
+            'status',
+            DB::raw($dateColumn . ' as invoice_date'),
+        ];
+
+        $orders = $sales->table('sales_orders')
+            ->whereNotNull('invoice_numbers')
+            ->whereRaw("TRIM(COALESCE(invoice_numbers, '')) <> ''")
+            ->whereNotNull('terms')
+            ->where('terms', '>=', 0)
+            ->where('total_amount', '>', 0)
+            ->whereRaw("UPPER(TRIM(COALESCE(status, ''))) NOT IN ('CANCELLED', 'CANCELED', 'VOID')")
+            ->select($select)
+            ->orderByDesc('id')
+            ->limit(5000)
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'overdue_invoices' => [],
+                'count' => 0,
+            ]);
+        }
+
+        $orderIds = $orders->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+
+        $paidByOrder = collect();
+        try {
+            $paidByOrder = DB::connection('accounting')
+                ->table('process_payment_invoices as ppi')
+                ->join('process_payments as pp', 'pp.id', '=', 'ppi.process_payment_id')
+                ->where('ppi.source_type', 'sales_order')
+                ->whereIn('ppi.source_id', $orderIds)
+                ->whereRaw("UPPER(TRIM(COALESCE(pp.status, 'POSTED'))) NOT IN ('CANCELLED', 'CANCELED', 'VOID')")
+                ->groupBy('ppi.source_id')
+                ->selectRaw('ppi.source_id, SUM(COALESCE(ppi.paid_amount, 0)) as paid_total')
+                ->pluck('paid_total', 'source_id');
+        } catch (\Throwable $paymentError) {
+            Log::warning('Overdue invoice notification could not read payment totals.', [
+                'message' => $paymentError->getMessage(),
+            ]);
+        }
+
+        $today = now('Asia/Manila')->startOfDay();
+        $notifications = [];
+
+        foreach ($orders as $order) {
+            $invoiceDateRaw = trim((string) ($order->invoice_date ?? ''));
+            if ($invoiceDateRaw === '') {
+                continue;
+            }
+
+            try {
+                $invoiceDate = \Illuminate\Support\Carbon::parse($invoiceDateRaw, 'Asia/Manila')->startOfDay();
+            } catch (\Throwable $dateError) {
+                continue;
+            }
+
+            $terms = max(0, (int) ($order->terms ?? 0));
+            $dueDate = $invoiceDate->copy()->addDays($terms);
+
+            if (!$today->greaterThan($dueDate)) {
+                continue;
+            }
+
+            $paid = (float) ($paidByOrder[(int) $order->id] ?? 0);
+            $invoiceAmount = max(0, (float) ($order->total_amount ?? 0));
+            $balance = max(0, round($invoiceAmount - $paid, 2));
+
+            if ($balance <= 0.004) {
+                continue;
+            }
+
+            $invoiceLabel = trim((string) ($order->invoice_numbers ?? ''));
+            $decoded = json_decode($invoiceLabel, true);
+            if (is_array($decoded)) {
+                $invoiceLabel = collect($decoded)
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->implode(', ');
+            }
+            if ($invoiceLabel === '') {
+                $invoiceLabel = '---';
+            }
+
+            $notifications[] = [
+                'sales_order_id' => (int) $order->id,
+                'order_number' => (string) ($order->order_number ?? ''),
+                'invoice_no' => $invoiceLabel,
+                'customer_id' => (int) ($order->customer_id ?? 0),
+                'customer_name' => (string) ($order->customer_name ?? '---'),
+                'invoice_date' => $invoiceDate->format('Y-m-d'),
+                'terms_days' => $terms,
+                'due_date' => $dueDate->format('Y-m-d'),
+                'overdue_days' => $dueDate->diffInDays($today),
+                'invoice_amount' => round($invoiceAmount, 2),
+                'paid_amount' => round($paid, 2),
+                'balance_due' => $balance,
+            ];
+        }
+
+        usort($notifications, function ($a, $b) {
+            $days = ((int) ($b['overdue_days'] ?? 0)) <=> ((int) ($a['overdue_days'] ?? 0));
+            if ($days !== 0) {
+                return $days;
+            }
+
+            return strcmp((string) ($a['due_date'] ?? ''), (string) ($b['due_date'] ?? ''));
+        });
+
+        return response()->json([
+            'success' => true,
+            'overdue_invoices' => $notifications,
+            'count' => count($notifications),
+            'generated_at' => now('Asia/Manila')->toDateTimeString(),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Overdue invoice notification failed.', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to load overdue invoices.',
+            'overdue_invoices' => [],
+            'count' => 0,
+        ], 500);
+    }
+};
+
+Route::get('/admin/notifications/overdue-invoices', $w68OverdueInvoiceNotifications)
+    ->name('w68.admin.overdue-invoices');
+Route::get('/regular/notifications/overdue-invoices', $w68OverdueInvoiceNotifications)
+    ->name('w68.regular.overdue-invoices');
+
 $w68DirectOnlineProductFetch = function (Request $request) {
     try {
         $user = session('user');
