@@ -3383,6 +3383,8 @@ window.applyViewPictureManager = function() {
 
             const description = String(result.description || '').trim().toUpperCase();
             const applications = Array.isArray(result.applications) ? result.applications : [];
+            const productType = String(result.product_type || 'AUTOMOTIVE').trim().toUpperCase();
+            const isGeneralProduct = productType === 'GENERAL';
 
             if (fields.description && description) {
                 fields.description.value = description;
@@ -3391,17 +3393,38 @@ window.applyViewPictureManager = function() {
             }
 
             if (mode === 'add' || mode === 'edit') {
-                aiPartSetStructuredApplications(mode, applications);
+                if (isGeneralProduct) {
+                    const container = document.getElementById(mode + '-application-entries');
+                    const hidden = document.getElementById(mode + '-application-hidden');
+                    if (container) container.innerHTML = '';
+                    if (hidden) hidden.value = '';
+                } else {
+                    aiPartSetStructuredApplications(mode, applications);
+                }
             } else {
                 const appField = document.getElementById('view-prod-app');
                 if (appField) {
-                    appField.value = aiPartApplicationText(applications);
+                    appField.value = isGeneralProduct ? '' : aiPartApplicationText(applications);
                     appField.dispatchEvent(new Event('input', { bubbles: true }));
                     appField.dispatchEvent(new Event('change', { bubbles: true }));
                 }
                 if (typeof window.updateProductViewDirtyState === 'function') {
                     window.updateProductViewDirtyState();
                 }
+            }
+
+            const confidence = String(result.confidence || '').toUpperCase();
+
+            if (isGeneralProduct) {
+                aiPartSetStatus(
+                    mode,
+                    'Found ' + description
+                        + ' · GENERAL / UNIVERSAL PRODUCT'
+                        + (confidence ? ' · ' + confidence + ' confidence' : '')
+                        + '. Vehicle Application is not required.',
+                    'success'
+                );
+                return;
             }
 
             const incomplete = applications.some(function (app) {
@@ -3411,7 +3434,6 @@ window.applyViewPictureManager = function() {
             });
 
             const count = applications.length;
-            const confidence = String(result.confidence || '').toUpperCase();
             const baseMessage = 'Found ' + description + ' with ' + count
                 + (count === 1 ? ' vehicle application' : ' vehicle applications')
                 + (confidence ? ' · ' + confidence + ' confidence' : '') + '.';
