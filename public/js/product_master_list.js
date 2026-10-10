@@ -3253,7 +3253,7 @@ window.applyViewPictureManager = function() {
     function aiPartStatusElement(mode) {
         return document.getElementById('ai-part-status-' + mode);
     }
-    const aiPartDefaultMessage = 'AI Search fills Description and all verified vehicle Applications from the Part Number.';
+    const aiPartDefaultMessage = 'AI Search uses Philippine-market results to fill Description and verified vehicle Applications.';
     const aiPartControllers = {};
 
     function resetAiPartStatus(mode) {
@@ -3345,7 +3345,7 @@ window.applyViewPictureManager = function() {
             : '';
 
         aiPartSetButtonLoading(button, true);
-        aiPartSetStatus(mode, 'Searching exact part number...', 'loading');
+        aiPartSetStatus(mode, 'Searching the Philippine market for this exact part number...', 'loading');
 
         try {
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -3441,7 +3441,7 @@ window.applyViewPictureManager = function() {
                     'Found ' + description
                         + ' · GENERAL / UNIVERSAL PRODUCT'
                         + (confidence ? ' · ' + confidence + ' confidence' : '')
-                        + '. Vehicle Application is not required.',
+                        + ' · PHILIPPINE MARKET. Vehicle Application is not required.',
                     'success'
                 );
                 return;
@@ -3455,7 +3455,7 @@ window.applyViewPictureManager = function() {
 
             const count = applications.length;
             const baseMessage = 'Found ' + description + ' with ' + count
-                + (count === 1 ? ' vehicle application' : ' vehicle applications')
+                + (count === 1 ? ' Philippine-market vehicle application' : ' Philippine-market vehicle applications')
                 + (confidence ? ' · ' + confidence + ' confidence' : '') + '.';
 
             aiPartSetStatus(
