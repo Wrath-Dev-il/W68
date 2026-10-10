@@ -1497,20 +1497,35 @@ window.openOnlineReportEdit = async function(reportId) {
         if (editDateWrap) editDateWrap.classList.remove('hidden');
         if (editDateInput) editDateInput.value = data.report?.invoice_date || '';
 
-        // Populate Step 1: invoice numbers, addresses, date ranges
+        // Populate Step 1: ONLINE Sales Note/customer, invoice numbers, addresses
         const tbody = document.getElementById('or-notes-tbody');
         if (notes.length > 0) {
-            tbody.innerHTML = notes.map((note, idx) => `
-                <tr class="or-note-row" data-idx="${idx}">
-                    <td class="p-3 px-4 font-bold text-slate-800">${note.sales_number || '---'}</td>
-                    <td class="p-3 px-4"><input type="text" class="or-invoice-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${(note.invoice_no || '').replace(/"/g, '&quot;')}"></td>
-                    <td class="p-3 px-4"><input type="text" class="or-address-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${(note.address || '').replace(/"/g, '&quot;')}"></td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = notes.map((note, idx) => {
+                const available = Array.isArray(window._onlineReportAvailableNotes) ? window._onlineReportAvailableNotes : [];
+                const currentExists = available.some(opt => Number(opt.id) === Number(note.id));
+                const currentFallback = currentExists ? '' : '<option value="' + Number(note.id) + '" selected>' + escapeHtml(note.sales_number || '---') + ' — ' + escapeHtml(note.customer_name || '---') + ' (CURRENT)</option>';
+                const options = available.map(function(opt) {
+                    const selected = Number(opt.id) === Number(note.id) ? ' selected' : '';
+                    const label = (opt.sales_number || '---') + ' — ' + (opt.customer_name || '---');
+                    return '<option value="' + Number(opt.id) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+                }).join('');
+
+                return `
+                    <tr class="or-note-row" data-idx="${idx}">
+                        <td class="p-3 px-4 min-w-[280px]">
+                            <select class="or-note-select w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon bg-white" onchange="changeOnlineReportNote(${idx}, this.value)">
+                                ${currentFallback}${options}
+                            </select>
+                            <div class="or-note-customer mt-1 text-[10px] font-semibold text-maroon/70">${escapeHtml(note.customer_name || '---')}</div>
+                        </td>
+                        <td class="p-3 px-4"><input type="text" class="or-invoice-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${escapeHtml(note.invoice_no || '')}"></td>
+                        <td class="p-3 px-4"><input type="text" class="or-address-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${escapeHtml(note.address || '')}"></td>
+                    </tr>
+                `;
+            }).join('');
         } else {
             tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-slate-300 italic">No sales notes found.</td></tr>';
         }
-
         // Populate date ranges
         const dateRanges = data.date_ranges || [];
         document.getElementById('date-range-container').innerHTML = '';
@@ -1556,7 +1571,9 @@ window.openOnlineReportEdit = async function(reportId) {
             return {
                 id: note.id,
                 sales_number: note.sales_number,
+                customer_id: Number(note.customer_id || 0),
                 customer_name: note.customer_name,
+                order_date: note.order_date || '',
                 net_total: netTotal,
                 items: [],
             };
@@ -1584,6 +1601,23 @@ window.openOnlineReportEdit = async function(reportId) {
     }
 };
 
+window.changeOnlineReportNote = function(noteIdx, noteId) {
+    const idx = Number(noteIdx);
+    const selectedId = Number(noteId);
+    const available = Array.isArray(window._onlineReportAvailableNotes) ? window._onlineReportAvailableNotes : [];
+    const selected = available.find(function(note) { return Number(note.id) === selectedId; });
+    if (!selected || !_onlineReportNotes[idx]) return;
+
+    _onlineReportNotes[idx].id = selectedId;
+    _onlineReportNotes[idx].sales_number = selected.sales_number || '';
+    _onlineReportNotes[idx].customer_id = Number(selected.customer_id || 0);
+    _onlineReportNotes[idx].customer_name = selected.customer_name || '';
+    _onlineReportNotes[idx].order_date = selected.order_date || '';
+
+    const row = document.querySelector('#or-notes-tbody .or-note-row[data-idx="' + idx + '"]');
+    const customerLabel = row?.querySelector('.or-note-customer');
+    if (customerLabel) customerLabel.textContent = selected.customer_name || '---';
+};
 function net_total_from_items(items, prices) {
     let total = 0;
     (items || []).forEach(function(item) {
