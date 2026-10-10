@@ -1693,6 +1693,13 @@ window.updateOnlineReport = async function() {
         const reportId = window._editingReportId;
         if (!reportId) { alert('No report selected for update.'); return; }
 
+        const invoiceDate = document.getElementById('or-edit-invoice-date')?.value || '';
+        if (!invoiceDate) {
+            alert('Please select the Online Invoice date.');
+            toggleModal('online-report-modal', true);
+            return;
+        }
+
         // Collect data same as generateOnlineReceipt
         const prices = {};
         document.querySelectorAll('.or-price-input').forEach(function(input) {
@@ -1795,6 +1802,7 @@ window.updateOnlineReport = async function() {
 
         const payload = {
             data: {
+                invoice_date: invoiceDate,
                 date_ranges: dateRanges,
                 prices: prices,
                 invoice_numbers: invoiceNumbers,
@@ -1821,7 +1829,7 @@ window.updateOnlineReport = async function() {
         if (data.success) {
             const notice = document.createElement('div');
             notice.className = 'fixed top-4 right-4 z-[9999] bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl text-sm font-bold animate-fade-in';
-            notice.textContent = 'Online Invoice updated successfully.';
+            notice.textContent = 'Online Invoice note, customer and date synchronized successfully.';
             document.body.appendChild(notice);
             setTimeout(function() { notice.remove(); }, 3000);
             fetchOiPage();
