@@ -837,11 +837,15 @@ $w68ProductPartAiSearch = function (Request $request) {
     $cacheKey = 'w68_product_part_ai_' . sha1(mb_strtoupper($partNumber));
 
     try {
-        $result = \Illuminate\Support\Facades\Cache::remember(
-            $cacheKey,
-            now()->addDays(14),
-            fn () => app(\App\Services\ProductPartAiService::class)->identify($partNumber)
-        );
+        $result = \Illuminate\Support\Facades\Cache::get($cacheKey);
+
+        if (!is_array($result) || !($result['success'] ?? false)) {
+            $result = app(\App\Services\ProductPartAiService::class)->identify($partNumber);
+
+            if (($result['success'] ?? false) === true) {
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $result, now()->addDays(14));
+            }
+        }
 
         $status = ($result['success'] ?? false) ? 200 : 422;
         return response()->json($result, $status);
