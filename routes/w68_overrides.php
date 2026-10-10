@@ -55,7 +55,7 @@ $w68OverdueInvoiceNotifications = function (Request $request) {
             $user = (object) $user;
         }
 
-        if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2], true)) {
+        if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2, 3], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Forbidden',
@@ -279,6 +279,8 @@ Route::get('/admin/notifications/overdue-invoices', $w68OverdueInvoiceNotificati
     ->name('w68.admin.overdue-invoices');
 Route::get('/regular/notifications/overdue-invoices', $w68OverdueInvoiceNotifications)
     ->name('w68.regular.overdue-invoices');
+Route::get('/special/notifications/overdue-invoices', $w68OverdueInvoiceNotifications)
+    ->name('w68.special.overdue-invoices');
 
 $w68DirectOnlineProductFetch = function (Request $request) {
     try {
