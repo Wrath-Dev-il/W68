@@ -32,6 +32,15 @@ class ProductPartAiService
             return ['success' => false, 'message' => 'Gemini API is not configured.'];
         }
 
+        // Prefer the lighter model first for Product Master lookups. The larger
+        // models remain fallbacks when Gemini cannot answer reliably.
+        $models = [
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-flash-latest',
+        ];
+
         $researchInstruction =
             "You are an automotive replacement-parts fitment researcher for W68 Auto Parts.\n" .
             "Use Google Search to research the EXACT part number supplied by the user.\n" .
@@ -47,11 +56,10 @@ class ProductPartAiService
             "description must be a SHORT GENERIC PART NAME ONLY in uppercase, for example CON ROD BEARING, MAIN BEARING, BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
             "Do not put size text such as 0.25MM UNDERSIZE, 0.50MM, STD, OS or US in description. Keep size information only in notes.\n" .
             "applications must contain every clearly verified vehicle fitment. Each application must have car_brand, car_model, year_from, year_to, engine.\n" .
-            "For internal engine parts: if the exact part is verified for an engine code, and the supplemental vehicle research verifies that engine in a vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
+            "For internal engine parts: if the exact part is verified for an engine code, and supplemental research verifies that engine in a vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
             "Never place the vehicle model inside car_brand. Never place the brand inside car_model.\n" .
             "year_from/year_to must be four-digit years when supported by the research. A single verified model year must be used for both year_from and year_to.\n" .
             "If a range such as 2005-2015 appears, split it into year_from=2005 and year_to=2015.\n" .
-            "Prefer specific vehicle rows such as ISUZU / ELF NPR / 1984 / 1993 / 4BD1 instead of returning only an engine code.\n" .
             "Do not invent missing fitment data.\n";
 
         $schema = [
@@ -81,10 +89,11 @@ class ProductPartAiService
 
         $lastError = 'Gemini could not identify this part number.';
 
-        foreach ($this->models as $model) {
+        foreach ($models as $model) {
             try {
                 $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $this->apiKey;
 
+                // PASS 1: one grounded exact-part search.
                 $researchBody = [
                     'systemInstruction' => ['parts' => [['text' => $researchInstruction]]],
                     'contents' => [[
@@ -97,7 +106,7 @@ class ProductPartAiService
                     'generationConfig' => ['temperature' => 0.1],
                 ];
 
-                $researchResponse = Http::timeout(45)
+                $researchResponse = Http::timeout(25)
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->post($url, $researchBody);
 
@@ -122,9 +131,28 @@ class ProductPartAiService
                     continue;
                 }
 
-                // Second grounded pass: many engine-internal part catalogs only
-                // identify engine codes. Resolve those engines to real vehicle
-                // make/model/year applications before structured extraction.
+                // PASS 2: fast structured extraction. Most parts finish here.
+                $firstExtract = $this->extractStructuredResult(
+                    $url,
+                    $partNumber,
+                    $researchText,
+                    $extractInstruction,
+                    $schema
+                );
+
+                if (!is_array($firstExtract)) {
+                    $lastError = 'Gemini returned an unreadable structured fitment result.';
+                    continue;
+                }
+
+                $firstResult = $this->normalize($partNumber, $firstExtract);
+
+                if (!$this->needsVehicleExpansion($firstResult)) {
+                    return $firstResult;
+                }
+
+                // Only engine-only/incomplete results get this extra grounded pass.
+                // This keeps common BALL JOINT / TIE ROD END lookups much faster.
                 $vehicleResearchInstruction =
                     "You are an automotive engine-to-vehicle fitment researcher.\n" .
                     "Using Google Search, take the exact part-number research below and identify every ENGINE CODE mentioned.\n" .
@@ -145,75 +173,52 @@ class ProductPartAiService
                     'generationConfig' => ['temperature' => 0.1],
                 ];
 
-                $vehicleResearchText = '';
-                try {
-                    $vehicleResearchResponse = Http::timeout(45)
-                        ->withHeaders(['Content-Type' => 'application/json'])
-                        ->post($url, $vehicleResearchBody);
-
-                    if ($vehicleResearchResponse->successful()) {
-                        $vehicleResearchData = $vehicleResearchResponse->json();
-
-                        foreach (($vehicleResearchData['candidates'][0]['content']['parts'] ?? []) as $part) {
-                            if (isset($part['text'])) {
-                                $vehicleResearchText .= (string) $part['text'];
-                            }
-                        }
-
-                        $vehicleResearchText = trim($vehicleResearchText);
-                    }
-                } catch (\Throwable $vehicleResearchError) {
-                    // Keep the original part research usable even if this
-                    // supplemental fitment pass times out.
-                    $vehicleResearchText = '';
-                }
-
-                $combinedResearch = $researchText;
-                if ($vehicleResearchText !== '') {
-                    $combinedResearch .= "\n\n=== SUPPLEMENTAL ENGINE-TO-VEHICLE RESEARCH ===\n" . $vehicleResearchText;
-                }
-
-                $extractBody = [
-                    'systemInstruction' => ['parts' => [['text' => $extractInstruction]]],
-                    'contents' => [[
-                        'role' => 'user',
-                        'parts' => [[
-                            'text' => "PART NUMBER: " . $partNumber . "\n\nSEARCH RESEARCH:\n" . $combinedResearch,
-                        ]],
-                    ]],
-                    'generationConfig' => [
-                        'temperature' => 0,
-                        'responseMimeType' => 'application/json',
-                        'responseSchema' => $schema,
-                    ],
-                ];
-
-                $extractResponse = Http::timeout(45)
+                $vehicleResearchResponse = Http::timeout(25)
                     ->withHeaders(['Content-Type' => 'application/json'])
-                    ->post($url, $extractBody);
+                    ->post($url, $vehicleResearchBody);
 
-                if (!$extractResponse->successful()) {
-                    $lastError = (string) ($extractResponse->json('error.message') ?: $extractResponse->body());
-                    continue;
+                if (!$vehicleResearchResponse->successful()) {
+                    // Return the useful first result instead of making the user wait
+                    // through additional model fallbacks.
+                    return $firstResult;
                 }
 
-                $extractData = $extractResponse->json();
-                $jsonText = '';
+                $vehicleResearchData = $vehicleResearchResponse->json();
+                $vehicleResearchText = '';
 
-                foreach (($extractData['candidates'][0]['content']['parts'] ?? []) as $part) {
+                foreach (($vehicleResearchData['candidates'][0]['content']['parts'] ?? []) as $part) {
                     if (isset($part['text'])) {
-                        $jsonText .= (string) $part['text'];
+                        $vehicleResearchText .= (string) $part['text'];
                     }
                 }
 
-                $decoded = json_decode(trim($jsonText), true);
+                $vehicleResearchText = trim($vehicleResearchText);
 
-                if (!is_array($decoded)) {
-                    $lastError = 'Gemini returned an unreadable structured fitment result.';
-                    continue;
+                if ($vehicleResearchText === '') {
+                    return $firstResult;
                 }
 
-                return $this->normalize($partNumber, $decoded);
+                $combinedResearch = $researchText
+                    . "\n\n=== SUPPLEMENTAL ENGINE-TO-VEHICLE RESEARCH ===\n"
+                    . $vehicleResearchText;
+
+                $expandedExtract = $this->extractStructuredResult(
+                    $url,
+                    $partNumber,
+                    $combinedResearch,
+                    $extractInstruction,
+                    $schema
+                );
+
+                if (!is_array($expandedExtract)) {
+                    return $firstResult;
+                }
+
+                $expandedResult = $this->normalize($partNumber, $expandedExtract);
+
+                return $this->resultCompletenessScore($expandedResult) >= $this->resultCompletenessScore($firstResult)
+                    ? $expandedResult
+                    : $firstResult;
             } catch (\Throwable $e) {
                 $lastError = $e->getMessage();
             }
@@ -228,6 +233,94 @@ class ProductPartAiService
             'confidence' => 'low',
             'message' => $lastError,
         ];
+    }
+
+    protected function extractStructuredResult(
+        string $url,
+        string $partNumber,
+        string $researchText,
+        string $extractInstruction,
+        array $schema
+    ): ?array {
+        $extractBody = [
+            'systemInstruction' => ['parts' => [['text' => $extractInstruction]]],
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [[
+                    'text' => "PART NUMBER: " . $partNumber . "\n\nSEARCH RESEARCH:\n" . $researchText,
+                ]],
+            ]],
+            'generationConfig' => [
+                'temperature' => 0,
+                'responseMimeType' => 'application/json',
+                'responseSchema' => $schema,
+            ],
+        ];
+
+        $response = Http::timeout(18)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post($url, $extractBody);
+
+        if (!$response->successful()) {
+            return null;
+        }
+
+        $data = $response->json();
+        $jsonText = '';
+
+        foreach (($data['candidates'][0]['content']['parts'] ?? []) as $part) {
+            if (isset($part['text'])) {
+                $jsonText .= (string) $part['text'];
+            }
+        }
+
+        $decoded = json_decode(trim($jsonText), true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    protected function needsVehicleExpansion(array $result): bool
+    {
+        if (!($result['success'] ?? false)) {
+            return false;
+        }
+
+        $applications = is_array($result['applications'] ?? null)
+            ? $result['applications']
+            : [];
+
+        if (empty($applications)) {
+            return false;
+        }
+
+        foreach ($applications as $application) {
+            $model = trim((string) ($application['car_model'] ?? ''));
+            $yearFrom = trim((string) ($application['year_from'] ?? ''));
+            $yearTo = trim((string) ($application['year_to'] ?? ''));
+            $engine = trim((string) ($application['engine'] ?? ''));
+
+            if ($engine !== '' && ($model === '' || $yearFrom === '' || $yearTo === '')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function resultCompletenessScore(array $result): int
+    {
+        $score = trim((string) ($result['description'] ?? '')) !== '' ? 10 : 0;
+
+        foreach (($result['applications'] ?? []) as $application) {
+            if (!is_array($application)) continue;
+            foreach (['car_brand', 'car_model', 'year_from', 'year_to', 'engine'] as $field) {
+                if (trim((string) ($application[$field] ?? '')) !== '') {
+                    $score++;
+                }
+            }
+        }
+
+        return $score;
     }
 
     protected function normalize(string $partNumber, array $data): array
