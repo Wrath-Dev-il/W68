@@ -788,14 +788,20 @@ $w68OnlineInvoiceUpdate = function (Request $request, $id) use ($w68OnlineInvoic
     }
 };
 
-Route::get('/admin/sales/sales-order/report/online-edit/{id}', $w68OnlineInvoiceEdit);
-Route::put('/admin/sales/sales-order/report/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::get('/admin/sales/sales-order/report/online-edit/{id}', $w68OnlineInvoiceEdit)
+    ->name('admin.sales-order.online-edit');
+Route::put('/admin/sales/sales-order/report/online-update/{id}', $w68OnlineInvoiceUpdate)
+    ->name('admin.sales-order.online-update');
 Route::post('/admin/sales/sales-order/report/online-update/{id}', $w68OnlineInvoiceUpdate);
 
-Route::get('/regular/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit);
-Route::put('/regular/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::get('/regular/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit)
+    ->name('regular.sales-order.online-edit');
+Route::put('/regular/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate)
+    ->name('regular.sales-order.online-update');
 Route::post('/regular/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
 
-Route::get('/special/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit);
-Route::put('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::get('/special/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit)
+    ->name('special.sales-order.online-edit');
+Route::put('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate)
+    ->name('special.sales-order.online-update');
 Route::post('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
