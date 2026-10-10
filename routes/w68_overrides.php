@@ -822,7 +822,7 @@ $w68ProductPartAiSearch = function (Request $request) {
     $user = session('user');
     if (is_array($user)) $user = (object) $user;
 
-    if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2], true)) {
+    if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2, 3], true)) {
         return response()->json([
             'success' => false,
             'message' => 'Unauthorized.',
@@ -872,3 +872,6 @@ Route::post('/admin/masterlist/product/ai-part-search', $w68ProductPartAiSearch)
 
 Route::post('/regular/master-list/product-master/ai-part-search', $w68ProductPartAiSearch)
     ->name('regular.prod-master.ai-part-search');
+
+Route::post('/special/master-list/product-master/ai-part-search', $w68ProductPartAiSearch)
+    ->name('special.prod-master.ai-part-search');
