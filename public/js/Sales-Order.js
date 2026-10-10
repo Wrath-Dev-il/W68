@@ -1435,6 +1435,7 @@ window.resetOnlineReportModal = function() {
     window._onlineReportIds = [];
     window._onlineReportCounterParts = {};
     window._onlineReportAddedItems = {};
+    window._onlineReportAvailableNotes = [];
 
     document.querySelector('#online-report-modal h3').textContent = 'Online Report Generation';
     document.getElementById('online-report-subtitle').textContent = 'Step 1: Basic Info';
@@ -1454,6 +1455,10 @@ window.resetOnlineReportModal = function() {
     document.getElementById('or-notes-tbody').innerHTML = '<tr><td colspan="3" class="p-6 text-center text-slate-300 italic">No sales notes loaded.</td></tr>';
     document.getElementById('or-items-container').innerHTML = '';
     document.getElementById('or-items-loading').classList.add('hidden');
+    const editDateWrap = document.getElementById('or-edit-invoice-date-wrap');
+    const editDateInput = document.getElementById('or-edit-invoice-date');
+    if (editDateWrap) editDateWrap.classList.add('hidden');
+    if (editDateInput) editDateInput.value = '';
     _dateRangeRowCount = 0;
     const onlineTotal = document.getElementById('or-total-amount');
     if (onlineTotal) onlineTotal.textContent = '₱ 0.00';
@@ -1483,6 +1488,14 @@ window.openOnlineReportEdit = async function(reportId) {
             : {};
         window._onlineReportAddedItems = {};
         window._onlineReportEditData = data;
+        window._onlineReportAvailableNotes = Array.isArray(data.available_online_notes)
+            ? data.available_online_notes
+            : [];
+
+        const editDateWrap = document.getElementById('or-edit-invoice-date-wrap');
+        const editDateInput = document.getElementById('or-edit-invoice-date');
+        if (editDateWrap) editDateWrap.classList.remove('hidden');
+        if (editDateInput) editDateInput.value = data.report?.invoice_date || '';
 
         // Populate Step 1: invoice numbers, addresses, date ranges
         const tbody = document.getElementById('or-notes-tbody');
