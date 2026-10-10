@@ -1137,18 +1137,7 @@
                                 <td class="meta-label">DATE:</td>
                                 <td class="meta-value">{{ $displayPrintDate }}</td>
                             </tr>
-                            <tr>
-                                <td class="meta-label">TIN:</td>
-                                <td class="meta-value">{{ $customerTin }}</td>
-                            </tr>
-                            <tr>
-                                <td class="meta-label">TERMS:</td>
-                                <td class="meta-value terms-value">{{ $terms ?? '' }}</td>
-                            </tr>
-                            <tr>
-                                <td class="meta-label">SALESMAN:</td>
-                                <td class="meta-value">{{ $salesMan ?? '' }}</td>
-                            </tr>
+
                         </table>
                     </td>
                 </tr>
