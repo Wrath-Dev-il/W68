@@ -35,19 +35,23 @@ class ProductPartAiService
         $researchInstruction =
             "You are an automotive replacement-parts fitment researcher for W68 Auto Parts.\n" .
             "Use Google Search to research the EXACT part number supplied by the user.\n" .
-            "Collect the short generic part type and EVERY clearly supported vehicle application.\n" .
+            "A part number may contain a size suffix such as 0.25, 0.50, STD, OS or US. Treat that as the bearing/part size variant, not as the vehicle application.\n" .
+            "Collect the short generic part type, size/variant meaning, every verified engine code, and EVERY clearly supported vehicle application.\n" .
             "For every application, explicitly state MAKE/CAR BRAND, CAR MODEL, YEAR FROM, YEAR TO, and ENGINE CODE or engine displacement when available.\n" .
-            "Search multiple useful results when needed. Do not stop after the first vehicle fitment.\n" .
+            "Search multiple useful results when needed. Do not stop after the first engine code or first vehicle fitment.\n" .
             "Do not substitute a similar part number and do not invent compatibility.\n";
 
         $extractInstruction =
             "Convert the supplied automotive research into strict structured data for W68 Product Master.\n" .
             "Return JSON only.\n" .
-            "description must be a SHORT GENERIC PART NAME ONLY in uppercase, for example BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
+            "description must be a SHORT GENERIC PART NAME ONLY in uppercase, for example CON ROD BEARING, MAIN BEARING, BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
+            "Do not put size text such as 0.25MM UNDERSIZE, 0.50MM, STD, OS or US in description. Keep size information only in notes.\n" .
             "applications must contain every clearly verified vehicle fitment. Each application must have car_brand, car_model, year_from, year_to, engine.\n" .
+            "For internal engine parts: if the exact part is verified for an engine code, and the supplemental vehicle research verifies that engine in a vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
             "Never place the vehicle model inside car_brand. Never place the brand inside car_model.\n" .
             "year_from/year_to must be four-digit years when supported by the research. A single verified model year must be used for both year_from and year_to.\n" .
             "If a range such as 2005-2015 appears, split it into year_from=2005 and year_to=2015.\n" .
+            "Prefer specific vehicle rows such as ISUZU / ELF NPR / 1984 / 1993 / 4BD1 instead of returning only an engine code.\n" .
             "Do not invent missing fitment data.\n";
 
         $schema = [
@@ -118,12 +122,63 @@ class ProductPartAiService
                     continue;
                 }
 
+                // Second grounded pass: many engine-internal part catalogs only
+                // identify engine codes. Resolve those engines to real vehicle
+                // make/model/year applications before structured extraction.
+                $vehicleResearchInstruction =
+                    "You are an automotive engine-to-vehicle fitment researcher.\n" .
+                    "Using Google Search, take the exact part-number research below and identify every ENGINE CODE mentioned.\n" .
+                    "For each engine code, find verified vehicle MAKE, MODEL/SERIES, YEAR FROM, YEAR TO and engine code.\n" .
+                    "This is especially important for engine-internal parts such as con-rod bearings and main bearings.\n" .
+                    "Search engine-specific vehicle catalogs and reputable application references.\n" .
+                    "Do not guess. If an engine has no verified model/year source, say that it remains unresolved.\n";
+
+                $vehicleResearchBody = [
+                    'systemInstruction' => ['parts' => [['text' => $vehicleResearchInstruction]]],
+                    'contents' => [[
+                        'role' => 'user',
+                        'parts' => [[
+                            'text' => "EXACT PART NUMBER: " . $partNumber . "\n\nPART RESEARCH:\n" . $researchText,
+                        ]],
+                    ]],
+                    'tools' => [['google_search' => (object) []]],
+                    'generationConfig' => ['temperature' => 0.1],
+                ];
+
+                $vehicleResearchText = '';
+                try {
+                    $vehicleResearchResponse = Http::timeout(45)
+                        ->withHeaders(['Content-Type' => 'application/json'])
+                        ->post($url, $vehicleResearchBody);
+
+                    if ($vehicleResearchResponse->successful()) {
+                        $vehicleResearchData = $vehicleResearchResponse->json();
+
+                        foreach (($vehicleResearchData['candidates'][0]['content']['parts'] ?? []) as $part) {
+                            if (isset($part['text'])) {
+                                $vehicleResearchText .= (string) $part['text'];
+                            }
+                        }
+
+                        $vehicleResearchText = trim($vehicleResearchText);
+                    }
+                } catch (\Throwable $vehicleResearchError) {
+                    // Keep the original part research usable even if this
+                    // supplemental fitment pass times out.
+                    $vehicleResearchText = '';
+                }
+
+                $combinedResearch = $researchText;
+                if ($vehicleResearchText !== '') {
+                    $combinedResearch .= "\n\n=== SUPPLEMENTAL ENGINE-TO-VEHICLE RESEARCH ===\n" . $vehicleResearchText;
+                }
+
                 $extractBody = [
                     'systemInstruction' => ['parts' => [['text' => $extractInstruction]]],
                     'contents' => [[
                         'role' => 'user',
                         'parts' => [[
-                            'text' => "PART NUMBER: " . $partNumber . "\n\nSEARCH RESEARCH:\n" . $researchText,
+                            'text' => "PART NUMBER: " . $partNumber . "\n\nSEARCH RESEARCH:\n" . $combinedResearch,
                         ]],
                     ]],
                     'generationConfig' => [
