@@ -130,6 +130,51 @@ $w68OverdueInvoiceNotifications = function (Request $request) {
             ]);
         }
 
+        // Sales returns reduce the collectible balance. This keeps the peso
+        // notification aligned with Payments so a fully returned invoice is not
+        // reported as overdue simply because it has no cash payment.
+        $returnByInvoice = collect();
+        try {
+            if ($schema->hasTable('sales_returns') && $schema->hasTable('sales_return_items')) {
+                $invoiceValues = $orders
+                    ->pluck('invoice_numbers')
+                    ->flatMap(function ($raw) {
+                        $text = trim((string) $raw);
+                        $decoded = json_decode($text, true);
+                        if (is_array($decoded)) {
+                            return $decoded;
+                        }
+                        return preg_split('/[,\n\r]+/', $text) ?: [];
+                    })
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if (!empty($invoiceValues)) {
+                    $returnRows = $sales->table('sales_returns as sr')
+                        ->join('sales_return_items as sri', 'sri.sales_return_id', '=', 'sr.id')
+                        ->whereIn('sr.invoice_no', $invoiceValues)
+                        ->whereRaw("UPPER(TRIM(COALESCE(sr.status, ''))) NOT IN ('CANCELLED', 'CANCELED', 'VOID')")
+                        ->selectRaw('sr.invoice_no, SUM(COALESCE(sri.return_amount, sri.subtotal, 0)) as return_total')
+                        ->groupBy('sr.invoice_no')
+                        ->get();
+
+                    foreach ($returnRows as $returnRow) {
+                        $key = strtoupper(preg_replace('/\\s+/', '', trim((string) $returnRow->invoice_no)));
+                        if ($key !== '') {
+                            $returnByInvoice[$key] = (float) ($returnRow->return_total ?? 0);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $returnError) {
+            Log::warning('Overdue invoice notification could not read sales returns.', [
+                'message' => $returnError->getMessage(),
+            ]);
+        }
+
         $today = now('Asia/Manila')->startOfDay();
         $notifications = [];
 
@@ -154,19 +199,29 @@ $w68OverdueInvoiceNotifications = function (Request $request) {
 
             $paid = (float) ($paidByOrder[(int) $order->id] ?? 0);
             $invoiceAmount = max(0, (float) ($order->total_amount ?? 0));
-            $balance = max(0, round($invoiceAmount - $paid, 2));
+
+            $invoiceLabel = trim((string) ($order->invoice_numbers ?? ''));
+            $decoded = json_decode($invoiceLabel, true);
+            $invoiceParts = is_array($decoded)
+                ? collect($decoded)->map(fn ($value) => trim((string) $value))->filter()->values()
+                : collect(preg_split('/[,\n\r]+/', $invoiceLabel) ?: [])
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->values();
+
+            $returned = (float) $invoiceParts->sum(function ($invoiceNo) use ($returnByInvoice) {
+                $key = strtoupper(preg_replace('/\\s+/', '', (string) $invoiceNo));
+                return (float) ($returnByInvoice[$key] ?? 0);
+            });
+
+            $balance = max(0, round($invoiceAmount - $returned - $paid, 2));
 
             if ($balance <= 0.004) {
                 continue;
             }
 
-            $invoiceLabel = trim((string) ($order->invoice_numbers ?? ''));
-            $decoded = json_decode($invoiceLabel, true);
-            if (is_array($decoded)) {
-                $invoiceLabel = collect($decoded)
-                    ->map(fn ($value) => trim((string) $value))
-                    ->filter()
-                    ->implode(', ');
+            if ($invoiceParts->isNotEmpty()) {
+                $invoiceLabel = $invoiceParts->implode(', ');
             }
             if ($invoiceLabel === '') {
                 $invoiceLabel = '---';
@@ -183,6 +238,7 @@ $w68OverdueInvoiceNotifications = function (Request $request) {
                 'due_date' => $dueDate->format('Y-m-d'),
                 'overdue_days' => $dueDate->diffInDays($today),
                 'invoice_amount' => round($invoiceAmount, 2),
+                'returned_amount' => round($returned, 2),
                 'paid_amount' => round($paid, 2),
                 'balance_due' => $balance,
             ];
