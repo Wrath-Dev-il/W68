@@ -402,10 +402,32 @@
                         </div>
                     </div>
 
-                    <!-- Payments Peso Shortcut -->
-                    <a href="{{ route('special.payments') }}" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-maroon-900 relative transition-all flex items-center justify-center" title="Payments" aria-label="Payments">
-                        <span class="w-5.5 h-5.5 flex items-center justify-center text-[20px] font-bold leading-none">₱</span>
-                    </a>
+                    <!-- W68_OVERDUE_INVOICE_PESO_NOTIFICATION_20261010 -->
+                    <div class="relative">
+                        <button id="overdue-invoice-btn" type="button" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-maroon-900 relative transition-all flex items-center justify-center" title="Overdue Invoice Notifications" aria-label="Overdue Invoice Notifications">
+                            <span id="overdue-invoice-badge" class="hidden absolute top-0 right-0 z-20 bg-red-500 text-white font-bold rounded-full min-w-4 h-4 px-1 items-center justify-center text-[9px] shadow-sm ring-1 ring-white">0</span>
+                            <span id="overdue-invoice-peso-icon" class="w-5.5 h-5.5 flex items-center justify-center text-[20px] font-bold leading-none">₱</span>
+                        </button>
+
+                        <div id="overdue-invoice-dropdown" class="hidden absolute right-0 mt-3 w-[420px] max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-xl shadow-xl z-[75] overflow-hidden transform origin-top-right transition-all">
+                            <div class="p-3 bg-maroon-900 text-white font-bold flex justify-between items-center text-sm border-b-2 border-goldlining-500">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-goldlining-400 text-lg font-black leading-none">₱</span>
+                                    <span>Overdue Invoices</span>
+                                </div>
+                                <span id="overdue-invoice-count" class="bg-goldlining-500 text-maroon-900 text-xs px-2 py-0.5 rounded-full font-semibold">0 Overdue</span>
+                            </div>
+                            <div id="overdue-invoice-list" class="max-h-96 overflow-y-auto divide-y divide-gray-100">
+                                <div class="p-8 text-center text-gray-400 text-sm">
+                                    <i data-lucide="loader-circle" class="w-7 h-7 mx-auto mb-2 animate-spin text-gray-300"></i>
+                                    <p>Loading overdue invoices...</p>
+                                </div>
+                            </div>
+                            <a href="{{ route('special.payments') }}" class="block px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-center text-[10px] font-extrabold uppercase tracking-wider text-maroon-900 hover:bg-amber-50 transition-colors">
+                                Open Payments
+                            </a>
+                        </div>
+                    </div>
 
                     <!-- Notification Bell -->
                     <div class="relative">
@@ -2004,6 +2026,194 @@
         }
         .online-order-mail-pulse {
             animation: onlineOrderMailPulse 1.4s ease-in-out infinite;
+        }
+    </style>
+
+    <script>
+        // W68_OVERDUE_INVOICE_PESO_NOTIFICATION_20261010
+        (function () {
+            const overdueInvoiceEndpoint = '{{ url('/special/notifications/overdue-invoices') }}';
+            const overduePaymentsUrl = '{{ route('special.payments') }}';
+
+            function overdueEscapeHtml(value) {
+                return String(value ?? '').replace(/[&<>"']/g, function (char) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    }[char];
+                });
+            }
+
+            function overdueMoney(value) {
+                return Number(value || 0).toLocaleString('en-PH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function overdueDate(value) {
+                const raw = String(value || '').trim();
+                if (!raw) return '---';
+                const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (!match) return raw;
+                const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            }
+
+            function renderOverdueInvoiceNotifications(items) {
+                const badge = document.getElementById('overdue-invoice-badge');
+                const count = document.getElementById('overdue-invoice-count');
+                const list = document.getElementById('overdue-invoice-list');
+                const pesoIcon = document.getElementById('overdue-invoice-peso-icon');
+                if (!badge || !count || !list) return;
+
+                const invoices = Array.isArray(items) ? items : [];
+                const total = invoices.length;
+                count.textContent = total + (total === 1 ? ' Overdue' : ' Overdue');
+
+                if (total === 0) {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                    pesoIcon?.classList.remove('overdue-peso-pulse', 'text-red-600');
+                    list.innerHTML = `
+                        <div class="p-8 text-center text-gray-400 text-sm">
+                            <i data-lucide="badge-check" class="w-8 h-8 mx-auto mb-2 text-emerald-400"></i>
+                            <p class="font-semibold text-gray-500">No overdue invoices</p>
+                            <p class="text-[10px] mt-1">Invoice terms are currently within their due dates.</p>
+                        </div>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    return;
+                }
+
+                badge.textContent = total > 99 ? '99+' : String(total);
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                pesoIcon?.classList.add('overdue-peso-pulse', 'text-red-600');
+
+                list.innerHTML = invoices.map(function (invoice) {
+                    const customerEncoded = encodeURIComponent(String(invoice.customer_name || ''));
+                    const invoiceNo = overdueEscapeHtml(invoice.invoice_no || '---');
+                    const customer = overdueEscapeHtml(invoice.customer_name || '---');
+                    const orderNumber = overdueEscapeHtml(invoice.order_number || '---');
+                    const terms = Number(invoice.terms_days || 0);
+                    const overdueDays = Number(invoice.overdue_days || 0);
+                    const dueDate = overdueEscapeHtml(overdueDate(invoice.due_date));
+                    const balance = overdueEscapeHtml(overdueMoney(invoice.balance_due));
+
+                    return `
+                        <button type="button"
+                                class="overdue-invoice-item block w-full text-left p-3.5 hover:bg-red-50/60 transition-colors cursor-pointer"
+                                data-customer-name="${customerEncoded}">
+                            <div class="flex gap-3">
+                                <div class="bg-red-100 text-red-600 p-2 rounded-lg h-fit flex-shrink-0 font-black text-sm">₱</div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-extrabold text-gray-800 truncate">Invoice ${invoiceNo}</p>
+                                            <p class="text-[10px] font-semibold text-maroon-800 mt-0.5 truncate">${customer}</p>
+                                        </div>
+                                        <span class="px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded-full uppercase flex-shrink-0">+${overdueDays}d</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[10px]">
+                                        <span class="text-gray-400">Due Date</span>
+                                        <span class="font-bold text-red-600 text-right">${dueDate}</span>
+                                        <span class="text-gray-400">Terms</span>
+                                        <span class="font-bold text-gray-700 text-right">${terms} day${terms === 1 ? '' : 's'}</span>
+                                        <span class="text-gray-400">Balance</span>
+                                        <span class="font-black text-maroon-900 text-right">₱${balance}</span>
+                                    </div>
+                                    <p class="text-[9px] text-gray-400 mt-1.5 truncate">Sales Order: ${orderNumber}</p>
+                                </div>
+                            </div>
+                        </button>`;
+                }).join('');
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            async function loadOverdueInvoiceNotifications() {
+                try {
+                    const response = await fetch(overdueInvoiceEndpoint, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                        cache: 'no-store'
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || ('HTTP ' + response.status));
+                    }
+                    renderOverdueInvoiceNotifications(data.overdue_invoices || []);
+                } catch (error) {
+                    console.warn('Unable to load overdue invoice notifications:', error.message);
+                    const badge = document.getElementById('overdue-invoice-badge');
+                    const count = document.getElementById('overdue-invoice-count');
+                    const list = document.getElementById('overdue-invoice-list');
+                    if (badge) {
+                        badge.classList.add('hidden');
+                        badge.classList.remove('flex');
+                    }
+                    if (count) count.textContent = 'Unavailable';
+                    if (list) {
+                        list.innerHTML = `
+                            <div class="p-8 text-center text-red-400 text-sm">
+                                <i data-lucide="circle-alert" class="w-8 h-8 mx-auto mb-2 text-red-300"></i>
+                                <p>Unable to load overdue invoices</p>
+                            </div>`;
+                    }
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+            }
+
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('#overdue-invoice-btn');
+                const dropdown = document.getElementById('overdue-invoice-dropdown');
+
+                if (button) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    dropdown?.classList.toggle('hidden');
+                    document.getElementById('online-order-dropdown')?.classList.add('hidden');
+                    document.getElementById('notif-dropdown')?.classList.add('hidden');
+                    document.getElementById('profile-dropdown')?.classList.add('hidden');
+                    return;
+                }
+
+                const invoiceItem = event.target.closest('.overdue-invoice-item');
+                if (invoiceItem) {
+                    const customerName = decodeURIComponent(invoiceItem.dataset.customerName || '');
+                    try {
+                        sessionStorage.setItem('highlightCustomerName', customerName);
+                        sessionStorage.setItem('highlightType', 'invoice');
+                    } catch (e) {}
+                    window.location.href = overduePaymentsUrl;
+                    return;
+                }
+
+                if (dropdown && !event.target.closest('#overdue-invoice-dropdown')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', function () {
+                loadOverdueInvoiceNotifications();
+                window.setInterval(loadOverdueInvoiceNotifications, 60000);
+            });
+        })();
+    </script>
+    <style>
+        @keyframes overduePesoPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.14); }
+        }
+        .overdue-peso-pulse {
+            animation: overduePesoPulse 1.25s ease-in-out infinite;
         }
     </style>
 
