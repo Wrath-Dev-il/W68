@@ -413,6 +413,7 @@ class OnlineReportProductLedgerSyncService
                         'customer_name' => $expectedOrder['customer_name'],
                         'invoice_numbers' => $expectedOrder['invoice_number'],
                         'status' => 'Confirmed',
+                        'created_at' => $expectedOrder['created_at'],
                         'updated_at' => self::nowManila(),
                     ]);
                     $updatedOrders++;
@@ -453,11 +454,11 @@ class OnlineReportProductLedgerSyncService
                         'additional_discount' => $item['additional_discount'],
                         'subtotal' => $item['subtotal'],
                         'particulars' => $item['particulars'],
+                        'created_at' => $expectedOrder['created_at'],
                         'updated_at' => self::nowManila(),
                     ];
 
                     if ($rows->isEmpty()) {
-                        $payload['created_at'] = $expectedOrder['created_at'];
                         $newItemId = (int) DB::connection('sales')->table('sales_order_items')->insertGetId($payload);
                         $createdItemIds[] = $newItemId;
                         $createdItems++;
