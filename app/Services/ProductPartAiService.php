@@ -42,20 +42,23 @@ class ProductPartAiService
         ];
 
         $researchInstruction =
-            "You are an automotive replacement-parts fitment researcher for W68 Auto Parts.\n" .
-            "Use Google Search to research the EXACT part number supplied by the user.\n" .
+            "You are a product identification and automotive-fitment researcher for W68 Auto Parts.\n" .
+            "Use Google Search to research the EXACT product/part number supplied by the user.\n" .
+            "W68 may also stock GENERAL or UNIVERSAL products such as LED bulbs, lamps, tools, accessories, electrical items and shop supplies. These are valid products even when they have no vehicle fitment.\n" .
             "A part number may contain a size suffix such as 0.25, 0.50, STD, OS or US. Treat that as the bearing/part size variant, not as the vehicle application.\n" .
             "Collect the short generic part type, size/variant meaning, every verified engine code, and EVERY clearly supported vehicle application.\n" .
             "For every application, explicitly state MAKE/CAR BRAND, CAR MODEL, YEAR FROM, YEAR TO, and ENGINE CODE or engine displacement when available.\n" .
             "Search multiple useful results when needed. Do not stop after the first engine code or first vehicle fitment.\n" .
-            "Do not substitute a similar part number and do not invent compatibility.\n";
+            "Do not substitute a similar part number and do not invent compatibility.\n" .
+            "If the exact number clearly identifies a general/universal non-vehicle-specific product, still mark it FOUND and identify its short generic description; vehicle applications may be empty.\n";
 
         $extractInstruction =
-            "Convert the supplied automotive research into strict structured data for W68 Product Master.\n" .
+            "Convert the supplied product research into strict structured data for W68 Product Master.\n" .
             "Return JSON only.\n" .
             "description must be a SHORT GENERIC PART NAME ONLY in uppercase, for example CON ROD BEARING, MAIN BEARING, BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
             "Do not put size text such as 0.25MM UNDERSIZE, 0.50MM, STD, OS or US in description. Keep size information only in notes.\n" .
-            "applications must contain every clearly verified vehicle fitment. Each application must have car_brand, car_model, year_from, year_to, engine.\n" .
+            "product_type must be AUTOMOTIVE when vehicle fitment exists, otherwise GENERAL for a verified general/universal product.\n" .
+            "applications must contain every clearly verified vehicle fitment for AUTOMOTIVE products. For GENERAL products, applications must be an empty array.\n" .
             "For internal engine parts: if the exact part is verified for an engine code, and supplemental research verifies that engine in a vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
             "Never place the vehicle model inside car_brand. Never place the brand inside car_model.\n" .
             "year_from/year_to must be four-digit years when supported by the research. A single verified model year must be used for both year_from and year_to.\n" .
@@ -66,6 +69,7 @@ class ProductPartAiService
             'type' => 'OBJECT',
             'properties' => [
                 'found' => ['type' => 'BOOLEAN'],
+                'product_type' => ['type' => 'STRING', 'enum' => ['AUTOMOTIVE', 'GENERAL']],
                 'description' => ['type' => 'STRING'],
                 'applications' => [
                     'type' => 'ARRAY',
@@ -84,7 +88,7 @@ class ProductPartAiService
                 'confidence' => ['type' => 'STRING'],
                 'notes' => ['type' => 'STRING'],
             ],
-            'required' => ['found', 'description', 'applications', 'confidence', 'notes'],
+            'required' => ['found', 'product_type', 'description', 'applications', 'confidence', 'notes'],
         ];
 
         $lastError = 'Gemini could not identify this part number.';
@@ -99,7 +103,7 @@ class ProductPartAiService
                     'contents' => [[
                         'role' => 'user',
                         'parts' => [[
-                            'text' => 'Research exact automotive part number ' . $partNumber . '. Include full make/model/year/engine fitment details.',
+                            'text' => 'Research exact product or automotive part number ' . $partNumber . '. If automotive, include full make/model/year/engine fitment details. If general/universal, identify the exact product type without inventing vehicle fitment.',
                         ]],
                     ]],
                     'tools' => [['google_search' => (object) []]],
@@ -327,6 +331,10 @@ class ProductPartAiService
     {
         $found = (bool) ($data['found'] ?? false);
         $description = mb_strtoupper(trim((string) ($data['description'] ?? '')));
+        $productType = mb_strtoupper(trim((string) ($data['product_type'] ?? 'AUTOMOTIVE')));
+        if (!in_array($productType, ['AUTOMOTIVE', 'GENERAL'], true)) {
+            $productType = 'AUTOMOTIVE';
+        }
         $confidence = strtolower(trim((string) ($data['confidence'] ?? 'low')));
 
         if (!in_array($confidence, ['high', 'medium', 'low'], true)) {
@@ -433,14 +441,15 @@ class ProductPartAiService
             }
         }
 
-        $ok = $found && $description !== '' && !empty($applications);
+        $ok = $found && $description !== '' && ($productType === 'GENERAL' || !empty($applications));
 
         return [
             'success' => $ok,
             'found' => $ok,
+            'product_type' => $productType,
             'part_number' => $partNumber,
             'description' => $description,
-            'applications' => $applications,
+            'applications' => $productType === 'GENERAL' ? [] : $applications,
             'confidence' => $confidence,
             'message' => trim((string) ($data['notes'] ?? ($ok ? '' : 'Exact part-number compatibility could not be verified.'))),
         ];
