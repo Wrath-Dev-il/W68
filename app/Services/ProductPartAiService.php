@@ -42,11 +42,15 @@ class ProductPartAiService
         ];
 
         $researchInstruction =
-            "You are a product identification and automotive-fitment researcher for W68 Auto Parts.\n" .
-            "Use Google Search to research the EXACT product/part number supplied by the user.\n" .
-            "W68 may also stock GENERAL or UNIVERSAL products such as LED bulbs, lamps, tools, accessories, electrical items and shop supplies. These are valid products even when they have no vehicle fitment.\n" .
+            "You are a product identification and automotive-fitment researcher for W68 Auto Parts in the PHILIPPINES.\n" .
+            "Use Google Search to research the EXACT product/part number supplied by the user, with PHILIPPINE MARKET relevance as the priority.\n" .
+            "Prioritize evidence from Philippine distributors, Philippine auto-parts sellers, official Philippine vehicle/model information, local catalogs, and Philippine e-commerce/local-market listings when useful.\n" .
+            "You may use global manufacturer or technical catalogs to identify the exact part, engine code, dimensions or cross-reference, but VEHICLE APPLICATIONS returned to W68 must be models/variants sold, imported, or commonly used in the Philippine market.\n" .
+            "Do not return a foreign-market-only vehicle application merely because the same engine/part exists overseas. If Philippine relevance cannot be supported, omit that application rather than guessing.\n" .
+            "Use Philippine-market model names and common local naming when they differ from overseas names.\n" .
+            "W68 may also stock GENERAL or UNIVERSAL products such as LED bulbs, lamps, tools, accessories, electrical items and shop supplies. These are valid products even when they have no vehicle fitment; identify them using naming commonly used in the Philippine market.\n" .
             "A part number may contain a size suffix such as 0.25, 0.50, STD, OS or US. Treat that as the bearing/part size variant, not as the vehicle application.\n" .
-            "Collect the short generic part type, size/variant meaning, every verified engine code, and EVERY clearly supported vehicle application.\n" .
+            "Collect the short generic part type, size/variant meaning, every verified engine code, and EVERY clearly supported PHILIPPINE-MARKET vehicle application.\n" .
             "For every application, explicitly state MAKE/CAR BRAND, CAR MODEL, YEAR FROM, YEAR TO, and ENGINE CODE or engine displacement when available.\n" .
             "Search multiple useful results when needed. Do not stop after the first engine code or first vehicle fitment.\n" .
             "Do not substitute a similar part number and do not invent compatibility.\n" .
@@ -59,7 +63,8 @@ class ProductPartAiService
             "Do not put size text such as 0.25MM UNDERSIZE, 0.50MM, STD, OS or US in description. Keep size information only in notes.\n" .
             "product_type must be AUTOMOTIVE when vehicle fitment exists, otherwise GENERAL for a verified general/universal product.\n" .
             "applications must contain every clearly verified vehicle fitment for AUTOMOTIVE products. For GENERAL products, applications must be an empty array.\n" .
-            "For internal engine parts: if the exact part is verified for an engine code, and supplemental research verifies that engine in a vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
+            "For internal engine parts: if the exact part is verified for an engine code, and supplemental research verifies that engine in a Philippine-market vehicle model/year, you MAY bridge that engine fitment into an application row.\n" .
+            "Only include vehicle applications relevant to the PHILIPPINE MARKET. Exclude foreign-market-only fitments unless the same model/variant is also sold, imported, or commonly used in the Philippines.\n" .
             "Never place the vehicle model inside car_brand. Never place the brand inside car_model.\n" .
             "year_from/year_to must be four-digit years when supported by the research. A single verified model year must be used for both year_from and year_to.\n" .
             "If a range such as 2005-2015 appears, split it into year_from=2005 and year_to=2015.\n" .
@@ -103,7 +108,7 @@ class ProductPartAiService
                     'contents' => [[
                         'role' => 'user',
                         'parts' => [[
-                            'text' => 'Research exact product or automotive part number ' . $partNumber . '. If automotive, include full make/model/year/engine fitment details. If general/universal, identify the exact product type without inventing vehicle fitment.',
+                            'text' => 'PHILIPPINES / PHILIPPINE MARKET lookup for exact product or automotive part number ' . $partNumber . '. If automotive, include only Philippine-market make/model/year/engine fitment details. If general/universal, identify the exact product type as sold/named in the Philippine market without inventing vehicle fitment.',
                         ]],
                     ]],
                     'tools' => [['google_search' => (object) []]],
@@ -158,19 +163,19 @@ class ProductPartAiService
                 // Only engine-only/incomplete results get this extra grounded pass.
                 // This keeps common BALL JOINT / TIE ROD END lookups much faster.
                 $vehicleResearchInstruction =
-                    "You are an automotive engine-to-vehicle fitment researcher.\n" .
+                    "You are an automotive engine-to-vehicle fitment researcher for the PHILIPPINE MARKET.\n" .
                     "Using Google Search, take the exact part-number research below and identify every ENGINE CODE mentioned.\n" .
-                    "For each engine code, find verified vehicle MAKE, MODEL/SERIES, YEAR FROM, YEAR TO and engine code.\n" .
+                    "For each engine code, find verified vehicle MAKE, MODEL/SERIES, YEAR FROM, YEAR TO and engine code specifically for vehicles sold, imported, or commonly used in the Philippines.\n" .
+                    "Prioritize Philippine sources and Philippine-market model names. Global engine catalogs may support technical identity, but do not return a foreign-market-only vehicle fitment as a Philippine application.\n" .
                     "This is especially important for engine-internal parts such as con-rod bearings and main bearings.\n" .
-                    "Search engine-specific vehicle catalogs and reputable application references.\n" .
-                    "Do not guess. If an engine has no verified model/year source, say that it remains unresolved.\n";
+                    "Do not guess. If Philippine-market model/year support cannot be verified, say that it remains unresolved.\n";
 
                 $vehicleResearchBody = [
                     'systemInstruction' => ['parts' => [['text' => $vehicleResearchInstruction]]],
                     'contents' => [[
                         'role' => 'user',
                         'parts' => [[
-                            'text' => "EXACT PART NUMBER: " . $partNumber . "\n\nPART RESEARCH:\n" . $researchText,
+                            'text' => "MARKET: PHILIPPINES\nEXACT PART NUMBER: " . $partNumber . "\n\nPART RESEARCH:\n" . $researchText,
                         ]],
                     ]],
                     'tools' => [['google_search' => (object) []]],
