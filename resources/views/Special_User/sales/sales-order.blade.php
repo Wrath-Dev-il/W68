@@ -1296,13 +1296,22 @@
                 </button>
             </div>
 
+            <!-- Edit Online Invoice Date: shown only while editing an existing Online Invoice -->
+            <div id="or-edit-invoice-date-wrap" class="hidden">
+                <label for="or-edit-invoice-date" class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Online Invoice Date</label>
+                <div class="max-w-sm">
+                    <input id="or-edit-invoice-date" type="date" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon bg-white">
+                    <p class="mt-1.5 text-[10px] text-slate-400">Changing this date also updates the synchronized Sales Order and Product Ledger date.</p>
+                </div>
+            </div>
+
             <!-- Sales Notes -->
             <div>
                 <div class="overflow-x-auto border border-slate-200 rounded-xl">
                     <table class="w-full text-left">
                         <thead class="bg-slate-100">
                             <tr>
-                                <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">SN No.</th>
+                                <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">ONLINE NOTE / CUSTOMER</th>
                                 <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Invoice NO.</th>
                                 <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</th>
                             </tr>
