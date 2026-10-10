@@ -737,9 +737,11 @@ class OnlineReportProductLedgerSyncService
                     'processed_actual_qty' => $qtyOut,
                     'transaction_type' => 'OUT',
                     'date' => $ledgerDate,
-                    'transaction_number' => $existingLedgerRow
-                        ? (string) ($existingLedgerRow->transaction_number ?? $item->order_number)
-                        : (string) $item->order_number,
+                    'transaction_number' => $currentSalesNumber !== ''
+                        ? $currentSalesNumber
+                        : ($existingLedgerRow
+                            ? (string) ($existingLedgerRow->transaction_number ?? $item->order_number)
+                            : (string) $item->order_number),
                     'reference_number' => (string) ($item->invoice_numbers ?? ''),
                     'entity_name' => (string) ($item->customer_name ?? ''),
                     'quantity_in' => 0,
@@ -749,6 +751,7 @@ class OnlineReportProductLedgerSyncService
                     'cost' => $cost,
                     'remarks' => 'Online Report Generation - Invoice: ' . (string) ($item->invoice_numbers ?? ''),
                     'idempotency_key' => $idempotencyKey,
+                    'created_at' => $createdAt,
                     'updated_at' => self::nowManila(),
                 ];
 
@@ -757,7 +760,6 @@ class OnlineReportProductLedgerSyncService
                         throw new RuntimeException('Edit Online Invoice is not allowed to insert a new Product Ledger transaction.');
                     }
                     $payload['balance_stock'] = 0;
-                    $payload['created_at'] = $createdAt;
                     $ledgerId = (int) DB::connection('ledger')->table('product_ledgers')->insertGetId($payload);
                     $inserted++;
                 } else {
@@ -766,7 +768,11 @@ class OnlineReportProductLedgerSyncService
                     $updated++;
                 }
 
-                $affectedLedgerIdsByProduct[$productId][] = $ledgerId;
+                $affectedStartPositionsByProduct[$productId][] = [
+                    'date' => $ledgerDate,
+                    'created_at' => $createdAt,
+                    'id' => $ledgerId,
+                ];
                 $links[] = [
                     'report_id' => $reportId,
                     'sales_order_id' => (int) $item->sales_order_id,
@@ -777,8 +783,15 @@ class OnlineReportProductLedgerSyncService
                 ];
             }
 
-            foreach ($affectedLedgerIdsByProduct as $productId => $ledgerIds) {
-                $latestBalances[(int) $productId] = self::recalculateBalancesFromAffectedRow((int) $productId, $ledgerIds);
+            foreach ($affectedStartPositionsByProduct as $productId => $positions) {
+                usort($positions, fn ($a, $b) => self::compareLedgerPosition($a, $b));
+                $earliest = $positions[0] ?? null;
+                if (!$earliest) continue;
+                $earliest['id'] = 0;
+                $latestBalances[(int) $productId] = self::recalculateBalancesAfterDeletedRows(
+                    (int) $productId,
+                    [$earliest]
+                );
             }
         });
 
