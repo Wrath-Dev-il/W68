@@ -834,7 +834,7 @@ $w68ProductPartAiSearch = function (Request $request) {
     ]);
 
     $partNumber = trim((string) $validated['part_number']);
-    $cacheKey = 'w68_product_part_ai_v3_' . sha1(mb_strtoupper($partNumber));
+    $cacheKey = 'w68_product_part_ai_v4_' . sha1(mb_strtoupper($partNumber));
 
     try {
         $result = \Illuminate\Support\Facades\Cache::get($cacheKey);
