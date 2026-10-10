@@ -32,90 +32,135 @@ class ProductPartAiService
             return ['success' => false, 'message' => 'Gemini API is not configured.'];
         }
 
-        $systemInstruction =
-            "You are an automotive replacement-parts catalog researcher for W68 Auto Parts.\n" .
-            "Use Google Search grounding to research the EXACT part number supplied by the user.\n" .
-            "Return ONLY one valid JSON object, without markdown or commentary.\n" .
-            "Required shape: {\"found\":true,\"description\":\"BALL JOINT\",\"applications\":[{\"car_brand\":\"TOYOTA\",\"car_model\":\"HILUX\",\"year_from\":\"2005\",\"year_to\":\"2015\",\"engine\":\"2KD / 1KD\"}],\"confidence\":\"high\",\"notes\":\"\"}.\n" .
-            "Rules:\n" .
-            "1. Match the exact part number; never silently substitute a similar number.\n" .
-            "2. description is the SHORT GENERIC PART NAME ONLY and uppercase, e.g. BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
-            "3. Return ALL clearly verified vehicle applications for the exact part number. Use a separate application object for each make/model/engine/year fitment.\n" .
-            "4. car_brand and car_model must be uppercase.\n" .
-            "5. year_from and year_to must be four-digit years when verified; otherwise use an empty string.\n" .
-            "6. engine must be verified; otherwise use an empty string.\n" .
-            "7. Deduplicate identical applications.\n" .
-            "8. Never invent compatibility. If exact compatibility cannot be verified, return found=false with empty description/applications.\n";
+        $researchInstruction =
+            "You are an automotive replacement-parts fitment researcher for W68 Auto Parts.\n" .
+            "Use Google Search to research the EXACT part number supplied by the user.\n" .
+            "Collect the short generic part type and EVERY clearly supported vehicle application.\n" .
+            "For every application, explicitly state MAKE/CAR BRAND, CAR MODEL, YEAR FROM, YEAR TO, and ENGINE CODE or engine displacement when available.\n" .
+            "Search multiple useful results when needed. Do not stop after the first vehicle fitment.\n" .
+            "Do not substitute a similar part number and do not invent compatibility.\n";
 
-        $body = [
-            'systemInstruction' => ['parts' => [['text' => $systemInstruction]]],
-            'contents' => [[
-                'role' => 'user',
-                'parts' => [['text' => 'Exact automotive part number: ' . $partNumber]],
-            ]],
-            'tools' => [['google_search' => (object) []]],
-            'generationConfig' => ['temperature' => 0.1],
+        $extractInstruction =
+            "Convert the supplied automotive research into strict structured data for W68 Product Master.\n" .
+            "Return JSON only.\n" .
+            "description must be a SHORT GENERIC PART NAME ONLY in uppercase, for example BALL JOINT, TIE ROD END, RACK END, STABILIZER LINK, CONTROL ARM, ENGINE MOUNTING, WHEEL BEARING, BRAKE PAD, ABS SENSOR.\n" .
+            "applications must contain every clearly verified vehicle fitment. Each application must have car_brand, car_model, year_from, year_to, engine.\n" .
+            "Never place the vehicle model inside car_brand. Never place the brand inside car_model.\n" .
+            "year_from/year_to must be four-digit years when supported by the research. A single verified model year must be used for both year_from and year_to.\n" .
+            "If a range such as 2005-2015 appears, split it into year_from=2005 and year_to=2015.\n" .
+            "Do not invent missing fitment data.\n";
+
+        $schema = [
+            'type' => 'OBJECT',
+            'properties' => [
+                'found' => ['type' => 'BOOLEAN'],
+                'description' => ['type' => 'STRING'],
+                'applications' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'car_brand' => ['type' => 'STRING'],
+                            'car_model' => ['type' => 'STRING'],
+                            'year_from' => ['type' => 'STRING'],
+                            'year_to' => ['type' => 'STRING'],
+                            'engine' => ['type' => 'STRING'],
+                        ],
+                        'required' => ['car_brand', 'car_model', 'year_from', 'year_to', 'engine'],
+                    ],
+                ],
+                'confidence' => ['type' => 'STRING'],
+                'notes' => ['type' => 'STRING'],
+            ],
+            'required' => ['found', 'description', 'applications', 'confidence', 'notes'],
         ];
 
         $lastError = 'Gemini could not identify this part number.';
 
         foreach ($this->models as $model) {
-            for ($attempt = 1; $attempt <= 2; $attempt++) {
-                try {
-                    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $this->apiKey;
-                    $response = Http::timeout(45)
-                        ->withHeaders(['Content-Type' => 'application/json'])
-                        ->post($url, $body);
+            try {
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $this->apiKey;
 
-                    if (!$response->successful()) {
-                        $lastError = (string) ($response->json('error.message') ?: $response->body());
+                $researchBody = [
+                    'systemInstruction' => ['parts' => [['text' => $researchInstruction]]],
+                    'contents' => [[
+                        'role' => 'user',
+                        'parts' => [[
+                            'text' => 'Research exact automotive part number ' . $partNumber . '. Include full make/model/year/engine fitment details.',
+                        ]],
+                    ]],
+                    'tools' => [['google_search' => (object) []]],
+                    'generationConfig' => ['temperature' => 0.1],
+                ];
 
-                        if (in_array($response->status(), [429, 503], true) && $attempt < 2) {
-                            usleep(1000000 * $attempt);
-                            continue;
-                        }
+                $researchResponse = Http::timeout(45)
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post($url, $researchBody);
 
-                        break;
-                    }
+                if (!$researchResponse->successful()) {
+                    $lastError = (string) ($researchResponse->json('error.message') ?: $researchResponse->body());
+                    continue;
+                }
 
-                    $data = $response->json();
-                    $text = '';
+                $researchData = $researchResponse->json();
+                $researchText = '';
 
-                    foreach (($data['candidates'][0]['content']['parts'] ?? []) as $part) {
-                        if (isset($part['text'])) {
-                            $text .= (string) $part['text'];
-                        }
-                    }
-
-                    $text = trim($text);
-                    $ticks = chr(96) . chr(96) . chr(96);
-                    $text = trim(str_replace([$ticks . 'json', $ticks . 'JSON', $ticks], '', $text));
-
-                    $decoded = json_decode($text, true);
-
-                    if (!is_array($decoded)) {
-                        $first = strpos($text, '{');
-                        $last = strrpos($text, '}');
-
-                        if ($first !== false && $last !== false && $last > $first) {
-                            $decoded = json_decode(substr($text, $first, $last - $first + 1), true);
-                        }
-                    }
-
-                    if (!is_array($decoded)) {
-                        $lastError = 'Gemini returned an unreadable product result.';
-                        break;
-                    }
-
-                    return $this->normalize($partNumber, $decoded);
-                } catch (\Throwable $e) {
-                    $lastError = $e->getMessage();
-
-                    if ($attempt < 2) {
-                        usleep(1000000 * $attempt);
-                        continue;
+                foreach (($researchData['candidates'][0]['content']['parts'] ?? []) as $part) {
+                    if (isset($part['text'])) {
+                        $researchText .= (string) $part['text'];
                     }
                 }
+
+                $researchText = trim($researchText);
+
+                if ($researchText === '') {
+                    $lastError = 'Gemini search returned no fitment details.';
+                    continue;
+                }
+
+                $extractBody = [
+                    'systemInstruction' => ['parts' => [['text' => $extractInstruction]]],
+                    'contents' => [[
+                        'role' => 'user',
+                        'parts' => [[
+                            'text' => "PART NUMBER: " . $partNumber . "\n\nSEARCH RESEARCH:\n" . $researchText,
+                        ]],
+                    ]],
+                    'generationConfig' => [
+                        'temperature' => 0,
+                        'responseMimeType' => 'application/json',
+                        'responseSchema' => $schema,
+                    ],
+                ];
+
+                $extractResponse = Http::timeout(45)
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post($url, $extractBody);
+
+                if (!$extractResponse->successful()) {
+                    $lastError = (string) ($extractResponse->json('error.message') ?: $extractResponse->body());
+                    continue;
+                }
+
+                $extractData = $extractResponse->json();
+                $jsonText = '';
+
+                foreach (($extractData['candidates'][0]['content']['parts'] ?? []) as $part) {
+                    if (isset($part['text'])) {
+                        $jsonText .= (string) $part['text'];
+                    }
+                }
+
+                $decoded = json_decode(trim($jsonText), true);
+
+                if (!is_array($decoded)) {
+                    $lastError = 'Gemini returned an unreadable structured fitment result.';
+                    continue;
+                }
+
+                return $this->normalize($partNumber, $decoded);
+            } catch (\Throwable $e) {
+                $lastError = $e->getMessage();
             }
         }
 
