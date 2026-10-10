@@ -3123,13 +3123,21 @@ window.applyViewPictureManager = function() {
 // W68_PRODUCT_MASTER_GEMINI_PART_SEARCH_20261010
 (function () {
     const path = String(window.location.pathname || '').toLowerCase();
-    const aiRole = path.startsWith('/admin/') ? 'admin' : (path.startsWith('/regular/') ? 'regular' : '');
+    const aiRole = path.startsWith('/admin/')
+        ? 'admin'
+        : (path.startsWith('/regular/')
+            ? 'regular'
+            : (path.startsWith('/special/')
+                ? 'special'
+                : ''));
 
     if (!aiRole) return;
 
     const aiSearchUrl = aiRole === 'admin'
         ? '/admin/masterlist/product/ai-part-search'
-        : '/regular/master-list/product-master/ai-part-search';
+        : (aiRole === 'regular'
+            ? '/regular/master-list/product-master/ai-part-search'
+            : '/special/master-list/product-master/ai-part-search');
 
     function aiPartApplicationText(applications) {
         return (applications || []).map(function (app) {
