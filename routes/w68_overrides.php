@@ -470,3 +470,332 @@ $w68DirectOnlineProductFetch = function (Request $request) {
 Route::get('/admin/masterlist/online-product-config/fetch-online', $w68DirectOnlineProductFetch);
 Route::get('/special/master-list/online-product-config/fetch-online', $w68DirectOnlineProductFetch);
 Route::get('/regular/master-list/online-product-config/fetch-online', $w68DirectOnlineProductFetch);
+
+
+/*
+|--------------------------------------------------------------------------
+| Online Invoice Edit: ONLINE note/customer + invoice date (all sales users)
+|--------------------------------------------------------------------------
+|
+| W68_ONLINE_INVOICE_EDIT_NOTE_DATE_20261010
+| The selected Sales Note must belong to an online portal order or one of the
+| dedicated online-buyer customers. The Online Report snapshot remains the
+| invoice item source of truth; changing the note changes customer ownership.
+| Reconciliation then updates Sales Orders and Product Ledger rows.
+|
+*/
+$w68OnlineInvoiceUser = function () {
+    $user = session('user');
+    if (is_array($user)) $user = (object) $user;
+    if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2, 3], true)) {
+        return null;
+    }
+    return $user;
+};
+
+$w68OnlineNoteQuery = function () {
+    $onlineCustomerNames = [
+        'LAZADA ONLINE BUYERS',
+        'SHOPEE ONLINE BUYERS',
+        'SHOPPE ONLINE',
+        'SHOPPEE ONLINE',
+        'TIKTOK SHOP',
+        'TIKTOK ONLINE BUYERS',
+    ];
+
+    return DB::connection('sales')
+        ->table('sales_notes as sn')
+        ->where('sn.sales_number', 'NOT LIKE', 'PURRTN%')
+        ->where(function ($query) use ($onlineCustomerNames) {
+            $query->whereExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('w68_portal_orders as po')
+                    ->whereColumn('po.sales_note_id', 'sn.id');
+            })->orWhereIn(DB::raw('UPPER(TRIM(COALESCE(sn.customer_name, "")))'), $onlineCustomerNames);
+        });
+};
+
+$w68OnlineInvoiceEdit = function ($id) use ($w68OnlineInvoiceUser, $w68OnlineNoteQuery) {
+    if (!$w68OnlineInvoiceUser()) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    try {
+        $report = \App\Models\OnlineReport::on('sales')->find((int) $id);
+        if (!$report) {
+            return response()->json(['success' => false, 'message' => 'Online invoice not found.'], 404);
+        }
+
+        $decode = static function ($value): array {
+            if (is_array($value)) return $value;
+            if (is_object($value)) return (array) $value;
+            if (!is_string($value) || trim($value) === '') return [];
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        };
+
+        $noteIds = collect(explode(',', (string) $report->sales_note_ids))
+            ->map(fn ($value) => (int) trim((string) $value))
+            ->filter(fn ($value) => $value > 0)
+            ->values();
+
+        $notesById = DB::connection('sales')
+            ->table('sales_notes')
+            ->whereIn('id', $noteIds->all())
+            ->get(['id', 'sales_number', 'customer_id', 'customer_name', 'order_date', 'net_total', 'status'])
+            ->keyBy(fn ($row) => (int) $row->id);
+
+        $invoiceNumbers = $decode($report->invoice_numbers);
+        $addresses = $decode($report->addresses);
+        $dateRanges = $decode($report->date_ranges);
+        $prices = $decode($report->prices);
+        $counterParts = $decode($report->counter_parts);
+        $notesData = $decode($report->notes_data);
+
+        $productIds = collect($notesData)
+            ->flatMap(function ($noteData) {
+                $items = $noteData['items'] ?? [];
+                if (is_string($items)) $items = json_decode($items, true) ?: [];
+                return collect(is_array($items) ? $items : [])->pluck('product_id');
+            })
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values();
+
+        $productsById = DB::connection('masterlist')
+            ->table('products')
+            ->whereIn('id', $productIds->all())
+            ->get(['id', 'price_online', 'selling_price', 'unit'])
+            ->keyBy(fn ($row) => (int) $row->id);
+
+        $notesResponse = [];
+        foreach ($noteIds as $index => $noteId) {
+            $note = $notesById->get((int) $noteId);
+            if (!$note) continue;
+
+            $noteData = is_array($notesData[$index] ?? null) ? $notesData[$index] : [];
+            $items = $noteData['items'] ?? [];
+            if (is_string($items)) $items = json_decode($items, true) ?: [];
+            if (!is_array($items)) $items = [];
+
+            $items = collect($items)->values()->map(function ($item) use ($prices, $productsById, $index) {
+                $item = is_array($item) ? $item : (array) $item;
+                $productId = (int) ($item['product_id'] ?? 0);
+                $product = $productsById->get($productId);
+                $resolved = null;
+
+                if ($productId > 0 && array_key_exists((string) $productId, $prices)) {
+                    $resolved = (float) $prices[(string) $productId];
+                }
+                if ($resolved === null && !empty($item['id'])) {
+                    $key = $index . '-' . $item['id'];
+                    if (array_key_exists($key, $prices)) $resolved = (float) $prices[$key];
+                }
+                if ($resolved === null && $product && (float) ($product->price_online ?? 0) > 0) {
+                    $resolved = (float) $product->price_online;
+                }
+                if ($resolved === null && (float) ($item['unit_price'] ?? 0) > 0) {
+                    $resolved = (float) $item['unit_price'];
+                }
+                if ($resolved === null && $product && (float) ($product->selling_price ?? 0) > 0) {
+                    $resolved = (float) $product->selling_price;
+                }
+
+                $item['resolved_unit_price'] = (float) ($resolved ?? 0);
+                if ($product && trim((string) ($product->unit ?? '')) !== '') {
+                    $item['oum'] = trim((string) $product->unit);
+                }
+                return $item;
+            })->all();
+
+            $notesResponse[] = [
+                'id' => (int) $note->id,
+                'sales_number' => (string) $note->sales_number,
+                'customer_id' => (int) ($note->customer_id ?? 0),
+                'customer_name' => (string) ($note->customer_name ?? ''),
+                'order_date' => $note->order_date,
+                'net_total' => (float) ($note->net_total ?? 0),
+                'invoice_no' => (string) ($invoiceNumbers[(string) $index] ?? $invoiceNumbers[$index] ?? ''),
+                'address' => (string) ($addresses[(string) $index] ?? $addresses[$index] ?? ''),
+                'items' => $items,
+            ];
+        }
+
+        $availableOnlineNotes = $w68OnlineNoteQuery()
+            ->orderByDesc('sn.order_date')
+            ->orderByDesc('sn.id')
+            ->limit(5000)
+            ->get([
+                'sn.id',
+                'sn.sales_number',
+                'sn.customer_id',
+                'sn.customer_name',
+                'sn.order_date',
+                'sn.net_total',
+                'sn.status',
+            ])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'sales_number' => (string) $row->sales_number,
+                'customer_id' => (int) ($row->customer_id ?? 0),
+                'customer_name' => (string) ($row->customer_name ?? ''),
+                'order_date' => $row->order_date,
+                'net_total' => (float) ($row->net_total ?? 0),
+                'status' => (string) ($row->status ?? ''),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'report' => [
+                'id' => (int) $report->id,
+                'sales_note_ids' => (string) $report->sales_note_ids,
+                'created_by' => $report->created_by,
+                'status' => $report->status,
+                'created_at' => $report->created_at,
+                'invoice_date' => $report->created_at ? date('Y-m-d', strtotime((string) $report->created_at)) : now('Asia/Manila')->format('Y-m-d'),
+            ],
+            'notes' => $notesResponse,
+            'available_online_notes' => $availableOnlineNotes,
+            'date_ranges' => $dateRanges,
+            'prices' => $prices,
+            'counter_parts' => $counterParts,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Online Invoice edit data failed.', [
+            'report_id' => (int) $id,
+            'message' => $e->getMessage(),
+        ]);
+        return response()->json(['success' => false, 'message' => 'Unable to load the Online Invoice for editing.'], 500);
+    }
+};
+
+$w68OnlineInvoiceUpdate = function (Request $request, $id) use ($w68OnlineInvoiceUser, $w68OnlineNoteQuery) {
+    if (!$w68OnlineInvoiceUser()) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    try {
+        $report = \App\Models\OnlineReport::on('sales')->find((int) $id);
+        if (!$report) {
+            return response()->json(['success' => false, 'message' => 'Online invoice not found.'], 404);
+        }
+
+        $data = $request->input('data', []);
+        $noteIds = collect($data['note_ids'] ?? [])
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->values();
+
+        $currentCount = collect(explode(',', (string) $report->sales_note_ids))
+            ->map(fn ($value) => (int) trim((string) $value))
+            ->filter(fn ($value) => $value > 0)
+            ->count();
+
+        if ($noteIds->isEmpty() || $noteIds->count() !== $currentCount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Every Online Invoice row must have one ONLINE Sales Note selected.',
+            ], 422);
+        }
+        if ($noteIds->unique()->count() !== $noteIds->count()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The same ONLINE Sales Note cannot be selected more than once in one Online Invoice.',
+            ], 422);
+        }
+
+        $eligibleNotes = $w68OnlineNoteQuery()
+            ->whereIn('sn.id', $noteIds->all())
+            ->get([
+                'sn.id',
+                'sn.sales_number',
+                'sn.customer_id',
+                'sn.customer_name',
+                'sn.order_date',
+                'sn.net_total',
+            ])
+            ->keyBy(fn ($row) => (int) $row->id);
+
+        if ($eligibleNotes->count() !== $noteIds->count()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only ONLINE Sales Notes can be assigned to an Online Invoice.',
+            ], 422);
+        }
+
+        $invoiceDate = trim((string) ($data['invoice_date'] ?? ''));
+        $dateObject = \DateTime::createFromFormat('!Y-m-d', $invoiceDate);
+        if (!$dateObject || $dateObject->format('Y-m-d') !== $invoiceDate) {
+            return response()->json(['success' => false, 'message' => 'Please select a valid Online Invoice date.'], 422);
+        }
+
+        $oldTimestamp = \Illuminate\Support\Carbon::parse($report->created_at ?: now('Asia/Manila'), 'Asia/Manila');
+        $newTimestamp = \Illuminate\Support\Carbon::createFromFormat('Y-m-d H:i:s', $invoiceDate . ' ' . $oldTimestamp->format('H:i:s'), 'Asia/Manila');
+
+        $notesData = $data['notes'] ?? [];
+        if (!is_array($notesData)) $notesData = [];
+
+        foreach ($noteIds as $index => $noteId) {
+            $note = $eligibleNotes->get((int) $noteId);
+            $row = is_array($notesData[$index] ?? null) ? $notesData[$index] : [];
+            $row['id'] = (int) $note->id;
+            $row['sales_number'] = (string) $note->sales_number;
+            $row['customer_id'] = (int) ($note->customer_id ?? 0);
+            $row['customer_name'] = (string) ($note->customer_name ?? '');
+            $row['order_date'] = $note->order_date;
+            $notesData[$index] = $row;
+        }
+
+        $report->sales_note_ids = $noteIds->implode(',');
+        $report->date_ranges = $data['date_ranges'] ?? [];
+        $report->prices = $data['prices'] ?? [];
+        $report->counter_parts = $data['counter_parts'] ?? [];
+        $report->invoice_numbers = $data['invoice_numbers'] ?? [];
+        $report->addresses = $data['addresses'] ?? [];
+        $report->notes_data = $notesData;
+        $report->created_at = $newTimestamp->format('Y-m-d H:i:s');
+        $report->save();
+
+        $sync = \App\Services\OnlineReportProductLedgerSyncService::reconcileEditedReport((int) $report->id);
+
+        Log::info('Online Invoice note/customer/date edit synchronized.', [
+            'report_id' => (int) $report->id,
+            'note_ids' => $noteIds->all(),
+            'invoice_date' => $invoiceDate,
+            'ledger_sync' => $sync,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Online Invoice note, customer and date updated and synchronized successfully.',
+            'invoice_date' => $invoiceDate,
+            'ledger_sync' => $sync,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Online Invoice note/customer/date update failed.', [
+            'report_id' => (int) $id,
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to update the Online Invoice: ' . $e->getMessage(),
+        ], 500);
+    }
+};
+
+Route::get('/admin/sales/sales-order/report/online-edit/{id}', $w68OnlineInvoiceEdit);
+Route::put('/admin/sales/sales-order/report/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::post('/admin/sales/sales-order/report/online-update/{id}', $w68OnlineInvoiceUpdate);
+
+Route::get('/regular/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit);
+Route::put('/regular/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::post('/regular/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+
+Route::get('/special/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit);
+Route::put('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+Route::post('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
