@@ -193,11 +193,64 @@ class ProductPartAiService
                 continue;
             }
 
-            $brand = mb_strtoupper(trim((string) ($application['car_brand'] ?? '')));
-            $carModel = mb_strtoupper(trim((string) ($application['car_model'] ?? '')));
-            $yearFrom = trim((string) ($application['year_from'] ?? ''));
-            $yearTo = trim((string) ($application['year_to'] ?? ''));
-            $engine = mb_strtoupper(trim((string) ($application['engine'] ?? '')));
+            $brand = mb_strtoupper(trim((string) (
+                $application['car_brand']
+                ?? $application['brand']
+                ?? $application['make']
+                ?? $application['vehicle_make']
+                ?? ''
+            )));
+
+            $carModel = mb_strtoupper(trim((string) (
+                $application['car_model']
+                ?? $application['model']
+                ?? $application['vehicle_model']
+                ?? ''
+            )));
+
+            $yearFrom = trim((string) (
+                $application['year_from']
+                ?? $application['from_year']
+                ?? $application['start_year']
+                ?? ''
+            ));
+
+            $yearTo = trim((string) (
+                $application['year_to']
+                ?? $application['to_year']
+                ?? $application['end_year']
+                ?? ''
+            ));
+
+            $engine = mb_strtoupper(trim((string) (
+                $application['engine']
+                ?? $application['engine_code']
+                ?? $application['engine_codes']
+                ?? $application['engine_type']
+                ?? ''
+            )));
+
+            $combinedYear = trim((string) (
+                $application['year_range']
+                ?? $application['years']
+                ?? $application['year']
+                ?? ''
+            ));
+
+            if (($yearFrom === '' || $yearTo === '') && $combinedYear !== '') {
+                preg_match_all('/\b(19|20)\d{2}\b/', $combinedYear, $yearMatches);
+                $years = $yearMatches[0] ?? [];
+
+                if ($yearFrom === '' && isset($years[0])) {
+                    $yearFrom = (string) $years[0];
+                }
+
+                if ($yearTo === '' && isset($years[1])) {
+                    $yearTo = (string) $years[1];
+                } elseif ($yearTo === '' && isset($years[0]) && count($years) === 1) {
+                    $yearTo = (string) $years[0];
+                }
+            }
 
             if ($yearFrom !== '' && !preg_match('/^\d{4}$/', $yearFrom)) {
                 $yearFrom = '';
