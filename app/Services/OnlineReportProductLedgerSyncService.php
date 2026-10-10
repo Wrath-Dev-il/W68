@@ -587,7 +587,7 @@ class OnlineReportProductLedgerSyncService
         $updated = 0;
         $duplicatesRemoved = 0;
         $links = [];
-        $affectedLedgerIdsByProduct = [];
+        $affectedStartPositionsByProduct = [];
         $latestBalances = [];
 
         DB::connection('ledger')->transaction(function () use (
@@ -597,7 +597,7 @@ class OnlineReportProductLedgerSyncService
             &$updated,
             &$duplicatesRemoved,
             &$links,
-            &$affectedLedgerIdsByProduct,
+            &$affectedStartPositionsByProduct,
             &$latestBalances,
             $legacySalesNumberByIndex,
             $allowInsert,
@@ -708,12 +708,24 @@ class OnlineReportProductLedgerSyncService
                     );
                 }
 
-                // An edit must keep the original ledger movement in the same
-                // chronological position. This is what lets the balance rebuild
-                // correctly from that old invoice through the newest invoice.
-                if ($existingLedgerRow && !empty($existingLedgerRow->date)) {
-                    $ledgerDate = (string) $existingLedgerRow->date;
+                // The Online Invoice date is authoritative. If the date changes,
+                // move the linked ledger movement too and rebuild running balances
+                // from the earliest old/new position.
+                if ($existingLedgerRow) {
+                    $affectedStartPositionsByProduct[$productId][] = [
+                        'date' => (string) ($existingLedgerRow->date ?? $ledgerDate),
+                        'created_at' => (string) ($existingLedgerRow->created_at ?? $createdAt),
+                        'id' => (int) ($existingLedgerRow->id ?? 0),
+                    ];
                 }
+
+                $currentOrderIndex = null;
+                if (preg_match('/^ONL-' . preg_quote((string) $reportId, '/') . '-(\d+)$/', (string) $item->order_number, $matches)) {
+                    $currentOrderIndex = (int) $matches[1];
+                }
+                $currentSalesNumber = $currentOrderIndex !== null
+                    ? trim((string) ($legacySalesNumberByIndex[$currentOrderIndex] ?? ''))
+                    : '';
 
                 $payload = [
                     'product_id' => $productId,
