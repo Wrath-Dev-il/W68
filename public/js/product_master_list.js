@@ -3115,3 +3115,270 @@ window.applyViewPictureManager = function() {
 
 
 
+
+
+// ============================================================================
+// PRODUCT MASTER GEMINI PART-NUMBER AI SEARCH - ADMIN + REGULAR
+// ============================================================================
+// W68_PRODUCT_MASTER_GEMINI_PART_SEARCH_20261010
+(function () {
+    const path = String(window.location.pathname || '').toLowerCase();
+    const aiRole = path.startsWith('/admin/') ? 'admin' : (path.startsWith('/regular/') ? 'regular' : '');
+
+    if (!aiRole) return;
+
+    const aiSearchUrl = aiRole === 'admin'
+        ? '/admin/masterlist/product/ai-part-search'
+        : '/regular/master-list/product-master/ai-part-search';
+
+    function aiPartApplicationText(applications) {
+        return (applications || []).map(function (app) {
+            const brand = String(app.car_brand || '').trim().toUpperCase();
+            const model = String(app.car_model || '').trim().toUpperCase();
+            const engine = String(app.engine || '').trim().toUpperCase();
+            const from = String(app.year_from || '').trim();
+            const to = String(app.year_to || '').trim();
+            const year = from && to ? from + '-' + to : (from || to);
+            return [brand, model, engine, year].filter(Boolean).join(' ');
+        }).filter(Boolean).join('/ ');
+    }
+
+    function aiPartSetStructuredApplications(mode, applications) {
+        const container = document.getElementById(mode + '-application-entries');
+        if (!container) return;
+
+        const rows = Array.isArray(applications) ? applications : [];
+        container.innerHTML = '';
+
+        if (!rows.length) {
+            if (typeof createApplicationEntryHTML === 'function') {
+                container.innerHTML = createApplicationEntryHTML({}, false);
+            }
+            return;
+        }
+
+        rows.forEach(function (app, index) {
+            const entry = {
+                brand: String(app.car_brand || '').trim().toUpperCase(),
+                model: String(app.car_model || '').trim().toUpperCase(),
+                yearFrom: String(app.year_from || '').trim(),
+                yearTo: String(app.year_to || '').trim(),
+                engine: String(app.engine || '').trim().toUpperCase()
+            };
+
+            if (typeof createApplicationEntryHTML === 'function') {
+                container.insertAdjacentHTML(
+                    'beforeend',
+                    createApplicationEntryHTML(entry, index > 0)
+                );
+            }
+        });
+
+        if (typeof window.collectApplicationString === 'function') {
+            window.collectApplicationString(mode);
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    function aiPartStatusElement(mode) {
+        return document.getElementById('ai-part-status-' + mode);
+    }
+
+    function aiPartSetStatus(mode, message, kind) {
+        const el = aiPartStatusElement(mode);
+        if (!el) return;
+
+        el.textContent = message || '';
+        el.classList.remove('text-slate-400', 'text-emerald-600', 'text-red-600', 'text-amber-600');
+
+        if (kind === 'success') el.classList.add('text-emerald-600');
+        else if (kind === 'error') el.classList.add('text-red-600');
+        else if (kind === 'warning') el.classList.add('text-amber-600');
+        else el.classList.add('text-slate-400');
+    }
+
+    function aiPartSetButtonLoading(button, loading) {
+        if (!button) return;
+        button.disabled = !!loading;
+        button.classList.toggle('opacity-60', !!loading);
+        button.classList.toggle('cursor-wait', !!loading);
+        button.innerHTML = loading
+            ? '<span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span><span>Searching AI...</span>'
+            : '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i><span>AI Search</span>';
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    function aiPartFields(mode) {
+        if (mode === 'add') {
+            return {
+                part: document.querySelector('#add-product-form [name="part_number"]'),
+                description: document.querySelector('#add-product-form [name="description"]')
+            };
+        }
+
+        if (mode === 'edit') {
+            return {
+                part: document.getElementById('edit-part-number'),
+                description: document.getElementById('edit-description')
+            };
+        }
+
+        return {
+            part: document.getElementById('view-prod-part'),
+            description: document.getElementById('view-prod-desc')
+        };
+    }
+
+    async function runProductPartAiSearch(mode, button) {
+        const fields = aiPartFields(mode);
+        const partNumber = String(fields.part?.value || '').trim();
+
+        if (!partNumber) {
+            aiPartSetStatus(mode, 'Enter a Part Number first.', 'error');
+            fields.part?.focus();
+            return;
+        }
+
+        aiPartSetButtonLoading(button, true);
+        aiPartSetStatus(mode, 'Gemini is searching the exact part number and compatible vehicles...', 'loading');
+
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const response = await fetch(aiSearchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ part_number: partNumber })
+            });
+
+            let result = {};
+            try {
+                result = await response.json();
+            } catch (e) {
+                throw new Error('AI Search returned an invalid server response.');
+            }
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || 'Gemini could not verify this part number.');
+            }
+
+            const description = String(result.description || '').trim().toUpperCase();
+            const applications = Array.isArray(result.applications) ? result.applications : [];
+
+            if (fields.description && description) {
+                fields.description.value = description;
+                fields.description.dispatchEvent(new Event('input', { bubbles: true }));
+                fields.description.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            if (mode === 'add' || mode === 'edit') {
+                aiPartSetStructuredApplications(mode, applications);
+            } else {
+                const appField = document.getElementById('view-prod-app');
+                if (appField) {
+                    appField.value = aiPartApplicationText(applications);
+                    appField.dispatchEvent(new Event('input', { bubbles: true }));
+                    appField.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (typeof window.updateProductViewDirtyState === 'function') {
+                    window.updateProductViewDirtyState();
+                }
+            }
+
+            const incomplete = applications.some(function (app) {
+                return !String(app.year_from || '').trim()
+                    || !String(app.year_to || '').trim()
+                    || !String(app.engine || '').trim();
+            });
+
+            const count = applications.length;
+            const confidence = String(result.confidence || '').toUpperCase();
+            const baseMessage = 'Found ' + description + ' with ' + count
+                + (count === 1 ? ' vehicle application' : ' vehicle applications')
+                + (confidence ? ' · ' + confidence + ' confidence' : '') + '.';
+
+            aiPartSetStatus(
+                mode,
+                incomplete
+                    ? baseMessage + ' Some year/engine fields were not verified; complete the blank fields before saving.'
+                    : baseMessage,
+                incomplete ? 'warning' : 'success'
+            );
+        } catch (error) {
+            console.error('Product Master AI Search error:', error);
+            aiPartSetStatus(mode, error.message || 'AI Search failed.', 'error');
+        } finally {
+            aiPartSetButtonLoading(button, false);
+        }
+    }
+
+    function injectAiPartButton(mode) {
+        const fields = aiPartFields(mode);
+        const partInput = fields.part;
+        if (!partInput || document.getElementById('ai-part-search-' + mode)) return;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'ai-part-search-' + mode;
+        button.className = 'mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-maroon/10 text-maroon hover:bg-maroon hover:text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60';
+        button.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i><span>AI Search</span>';
+        button.addEventListener('click', function () {
+            runProductPartAiSearch(mode, button);
+        });
+
+        const status = document.createElement('p');
+        status.id = 'ai-part-status-' + mode;
+        status.className = 'mt-1.5 text-[10px] font-semibold text-slate-400 leading-relaxed';
+        status.textContent = 'AI Search fills Description and all verified vehicle Applications from the Part Number.';
+
+        partInput.insertAdjacentElement('afterend', button);
+        button.insertAdjacentElement('afterend', status);
+    }
+
+    function initProductPartAiSearch() {
+        injectAiPartButton('add');
+        injectAiPartButton('edit');
+
+        const viewPart = document.getElementById('view-prod-part');
+        if (viewPart) {
+            injectAiPartButton('view');
+            const viewButton = document.getElementById('ai-part-search-view');
+            if (viewButton) {
+                viewButton.classList.add('hidden');
+            }
+
+            const observer = new MutationObserver(function () {
+                const button = document.getElementById('ai-part-search-view');
+                if (!button) return;
+                const editable = window.viewProductEditMode === true || !viewPart.hasAttribute('readonly');
+                button.classList.toggle('hidden', !editable);
+            });
+
+            observer.observe(viewPart, {
+                attributes: true,
+                attributeFilter: ['readonly', 'class']
+            });
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initProductPartAiSearch);
+    } else {
+        initProductPartAiSearch();
+    }
+})();
