@@ -805,3 +805,66 @@ Route::get('/special/sales/sales-order/online-edit/{id}', $w68OnlineInvoiceEdit)
 Route::put('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate)
     ->name('special.sales-order.online-update');
 Route::post('/special/sales/sales-order/online-update/{id}', $w68OnlineInvoiceUpdate);
+
+
+/*
+|--------------------------------------------------------------------------
+| Product Master Gemini AI Search - Admin + Regular
+|--------------------------------------------------------------------------
+|
+| W68_PRODUCT_MASTER_GEMINI_PART_SEARCH_20261010
+| Uses the same GEMINI_API_KEY already configured for W68 Chat. Google Search
+| grounding identifies the exact automotive part number and returns a short
+| part description plus all verified vehicle applications.
+|
+*/
+$w68ProductPartAiSearch = function (Request $request) {
+    $user = session('user');
+    if (is_array($user)) $user = (object) $user;
+
+    if (!$user || !in_array((int) ($user->account_type ?? 0), [1, 2], true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized.',
+        ], 403);
+    }
+
+    $validated = $request->validate([
+        'part_number' => 'required|string|max:120',
+    ]);
+
+    $partNumber = trim((string) $validated['part_number']);
+    $cacheKey = 'w68_product_part_ai_' . sha1(mb_strtoupper($partNumber));
+
+    try {
+        $result = \Illuminate\Support\Facades\Cache::remember(
+            $cacheKey,
+            now()->addDays(14),
+            fn () => app(\App\Services\ProductPartAiService::class)->identify($partNumber)
+        );
+
+        $status = ($result['success'] ?? false) ? 200 : 422;
+        return response()->json($result, $status);
+    } catch (\Throwable $e) {
+        Log::error('Product Master Gemini part-number search failed.', [
+            'part_number' => $partNumber,
+            'message' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'found' => false,
+            'part_number' => $partNumber,
+            'description' => '',
+            'applications' => [],
+            'confidence' => 'low',
+            'message' => 'AI Search could not complete this part-number lookup.',
+        ], 500);
+    }
+};
+
+Route::post('/admin/masterlist/product/ai-part-search', $w68ProductPartAiSearch)
+    ->name('admin.prod-master.ai-part-search');
+
+Route::post('/regular/master-list/product-master/ai-part-search', $w68ProductPartAiSearch)
+    ->name('regular.prod-master.ai-part-search');
