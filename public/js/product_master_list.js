@@ -3166,12 +3166,27 @@ window.applyViewPictureManager = function() {
         }
 
         rows.forEach(function (app, index) {
+            const rawYear = String(
+                app.year_range || app.years || app.year || ''
+            ).trim();
+            const yearMatches = rawYear.match(/\b(?:19|20)\d{2}\b/g) || [];
+
             const entry = {
-                brand: String(app.car_brand || '').trim().toUpperCase(),
-                model: String(app.car_model || '').trim().toUpperCase(),
-                yearFrom: String(app.year_from || '').trim(),
-                yearTo: String(app.year_to || '').trim(),
-                engine: String(app.engine || '').trim().toUpperCase()
+                brand: String(
+                    app.car_brand || app.brand || app.make || app.vehicle_make || ''
+                ).trim().toUpperCase(),
+                model: String(
+                    app.car_model || app.model || app.vehicle_model || ''
+                ).trim().toUpperCase(),
+                yearFrom: String(
+                    app.year_from || app.from_year || app.start_year || yearMatches[0] || ''
+                ).trim(),
+                yearTo: String(
+                    app.year_to || app.to_year || app.end_year || yearMatches[1] || yearMatches[0] || ''
+                ).trim(),
+                engine: String(
+                    app.engine || app.engine_code || app.engine_codes || app.engine_type || ''
+                ).trim().toUpperCase()
             };
 
             if (typeof createApplicationEntryHTML === 'function') {
@@ -3179,6 +3194,30 @@ window.applyViewPictureManager = function() {
                     'beforeend',
                     createApplicationEntryHTML(entry, index > 0)
                 );
+
+                // Fill the actual Product Master inputs explicitly after creating
+                // the row so Car Model and Year never depend only on template mapping.
+                const renderedRows = container.querySelectorAll('.app-entry');
+                const rendered = renderedRows[renderedRows.length - 1];
+
+                if (rendered) {
+                    const values = {
+                        car_brand: entry.brand,
+                        car_model: entry.model,
+                        year_from: entry.yearFrom,
+                        year_to: entry.yearTo,
+                        engine: entry.engine
+                    };
+
+                    Object.entries(values).forEach(function (pair) {
+                        const input = rendered.querySelector('[data-field="' + pair[0] + '"]');
+                        if (!input) return;
+                        input.value = pair[1];
+                        input.setCustomValidity('');
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                }
             }
         });
 
