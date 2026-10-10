@@ -1740,6 +1740,13 @@ window.confirmAddProduct = async function() {
 }
 
 window.viewProduct = function(product) {
+    // W68_PRODUCT_AI_VIEW_STATUS_RESET_20261010
+    // Product Ledger View is reused between products. Clear any AI status/result
+    // and abort an old lookup before loading the next product.
+    if (typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
+
     if (typeof product === 'number') {
         product = products[product];
     }
@@ -2760,6 +2767,16 @@ window.setProductViewEditMode = function(enabled) {
     if (pictureHint) pictureHint.classList.toggle('hidden', !enabled);
     if (galleryBtn) galleryBtn.classList.toggle('hidden', enabled);
 
+    const aiViewButton = document.getElementById('ai-part-search-view');
+    const aiViewStatus = document.getElementById('ai-part-status-view');
+
+    if (!enabled && typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
+
+    if (aiViewButton) aiViewButton.classList.toggle('hidden', !enabled);
+    if (aiViewStatus) aiViewStatus.classList.toggle('hidden', !enabled);
+
     window.renderViewProductImage();
     window.updateProductViewDirtyState();
 };
@@ -2816,6 +2833,9 @@ window.closeProductViewModal = function() {
     }
 
     window.setProductViewEditMode(false);
+    if (typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
     toggleModal('view-product-modal', false);
 };
 
@@ -3515,15 +3535,22 @@ window.applyViewPictureManager = function() {
         if (viewPart) {
             injectAiPartButton('view');
             const viewButton = document.getElementById('ai-part-search-view');
-            if (viewButton) {
-                viewButton.classList.add('hidden');
-            }
+            const viewStatus = document.getElementById('ai-part-status-view');
+
+            if (viewButton) viewButton.classList.add('hidden');
+            if (viewStatus) viewStatus.classList.add('hidden');
 
             const observer = new MutationObserver(function () {
                 const button = document.getElementById('ai-part-search-view');
-                if (!button) return;
+                const status = document.getElementById('ai-part-status-view');
                 const editable = window.viewProductEditMode === true || !viewPart.hasAttribute('readonly');
-                button.classList.toggle('hidden', !editable);
+
+                if (button) button.classList.toggle('hidden', !editable);
+                if (status) status.classList.toggle('hidden', !editable);
+
+                if (!editable && typeof window.resetProductPartAiStatus === 'function') {
+                    window.resetProductPartAiStatus('view');
+                }
             });
 
             observer.observe(viewPart, {
