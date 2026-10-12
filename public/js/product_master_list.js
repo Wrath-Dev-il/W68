@@ -3171,6 +3171,35 @@ window.applyViewPictureManager = function() {
         }).filter(Boolean).join('/ ');
     }
 
+    function aiPartSpecificationText(applications) {
+        return (applications || []).map(function (app) {
+            const brand = String(app.car_brand || app.brand || app.make || app.vehicle_make || '').trim().toUpperCase();
+            const model = String(app.car_model || app.model || app.vehicle_model || '').trim().toUpperCase();
+            const engine = String(app.engine || app.engine_code || app.engine_codes || app.engine_type || '').trim().toUpperCase();
+
+            let from = String(app.year_from || app.from_year || app.start_year || '').trim();
+            let to = String(app.year_to || app.to_year || app.end_year || '').trim();
+
+            const rawYear = String(app.year_range || app.years || app.year || '').trim();
+            const yearMatches = rawYear.match(/\b(?:19|20)\d{2}\b/g) || [];
+
+            if (!from && yearMatches[0]) from = yearMatches[0];
+            if (!to && yearMatches[1]) to = yearMatches[1];
+            if (!to && from) to = from;
+
+            const year = from && to
+                ? (from === to ? from : from + '-' + to)
+                : (from || to || '');
+
+            return [
+                'CAR BRAND: ' + (brand || ''),
+                'CAR MODEL: ' + (model || ''),
+                'YEAR: ' + year,
+                'ENGINE: ' + (engine || '')
+            ].join(' | ');
+        }).filter(Boolean).join('\n');
+    }
+
     function aiPartSetStructuredApplications(mode, applications) {
         const container = document.getElementById(mode + '-application-entries');
         if (!container) return;
@@ -3253,7 +3282,7 @@ window.applyViewPictureManager = function() {
     function aiPartStatusElement(mode) {
         return document.getElementById('ai-part-status-' + mode);
     }
-    const aiPartDefaultMessage = 'AI Search uses Philippine-market results to fill Description and verified vehicle Applications.';
+    const aiPartDefaultMessage = 'AI Search uses Philippine-market results to fill Description and vehicle Specification. Application is left unchanged.';
     const aiPartControllers = {};
 
     function resetAiPartStatus(mode) {
@@ -3307,20 +3336,23 @@ window.applyViewPictureManager = function() {
         if (mode === 'add') {
             return {
                 part: document.querySelector('#add-product-form [name="part_number"]'),
-                description: document.querySelector('#add-product-form [name="description"]')
+                description: document.querySelector('#add-product-form [name="description"]'),
+                specification: document.querySelector('#add-product-form [name="specification"]')
             };
         }
 
         if (mode === 'edit') {
             return {
                 part: document.getElementById('edit-part-number'),
-                description: document.getElementById('edit-description')
+                description: document.getElementById('edit-description'),
+                specification: document.getElementById('edit-specification')
             };
         }
 
         return {
             part: document.getElementById('view-prod-part'),
-            description: document.getElementById('view-prod-desc')
+            description: document.getElementById('view-prod-desc'),
+            specification: document.getElementById('view-prod-spec')
         };
     }
 
@@ -3412,25 +3444,16 @@ window.applyViewPictureManager = function() {
                 fields.description.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
-            if (mode === 'add' || mode === 'edit') {
-                if (isGeneralProduct) {
-                    const container = document.getElementById(mode + '-application-entries');
-                    const hidden = document.getElementById(mode + '-application-hidden');
-                    if (container) container.innerHTML = '';
-                    if (hidden) hidden.value = '';
-                } else {
-                    aiPartSetStructuredApplications(mode, applications);
-                }
-            } else {
-                const appField = document.getElementById('view-prod-app');
-                if (appField) {
-                    appField.value = isGeneralProduct ? '' : aiPartApplicationText(applications);
-                    appField.dispatchEvent(new Event('input', { bubbles: true }));
-                    appField.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                if (typeof window.updateProductViewDirtyState === 'function') {
-                    window.updateProductViewDirtyState();
-                }
+            // AI vehicle fitment now belongs in SPECIFICATION, not Application.
+            // Never modify the user's Application field/rows.
+            if (fields.specification && !isGeneralProduct) {
+                fields.specification.value = aiPartSpecificationText(applications);
+                fields.specification.dispatchEvent(new Event('input', { bubbles: true }));
+                fields.specification.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            if (mode === 'view' && typeof window.updateProductViewDirtyState === 'function') {
+                window.updateProductViewDirtyState();
             }
 
             const confidence = String(result.confidence || '').toUpperCase();
@@ -3441,7 +3464,7 @@ window.applyViewPictureManager = function() {
                     'Found ' + description
                         + ' · GENERAL / UNIVERSAL PRODUCT'
                         + (confidence ? ' · ' + confidence + ' confidence' : '')
-                        + ' · PHILIPPINE MARKET. Vehicle Application is not required.',
+                        + ' · PHILIPPINE MARKET. No vehicle Specification was required.',
                     'success'
                 );
                 return;
@@ -3455,7 +3478,7 @@ window.applyViewPictureManager = function() {
 
             const count = applications.length;
             const baseMessage = 'Found ' + description + ' with ' + count
-                + (count === 1 ? ' Philippine-market vehicle application' : ' Philippine-market vehicle applications')
+                + (count === 1 ? ' Philippine-market vehicle specification' : ' Philippine-market vehicle specifications')
                 + (confidence ? ' · ' + confidence + ' confidence' : '') + '.';
 
             aiPartSetStatus(
