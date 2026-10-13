@@ -35,7 +35,6 @@
 
     <div id="printable-content">
     @foreach($notes as $note)
-    <div style="text-align:center;font-size:20px;font-weight:bold;font-family:'Arial Black','Arial',sans-serif;margin-bottom:10px;">W68 AUTOPARTS &amp; SERVICE CENTER</div>
     <div class="report-title">SALES NOTE REPORT</div>
     <div style="height:10px;"></div>
 
