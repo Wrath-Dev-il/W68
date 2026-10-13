@@ -287,7 +287,6 @@
 
     <main class="unserved-print-sheet">
         <header class="unserved-print-header unserved-print-main-header">
-            <h1>W68 AUTOPARTS AND SERVICE CENTER</h1>
             <h2>{{ $unservedPrintHeading }}</h2>
             {{-- W68_UNSERVED_ALL_USERS_PARTIAL_FIX_20260918 --}}
             <p>GENERATED: {{ strtoupper($generatedAt) }} &nbsp; | &nbsp; DATE: {{ strtoupper($periodLabel) }}</p>
