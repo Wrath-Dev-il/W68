@@ -3192,10 +3192,10 @@ window.applyViewPictureManager = function() {
                 : (from || to || '');
 
             return [
-                'CAR BRAND: ' + (brand || ''),
-                'CAR MODEL: ' + (model || ''),
-                'YEAR: ' + year,
-                'ENGINE: ' + (engine || '')
+                brand || '',
+                model || '',
+                year,
+                engine || ''
             ].join(' | ');
         }).filter(Boolean).join('\n');
     }
