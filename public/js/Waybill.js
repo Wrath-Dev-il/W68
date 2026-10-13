@@ -1273,7 +1273,7 @@ function renderWaybillPrintPages(data) {
                         <div class="flex items-start"><span class="w-20 font-bold shrink-0">Date:</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable">${printedDate}</span></div>
                     </div>
                     <div class="space-y-1 w-1/2 min-w-0 ml-8">
-                        <div class="flex items-start"><span class="w-24 font-bold shrink-0">Shipper:</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable">W68 AUTOPARTS &amp; SERVICE CENTER</span></div>
+                        <div class="flex items-start"><span class="w-24 font-bold shrink-0">Shipper:</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable">SHARP CHOICE PARTS</span></div>
                         <div class="flex items-start"><span class="w-24 font-bold shrink-0">Forwarder:</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable">${forwarder}</span></div>
                         <div class="flex items-start"><span class="w-24 font-bold shrink-0">WAYBILL NO.</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable font-bold">${printedWaybillNo}</span></div>
                         <div class="flex items-start"><span class="w-24 font-bold shrink-0">Total:</span><span contenteditable="true" spellcheck="false" class="waybill-line waybill-editable">${totalText}</span></div>
@@ -1367,7 +1367,7 @@ window.printReceipt = function(waybillNo, forwarder, total, cargoItems) {
     document.getElementById('print-customer-tell').textContent = order.contact_number || '---';
     document.getElementById('print-date').textContent = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
     
-    document.getElementById('print-shipper').textContent = 'W68 AUTOPARTS & SERVICE CENTER';
+    document.getElementById('print-shipper').textContent = 'SHARP CHOICE PARTS';
     document.getElementById('print-forwarder').textContent = forwarder || '---';
     document.getElementById('print-waybill-no').textContent = waybillNo || '---';
     document.getElementById('print-total').textContent = '₱ ' + parseFloat(total).toLocaleString('en-US', {minimumFractionDigits: 2});
