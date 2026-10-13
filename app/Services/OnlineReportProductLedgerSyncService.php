@@ -280,6 +280,112 @@ class OnlineReportProductLedgerSyncService
         return $problems;
     }
 
+    private static function isBalanceOnlyVerificationFailure(array $verify): bool
+    {
+        if (($verify['verified'] ?? false) === true) {
+            return false;
+        }
+
+        $problems = (array) ($verify['problems'] ?? []);
+        $orderProblems = (array) ($problems['sales_orders'] ?? []);
+        $itemProblems = (array) ($problems['sales_order_items'] ?? []);
+        $ledgerProblems = (array) ($problems['product_ledgers'] ?? []);
+
+        if (!empty($orderProblems) || !empty($itemProblems) || empty($ledgerProblems)) {
+            return false;
+        }
+
+        foreach ($ledgerProblems as $problem) {
+            if (($problem['reason'] ?? '') !== 'ledger_balance_mismatch') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Rebuild balance_stock only. This deliberately does not update
+     * Sales Orders, Sales Order Items, quantity_out, transaction metadata,
+     * source fields, or Sales History inputs.
+     */
+    private static function repairBalanceChainsForReport(int $reportId): array
+    {
+        $rows = DB::connection('ledger')
+            ->table('product_ledgers')
+            ->where('source_type', 'online_report')
+            ->where('source_id', $reportId)
+            ->orderBy('product_id')
+            ->orderBy('date')
+            ->orderByRaw('COALESCE(created_at, "1970-01-01 00:00:00") ASC')
+            ->orderBy('id')
+            ->get(['id', 'product_id', 'date', 'created_at']);
+
+        if ($rows->isEmpty()) {
+            return ['rows_updated' => 0, 'products_rebuilt' => 0];
+        }
+
+        $beforeByProduct = [];
+        foreach ($rows->groupBy(fn ($row) => (int) $row->product_id) as $productId => $productRows) {
+            $productId = (int) $productId;
+            $earliest = $productRows->first();
+            if (!$earliest) {
+                continue;
+            }
+
+            $beforeByProduct[$productId] = DB::connection('ledger')
+                ->table('product_ledgers')
+                ->where('product_id', $productId)
+                ->pluck('balance_stock', 'id')
+                ->map(fn ($value) => (int) $value)
+                ->all();
+
+            $anchor = [
+                'date' => (string) ($earliest->date ?? ''),
+                'created_at' => (string) ($earliest->created_at ?? '1970-01-01 00:00:00'),
+                // id=0 makes the recalculation include the report row itself.
+                'id' => 0,
+            ];
+
+            $latestBalance = self::recalculateBalancesAfterDeletedRows(
+                $productId,
+                [$anchor]
+            );
+
+            try {
+                DB::connection('masterlist')->table('products')
+                    ->where('id', $productId)
+                    ->update([
+                        'on_hand' => $latestBalance,
+                        'updated_at' => self::nowManila(),
+                    ]);
+            } catch (\Throwable $ignored) {
+                // Product Ledger remains authoritative.
+            }
+        }
+
+        $rowsUpdated = 0;
+        foreach ($beforeByProduct as $productId => $beforeRows) {
+            $afterRows = DB::connection('ledger')
+                ->table('product_ledgers')
+                ->where('product_id', (int) $productId)
+                ->pluck('balance_stock', 'id')
+                ->map(fn ($value) => (int) $value)
+                ->all();
+
+            foreach ($afterRows as $ledgerId => $balance) {
+                if (array_key_exists($ledgerId, $beforeRows) && $beforeRows[$ledgerId] !== $balance) {
+                    $rowsUpdated++;
+                }
+            }
+        }
+
+        return [
+            'rows_updated' => $rowsUpdated,
+            'products_rebuilt' => count($beforeByProduct),
+        ];
+    }
+
     public static function syncByReportId(int $reportId): array
     {
         self::report($reportId);
@@ -295,6 +401,48 @@ class OnlineReportProductLedgerSyncService
         $errors = [];
 
         try {
+            // W68_ONLINE_REPORT_BALANCE_ONLY_REPAIR_20261013
+            // If the report rows/quantities are already correct and ONLY the
+            // running balance_stock chain is stale, do not rewrite the sale.
+            // Rewriting Sales Orders/Sales Order Items for a balance-only issue
+            // can disturb Sales History. Repair stock balances only.
+            $preVerify = self::verifyByReportId($reportId);
+
+            if (self::isBalanceOnlyVerificationFailure($preVerify)) {
+                $balanceRepair = self::repairBalanceChainsForReport($reportId);
+                $verify = self::verifyByReportId($reportId);
+
+                $status = ($verify['verified'] ?? false) ? 'completed' : 'failed';
+
+                DB::connection('sales')->table('online_report_product_ledger_syncs')->insert([
+                    'report_id' => $reportId,
+                    'status' => $status,
+                    'items_processed' => (int) ($verify['expected_entries'] ?? 0),
+                    'items_synced' => (int) ($verify['existing_entries'] ?? 0),
+                    'items_failed' => ($verify['verified'] ?? false) ? 0 : (int) ($verify['missing_entries'] ?? 0),
+                    'errors' => ($verify['verified'] ?? false) ? null : json_encode($verify['problems'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    'synced_at' => self::nowManila(),
+                    'created_at' => self::nowManila(),
+                    'updated_at' => self::nowManila(),
+                ]);
+
+                return [
+                    'status' => ($verify['verified'] ?? false) ? 'balance_repaired' : 'failed',
+                    'balance_only_repair' => true,
+                    'balance_rows_updated' => (int) ($balanceRepair['rows_updated'] ?? 0),
+                    'inserted_entries' => 0,
+                    'updated_entries' => 0,
+                    'duplicates_removed' => 0,
+                    'sales_orders_created' => 0,
+                    'sales_orders_updated' => 0,
+                    'sales_order_items_created' => 0,
+                    'sales_order_items_updated' => 0,
+                    'errors' => [],
+                    'verified' => (bool) ($verify['verified'] ?? false),
+                    'table_progress' => $verify['table_progress'] ?? [],
+                ];
+            }
+
             $salesResult = self::ensureSalesRows($reportId);
             $ledgerResult = self::ensureLedgerRows($reportId);
             $insertedLedgerEntries = $ledgerResult['inserted_entries'];
