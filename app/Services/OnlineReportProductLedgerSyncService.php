@@ -105,6 +105,7 @@ class OnlineReportProductLedgerSyncService
         $ledgerProblems = [];
         $existingUniqueLedgerEntries = 0;
         $duplicateLedgerEntries = 0;
+        $reportLedgerIdsByProduct = [];
 
         foreach ($resolvedItems as $itemId => $resolved) {
             $expectedQty = (int) $resolved['row']->actual_qty + (int) $resolved['row']->additional_qty;
@@ -119,8 +120,11 @@ class OnlineReportProductLedgerSyncService
             if ($ledgerRows->count() === 1) {
                 $existingUniqueLedgerEntries++;
                 $ledger = $ledgerRows->first();
+                $ledgerProductId = (int) $ledger->product_id;
+                $reportLedgerIdsByProduct[$ledgerProductId][] = (int) $ledger->id;
+
                 if (
-                    (int) $ledger->product_id !== (int) $resolved['row']->product_id
+                    $ledgerProductId !== (int) $resolved['row']->product_id
                     || strtoupper(trim((string) $ledger->transaction_type)) !== 'OUT'
                     || (int) $ledger->quantity_in !== 0
                     || (int) $ledger->quantity_out !== $expectedQty
@@ -147,6 +151,19 @@ class OnlineReportProductLedgerSyncService
                     'count' => $ledgerRows->count(),
                 ];
             }
+        }
+
+        // A Product Ledger row can exist with the correct OUT quantity while
+        // its running balance_stock (or a later row's balance_stock) is stale.
+        // Online Print displays the latest balance_stock as COMPT. STOCK, so
+        // verify the running balance chain from each report movement forward.
+        // A mismatch makes verification fail, which causes the existing
+        // pre-print flow to call syncByReportId() and rebuild the balances.
+        if (!empty($reportLedgerIdsByProduct)) {
+            $ledgerProblems = array_merge(
+                $ledgerProblems,
+                self::findBalanceChainProblems($reportLedgerIdsByProduct)
+            );
         }
 
         $reportComplete = true;
@@ -179,6 +196,88 @@ class OnlineReportProductLedgerSyncService
                 'product_ledgers' => $ledgerProblems,
             ],
         ];
+    }
+
+    /**
+     * Verify that balance_stock actually reflects every ledger movement from
+     * the earliest Online Report row for each affected product through the
+     * current/latest row. The row immediately before the report movement is
+     * used as the trusted opening balance.
+     */
+    private static function findBalanceChainProblems(array $ledgerIdsByProduct): array
+    {
+        $problems = [];
+
+        foreach ($ledgerIdsByProduct as $productId => $ledgerIds) {
+            $productId = (int) $productId;
+            $targetIds = array_values(array_unique(array_filter(
+                array_map('intval', (array) $ledgerIds),
+                fn ($id) => $id > 0
+            )));
+
+            if ($productId <= 0 || empty($targetIds)) {
+                continue;
+            }
+
+            $rows = DB::connection('ledger')
+                ->table('product_ledgers')
+                ->where('product_id', $productId)
+                ->orderBy('date')
+                ->orderByRaw('COALESCE(created_at, "1970-01-01 00:00:00") ASC')
+                ->orderBy('id')
+                ->get([
+                    'id',
+                    'quantity_in',
+                    'quantity_out',
+                    'balance_stock',
+                ]);
+
+            if ($rows->isEmpty()) {
+                continue;
+            }
+
+            $targetLookup = array_fill_keys($targetIds, true);
+            $startIndex = null;
+
+            foreach ($rows as $index => $row) {
+                if (isset($targetLookup[(int) $row->id])) {
+                    $startIndex = $index;
+                    break;
+                }
+            }
+
+            if ($startIndex === null) {
+                $problems[] = [
+                    'product_id' => $productId,
+                    'reason' => 'ledger_balance_anchor_missing',
+                ];
+                continue;
+            }
+
+            $runningBalance = $startIndex > 0
+                ? (int) ($rows[$startIndex - 1]->balance_stock ?? 0)
+                : 0;
+
+            for ($i = $startIndex, $count = $rows->count(); $i < $count; $i++) {
+                $row = $rows[$i];
+                $runningBalance += (int) ($row->quantity_in ?? 0)
+                    - (int) ($row->quantity_out ?? 0);
+
+                $storedBalance = (int) ($row->balance_stock ?? 0);
+                if ($storedBalance !== $runningBalance) {
+                    $problems[] = [
+                        'product_id' => $productId,
+                        'product_ledger_id' => (int) $row->id,
+                        'reason' => 'ledger_balance_mismatch',
+                        'expected_balance' => $runningBalance,
+                        'actual_balance' => $storedBalance,
+                    ];
+                    break;
+                }
+            }
+        }
+
+        return $problems;
     }
 
     public static function syncByReportId(int $reportId): array
