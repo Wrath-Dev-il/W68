@@ -25763,16 +25763,36 @@ Route::get('/admin/payments/history/data', function (Request $request) {
 
         if ($search !== '') {
             $like = "%{$search}%";
-            $baseQuery->where(function ($q) use ($like) {
+            $normalizedSearchAmount = str_replace([',', 'PHP', 'php', '₱', ' '], '', $search);
+
+            $baseQuery->where(function ($q) use ($like, $normalizedSearchAmount) {
                 $q->where('customer_name', 'LIKE', $like)
                   ->orWhere('payment_no', 'LIKE', $like)
                   ->orWhere('payment_date', 'LIKE', $like)
-                  ->orWhereRaw('CAST(total_paid AS CHAR) LIKE ?', [$like])
                   ->orWhereIn('id', function ($sub) use ($like) {
                       $sub->select('process_payment_id')
                           ->from('process_payment_invoices')
                           ->where('invoice_no', 'LIKE', $like);
                   });
+
+                // W68_PAYMENT_HISTORY_DETAIL_AMOUNT_SEARCH_20261014
+                // Search the saved payment-detail/check amounts individually.
+                // Only fall back to process_payments.total_paid for legacy
+                // payments that do not have process_payment_checks rows.
+                if ($normalizedSearchAmount !== '') {
+                    $q->orWhereExists(function ($checkSub) use ($normalizedSearchAmount) {
+                        $checkSub->select(DB::raw(1))
+                            ->from('process_payment_checks as ppc_search')
+                            ->whereColumn('ppc_search.process_payment_id', 'process_payments.id')
+                            ->whereRaw('CAST(ppc_search.credit_amount AS CHAR) LIKE ?', ['%' . $normalizedSearchAmount . '%']);
+                    })->orWhere(function ($legacyAmount) use ($normalizedSearchAmount) {
+                        $legacyAmount->whereNotExists(function ($checkExists) {
+                            $checkExists->select(DB::raw(1))
+                                ->from('process_payment_checks as ppc_existing')
+                                ->whereColumn('ppc_existing.process_payment_id', 'process_payments.id');
+                        })->whereRaw('CAST(total_paid AS CHAR) LIKE ?', ['%' . $normalizedSearchAmount . '%']);
+                    });
+                }
             });
         }
         if ($paymentNo !== '') {
@@ -25790,7 +25810,21 @@ Route::get('/admin/payments/history/data', function (Request $request) {
         }
         if ($amount !== '') {
             $normalizedAmount = str_replace([',', 'PHP', 'php', '₱', ' '], '', $amount);
-            $baseQuery->whereRaw('CAST(total_paid AS CHAR) LIKE ?', ['%' . $normalizedAmount . '%']);
+
+            $baseQuery->where(function ($amountQuery) use ($normalizedAmount) {
+                $amountQuery->whereExists(function ($checkSub) use ($normalizedAmount) {
+                    $checkSub->select(DB::raw(1))
+                        ->from('process_payment_checks as ppc_amount')
+                        ->whereColumn('ppc_amount.process_payment_id', 'process_payments.id')
+                        ->whereRaw('CAST(ppc_amount.credit_amount AS CHAR) LIKE ?', ['%' . $normalizedAmount . '%']);
+                })->orWhere(function ($legacyAmount) use ($normalizedAmount) {
+                    $legacyAmount->whereNotExists(function ($checkExists) {
+                        $checkExists->select(DB::raw(1))
+                            ->from('process_payment_checks as ppc_existing')
+                            ->whereColumn('ppc_existing.process_payment_id', 'process_payments.id');
+                    })->whereRaw('CAST(total_paid AS CHAR) LIKE ?', ['%' . $normalizedAmount . '%']);
+                });
+            });
         }
 
         $total = (clone $baseQuery)->count();
@@ -25810,7 +25844,15 @@ Route::get('/admin/payments/history/data', function (Request $request) {
                 ->get()
                 ->groupBy('process_payment_id');
 
-        $rows = $payments->map(function ($payment) use ($invoiceGroups) {
+        $checkGroups = $paymentIds->isEmpty()
+            ? collect()
+            : DB::connection('accounting')->table('process_payment_checks')
+                ->whereIn('process_payment_id', $paymentIds)
+                ->orderBy('id')
+                ->get(['id', 'process_payment_id', 'credit_amount'])
+                ->groupBy('process_payment_id');
+
+        $rows = $payments->map(function ($payment) use ($invoiceGroups, $checkGroups) {
             $invoiceRows = $invoiceGroups->get($payment->id, collect());
             $invoiceNumbers = $invoiceRows->pluck('invoice_no')->filter()->unique()->values();
 
@@ -25820,6 +25862,21 @@ Route::get('/admin/payments/history/data', function (Request $request) {
             // Use a one-cent tolerance because both values are stored as decimals.
             $totalPayment = round((float) ($payment->total_paid ?? 0), 2);
             $totalAmount = round((float) $invoiceRows->sum(fn ($row) => (float) ($row->due_amount ?? 0)), 2);
+
+            // W68_PAYMENT_HISTORY_DETAIL_AMOUNTS_20261014
+            // Keep one Payment No. row, but expose every saved payment-detail
+            // credit amount so the Check Amount column can show 13,000 / 14,000
+            // instead of collapsing them into the 27,000 payment total.
+            $checkAmounts = $checkGroups
+                ->get((int) $payment->id, collect())
+                ->map(fn ($check) => round((float) ($check->credit_amount ?? 0), 2))
+                ->values();
+
+            // Legacy payments may predate process_payment_checks.
+            if ($checkAmounts->isEmpty()) {
+                $checkAmounts = collect([$totalPayment]);
+            }
+
             $settlementStatus = abs($totalPayment - $totalAmount) <= 0.01
                 ? 'Fully Paid'
                 : 'Partial';
@@ -25833,6 +25890,7 @@ Route::get('/admin/payments/history/data', function (Request $request) {
                 'invoice_count' => $invoiceRows->count(),
                 'payment_date' => $payment->payment_date ? \Carbon\Carbon::parse($payment->payment_date)->format('Y-m-d') : '---',
                 'total_paid' => $totalPayment,
+                'check_amounts' => $checkAmounts->all(),
                 'total_amount' => $totalAmount,
                 'payment_status' => $settlementStatus,
                 'status' => (string) ($payment->status ?? 'Posted'),

@@ -665,6 +665,15 @@ window.loadPaymentsHistoryTable = async function() {
             const statusClass = isFullyPaid
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200';
+            // W68_PAYMENT_HISTORY_DETAIL_AMOUNTS_20261014
+            // One Payment No. stays on one row; each saved payment-detail/check
+            // amount is displayed on its own line in the Check Amount column.
+            const checkAmounts = Array.isArray(row.check_amounts) && row.check_amounts.length
+                ? row.check_amounts.map(value => Number(value || 0))
+                : [Number(row.total_paid || 0)];
+            const checkAmountHtml = checkAmounts
+                .map(value => `<div class="whitespace-nowrap">${money.format(value)}</div>`)
+                .join('');
             return `
             <tr class="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                 <td class="py-4 px-5 font-black text-slate-800">${escapeHtml(row.customer_name || '---')}</td>
@@ -675,7 +684,7 @@ window.loadPaymentsHistoryTable = async function() {
                     </div>
                 </td>
                 <td class="py-4 px-5 font-bold text-slate-500">${escapeHtml(row.payment_date || '---')}</td>
-                <td class="py-4 px-5 text-right font-black text-emerald-700">${money.format(Number(row.total_paid || 0))}</td>
+                <td class="py-4 px-5 text-right font-black text-emerald-700"><div class="space-y-1">${checkAmountHtml}</div></td>
                 <td class="py-4 px-5 text-center">
                     <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
                 </td>
