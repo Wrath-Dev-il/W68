@@ -271,6 +271,39 @@ class OnlineReportProductLedgerSyncService
             ->exists();
     }
 
+    /**
+     * Legacy recovery must be invoice-specific. The Sales Note number is NOT
+     * unique per Online Invoice: one Sales Note can legitimately create many
+     * invoices containing the same product. Matching only by Sales Note +
+     * product would steal/update the earlier invoice's Product Ledger row.
+     */
+    private static function legacyLedgerRowMatchesInvoice(object $row, string $invoiceNumber): bool
+    {
+        $invoiceNumber = trim($invoiceNumber);
+        if ($invoiceNumber === '') {
+            // With no invoice identity we cannot safely adopt an unowned legacy
+            // row. In normal generation this deliberately falls through to INSERT.
+            return false;
+        }
+
+        $referenceNumber = trim((string) ($row->reference_number ?? ''));
+        if ($referenceNumber !== '') {
+            return strcasecmp($referenceNumber, $invoiceNumber) === 0;
+        }
+
+        // Very old rows may only carry the invoice inside remarks.
+        $remarks = trim((string) ($row->remarks ?? ''));
+        if ($remarks === '') {
+            return false;
+        }
+
+        if (!preg_match('/Invoice:\\s*([^|\\r\\n]+)/i', $remarks, $match)) {
+            return false;
+        }
+
+        return strcasecmp(trim((string) ($match[1] ?? '')), $invoiceNumber) === 0;
+    }
+
     private static function findBalanceChainProblems(array $ledgerIdsByProduct): array
     {
         $problems = [];
@@ -959,7 +992,22 @@ class OnlineReportProductLedgerSyncService
                         // happen when the same Sales Note/product is invoiced
                         // again later in the day.
                         if ($linkedRow && self::canAdoptLedgerRowForReport($linkedRow, $reportId, $itemId)) {
-                            $rows = collect([$linkedRow]);
+                            $linkedSourceType = strtolower(trim((string) ($linkedRow->source_type ?? '')));
+                            $linkedSourceId = (int) ($linkedRow->source_id ?? 0);
+                            $linkedSourceItemId = (int) ($linkedRow->source_item_id ?? 0);
+                            $linkedAlreadyOwnedByThisItem = $linkedSourceType === 'online_report'
+                                && $linkedSourceId === $reportId
+                                && ($linkedSourceItemId === 0 || $linkedSourceItemId === $itemId);
+
+                            if (
+                                $linkedAlreadyOwnedByThisItem
+                                || self::legacyLedgerRowMatchesInvoice(
+                                    $linkedRow,
+                                    trim((string) ($item->invoice_numbers ?? ''))
+                                )
+                            ) {
+                                $rows = collect([$linkedRow]);
+                            }
                         }
                     }
                 }
@@ -979,6 +1027,10 @@ class OnlineReportProductLedgerSyncService
 
                 // Legacy fallback for old Online Reports: transaction_number was
                 // the Sales Note sales_number and remarks was Online Report Generation.
+                // IMPORTANT: Sales Note + product is not unique. The same note/product
+                // can be sold on multiple Online Invoices, so legacy adoption below is
+                // also required to match the exact invoice number. Otherwise Invoice 2
+                // could overwrite Invoice 1 instead of creating a new ledger row.
                 // Newly-created Sales Order Items skip this fallback so a newly-added
                 // product always receives its own fresh Product Ledger movement.
                 $forceInsertItem = in_array($itemId, array_map('intval', $forceInsertItemIds), true);
@@ -1000,11 +1052,17 @@ class OnlineReportProductLedgerSyncService
                             ->orderBy('id')
                             ->lockForUpdate()
                             ->get()
-                            ->filter(fn ($legacyRow) => self::canAdoptLedgerRowForReport(
-                                $legacyRow,
-                                $reportId,
-                                $itemId
-                            ))
+                            ->filter(fn ($legacyRow) =>
+                                self::canAdoptLedgerRowForReport(
+                                    $legacyRow,
+                                    $reportId,
+                                    $itemId
+                                )
+                                && self::legacyLedgerRowMatchesInvoice(
+                                    $legacyRow,
+                                    trim((string) ($item->invoice_numbers ?? ''))
+                                )
+                            )
                             ->values();
 
                         if ($legacyRows->count() === 1) {
