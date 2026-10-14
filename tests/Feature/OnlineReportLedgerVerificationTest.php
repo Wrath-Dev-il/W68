@@ -104,6 +104,32 @@ class OnlineReportLedgerVerificationTest extends TestCase
         );
     }
 
+    public function test_online_report_sync_does_not_reassign_another_reports_ledger_row(): void
+    {
+        $servicePath = app_path('Services/OnlineReportProductLedgerSyncService.php');
+        $this->assertFileExists($servicePath);
+
+        $content = file_get_contents($servicePath);
+
+        $this->assertStringContainsString(
+            'canAdoptLedgerRowForReport',
+            $content,
+            'Legacy recovery must verify ledger ownership before adopting a row.'
+        );
+
+        $this->assertStringContainsString(
+            "->where('report_id', '!=', \$reportId)",
+            $content,
+            'A ledger row linked to another Online Report must not be reassigned.'
+        );
+
+        $this->assertStringContainsString(
+            "if (\$sourceType === 'online_report')",
+            $content,
+            'Online Report source ownership must be checked before reusing a ledger row.'
+        );
+    }
+
     public function test_online_report_sync_supports_repeated_same_product_lines(): void
     {
         $servicePath = app_path('Services/OnlineReportProductLedgerSyncService.php');
