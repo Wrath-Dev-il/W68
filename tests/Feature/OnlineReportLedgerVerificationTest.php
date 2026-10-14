@@ -104,6 +104,38 @@ class OnlineReportLedgerVerificationTest extends TestCase
         );
     }
 
+    public function test_online_report_sync_supports_repeated_same_product_lines(): void
+    {
+        $servicePath = app_path('Services/OnlineReportProductLedgerSyncService.php');
+        $this->assertFileExists($servicePath);
+
+        $content = file_get_contents($servicePath);
+
+        $this->assertStringNotContainsString(
+            'Online Report contains the same product more than once',
+            $content,
+            'Online Report sync must not reject a second sale of the same product.'
+        );
+
+        $this->assertStringContainsString(
+            '$existingCursorByProduct',
+            $content,
+            'Sales Order sync must match repeated products by occurrence.'
+        );
+
+        $this->assertStringContainsString(
+            '$actualCursorByProduct',
+            $content,
+            'Verification must match repeated products by occurrence.'
+        );
+
+        $this->assertStringContainsString(
+            "'source_item_id' => $itemId",
+            $content,
+            'Each repeated sale must keep its own Sales Order Item identity in Product Ledger.'
+        );
+    }
+
     public function test_verify_function_has_min_3s_delay(): void
     {
         $jsPath = resource_path('js/Sales-Order.js');
