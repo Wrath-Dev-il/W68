@@ -236,6 +236,41 @@ class OnlineReportProductLedgerSyncService
      * current/latest row. The row immediately before the report movement is
      * used as the trusted opening balance.
      */
+    /**
+     * A ledger row may only be adopted by this Online Report when it is either
+     * already owned by this exact report/item, or is a truly unowned legacy row.
+     * Never reassign a row owned/linked to a different Online Report.
+     */
+    private static function canAdoptLedgerRowForReport(object $row, int $reportId, int $itemId): bool
+    {
+        $ledgerId = (int) ($row->id ?? 0);
+        if ($ledgerId <= 0) {
+            return false;
+        }
+
+        $sourceType = strtolower(trim((string) ($row->source_type ?? '')));
+        $sourceId = (int) ($row->source_id ?? 0);
+        $sourceItemId = (int) ($row->source_item_id ?? 0);
+
+        if ($sourceType === 'online_report') {
+            return $sourceId === $reportId
+                && ($sourceItemId === 0 || $sourceItemId === $itemId);
+        }
+
+        // Any non-empty ownership metadata means another workflow/report owns it.
+        if ($sourceType !== '' || $sourceId > 0 || $sourceItemId > 0) {
+            return false;
+        }
+
+        // A truly legacy row has no source metadata. It is adoptable only when
+        // no durable link says another Online Report already owns it.
+        return !DB::connection('sales')
+            ->table('online_report_product_ledger_links')
+            ->where('product_ledger_id', $ledgerId)
+            ->where('report_id', '!=', $reportId)
+            ->exists();
+    }
+
     private static function findBalanceChainProblems(array $ledgerIdsByProduct): array
     {
         $problems = [];
@@ -918,7 +953,12 @@ class OnlineReportProductLedgerSyncService
                             ->where('id', (int) $link->product_ledger_id)
                             ->lockForUpdate()
                             ->first();
-                        if ($linkedRow) {
+
+                        // A stale link must never steal a ledger transaction that
+                        // already belongs to another Online Report. This can
+                        // happen when the same Sales Note/product is invoiced
+                        // again later in the day.
+                        if ($linkedRow && self::canAdoptLedgerRowForReport($linkedRow, $reportId, $itemId)) {
                             $rows = collect([$linkedRow]);
                         }
                     }
@@ -959,14 +999,20 @@ class OnlineReportProductLedgerSyncService
                             ->where('remarks', 'like', 'Online Report Generation%')
                             ->orderBy('id')
                             ->lockForUpdate()
-                            ->get();
+                            ->get()
+                            ->filter(fn ($legacyRow) => self::canAdoptLedgerRowForReport(
+                                $legacyRow,
+                                $reportId,
+                                $itemId
+                            ))
+                            ->values();
 
                         if ($legacyRows->count() === 1) {
                             $rows = $legacyRows;
                         } elseif ($legacyRows->count() > 1) {
                             throw new RuntimeException(
-                                'Edit stopped because more than one legacy Product Ledger row matches product ID ' . $productId
-                                . ' for Online Report #' . $reportId . '. No new Product Ledger transaction was created.'
+                                'More than one unowned legacy Product Ledger row matches product ID ' . $productId
+                                . ' for Online Report #' . $reportId . '. Sync stopped instead of reassigning an existing invoice.'
                             );
                         }
                     }
