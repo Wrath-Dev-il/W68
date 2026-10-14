@@ -60,26 +60,38 @@ class OnlineReportProductLedgerSyncService
                 ->orderBy('id')
                 ->get();
             $actualItemCount += $actualItems->count();
-            $byProduct = $actualItems->groupBy(fn ($row) => (int) $row->product_id);
 
-            foreach ($expectedOrder['items'] as $expectedItem) {
-                $matches = $byProduct->get($expectedItem['product_id'], collect());
-                if ($matches->count() !== 1) {
+            // The same product can legitimately be sold more than once in the
+            // same Online Invoice. Match each expected line to the next actual
+            // Sales Order Item occurrence for that product instead of assuming
+            // product_id is unique within the order.
+            $actualByProduct = [];
+            foreach ($actualItems as $actualItem) {
+                $actualByProduct[(int) $actualItem->product_id][] = $actualItem;
+            }
+            $actualCursorByProduct = [];
+
+            foreach ($expectedOrder['items'] as $expectedItemIndex => $expectedItem) {
+                $productId = (int) $expectedItem['product_id'];
+                $occurrence = (int) ($actualCursorByProduct[$productId] ?? 0);
+                $row = $actualByProduct[$productId][$occurrence] ?? null;
+                $actualCursorByProduct[$productId] = $occurrence + 1;
+
+                if (!$row) {
                     $itemProblems[] = [
                         'order_number' => $expectedOrder['order_number'],
-                        'product_id' => $expectedItem['product_id'],
-                        'expected' => 1,
-                        'actual' => $matches->count(),
-                        'reason' => $matches->isEmpty() ? 'missing' : 'duplicate',
+                        'product_id' => $productId,
+                        'expected_item_index' => (int) $expectedItemIndex,
+                        'occurrence' => $occurrence + 1,
+                        'reason' => 'missing',
                     ];
                     continue;
                 }
 
-                $row = $matches->first();
                 $expectedOut = $expectedItem['actual_qty'] + $expectedItem['additional_qty'];
                 $actualOut = (int) $row->actual_qty + (int) $row->additional_qty;
                 $matchesSnapshot =
-                    (int) $row->product_id === $expectedItem['product_id']
+                    (int) $row->product_id === $productId
                     && (int) $row->actual_qty === $expectedItem['actual_qty']
                     && (int) $row->additional_qty === $expectedItem['additional_qty']
                     && abs((float) $row->unit_price - $expectedItem['unit_price']) < 0.005
@@ -88,8 +100,10 @@ class OnlineReportProductLedgerSyncService
                 if (!$matchesSnapshot) {
                     $itemProblems[] = [
                         'order_number' => $expectedOrder['order_number'],
-                        'product_id' => $expectedItem['product_id'],
+                        'product_id' => $productId,
                         'sales_order_item_id' => (int) $row->id,
+                        'expected_item_index' => (int) $expectedItemIndex,
+                        'occurrence' => $occurrence + 1,
                         'reason' => 'snapshot_mismatch',
                     ];
                 }
@@ -99,6 +113,24 @@ class OnlineReportProductLedgerSyncService
                     'order' => $order,
                     'expected' => $expectedItem,
                 ];
+            }
+
+            // Detect extra occurrences of a product that are not part of the
+            // Online Report snapshot.
+            foreach ($actualByProduct as $productId => $rowsForProduct) {
+                $used = (int) ($actualCursorByProduct[$productId] ?? 0);
+                if ($used < count($rowsForProduct)) {
+                    for ($extraIndex = $used; $extraIndex < count($rowsForProduct); $extraIndex++) {
+                        $extraRow = $rowsForProduct[$extraIndex];
+                        $itemProblems[] = [
+                            'order_number' => $expectedOrder['order_number'],
+                            'product_id' => (int) $productId,
+                            'sales_order_item_id' => (int) $extraRow->id,
+                            'occurrence' => $extraIndex + 1,
+                            'reason' => 'unexpected',
+                        ];
+                    }
+                }
             }
         }
 
@@ -666,29 +698,35 @@ class OnlineReportProductLedgerSyncService
                     $updatedOrders++;
                 }
 
-                $expectedProductIds = [];
                 $orderTotal = 0.0;
 
-                foreach ($expectedOrder['items'] as $item) {
-                    if (isset($expectedProductIds[$item['product_id']])) {
-                        throw new RuntimeException('Online Report contains the same product more than once in ' . $expectedOrder['order_number'] . '. Sync stopped to prevent duplicate Sales Order Items.');
-                    }
-                    $expectedProductIds[$item['product_id']] = true;
+                // Lock all current order items once, then consume one row per
+                // expected product occurrence. This allows the same product to
+                // appear multiple times in one Online Invoice without merging
+                // or overwriting the second sale.
+                $existingRows = DB::connection('sales')
+                    ->table('sales_order_items')
+                    ->where('sales_order_id', $salesOrderId)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
 
-                    $rows = DB::connection('sales')
-                        ->table('sales_order_items')
-                        ->where('sales_order_id', $salesOrderId)
-                        ->where('product_id', $item['product_id'])
-                        ->lockForUpdate()
-                        ->get();
+                $existingByProduct = [];
+                foreach ($existingRows as $existingRow) {
+                    $existingByProduct[(int) $existingRow->product_id][] = $existingRow;
+                }
+                $existingCursorByProduct = [];
+                $matchedExistingItemIds = [];
 
-                    if ($rows->count() > 1) {
-                        throw new RuntimeException('Duplicate Sales Order Items already exist for product ID ' . $item['product_id'] . ' in ' . $expectedOrder['order_number'] . '. Sync stopped to avoid compounding the duplicate.');
-                    }
+                foreach ($expectedOrder['items'] as $itemIndex => $item) {
+                    $productId = (int) $item['product_id'];
+                    $occurrence = (int) ($existingCursorByProduct[$productId] ?? 0);
+                    $existingRow = $existingByProduct[$productId][$occurrence] ?? null;
+                    $existingCursorByProduct[$productId] = $occurrence + 1;
 
                     $payload = [
                         'sales_order_id' => $salesOrderId,
-                        'product_id' => $item['product_id'],
+                        'product_id' => $productId,
                         'price_code' => $item['price_code'],
                         'product_code' => $item['product_code'],
                         'description' => $item['description'],
@@ -705,25 +743,21 @@ class OnlineReportProductLedgerSyncService
                         'updated_at' => self::nowManila(),
                     ];
 
-                    if ($rows->isEmpty()) {
+                    if (!$existingRow) {
                         $newItemId = (int) DB::connection('sales')->table('sales_order_items')->insertGetId($payload);
                         $createdItemIds[] = $newItemId;
                         $createdItems++;
                     } else {
-                        DB::connection('sales')->table('sales_order_items')->where('id', $rows->first()->id)->update($payload);
+                        $matchedExistingItemIds[(int) $existingRow->id] = true;
+                        DB::connection('sales')->table('sales_order_items')->where('id', $existingRow->id)->update($payload);
                         $updatedItems++;
                     }
+
                     $orderTotal += $item['subtotal'];
                 }
 
-                $actualRows = DB::connection('sales')
-                    ->table('sales_order_items')
-                    ->where('sales_order_id', $salesOrderId)
-                    ->lockForUpdate()
-                    ->get(['id', 'product_id']);
-
-                foreach ($actualRows as $actualRow) {
-                    if (isset($expectedProductIds[(int) $actualRow->product_id])) {
+                foreach ($existingRows as $actualRow) {
+                    if (isset($matchedExistingItemIds[(int) $actualRow->id])) {
                         continue;
                     }
 
