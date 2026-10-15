@@ -24275,6 +24275,7 @@ Route::get('/admin/payments/data', function () {
 
             if (!$isActionable) {
                 $paid = 0.0;
+                $recordedAdjustment = 0.0;
 
                 foreach ($invoiceValues as $invoiceValue) {
                     $invoiceNo = trim((string) $invoiceValue);
@@ -24288,6 +24289,7 @@ Route::get('/admin/payments/data', function () {
                     );
 
                     $paid += (float) ($paidRow->paid_total ?? 0);
+                    $recordedAdjustment += (float) ($paidRow->adjustment_total ?? 0);
                 }
 
                 $returned = $returnAmountFor(
@@ -24295,10 +24297,17 @@ Route::get('/admin/payments/data', function () {
                     $onlineReturnMap
                 );
 
-                $isActionable = max(
-                    $amount - $paid - $returned,
-                    0
-                ) > 0;
+                $due = max($amount - $paid - $returned, 0);
+                $remainingReturnAdjustment = min(
+                    max($returned - $recordedAdjustment, 0),
+                    max($amount - $paid, 0)
+                );
+
+                // W68_PAYMENTS_ONLINE_RETURN_BEFORE_PAYMENT_20261015
+                // A completed return can reduce an online invoice due to zero BEFORE
+                // accounting records that return adjustment. Keep the invoice/payor
+                // actionable until that adjustment has actually been processed.
+                $isActionable = $due > 0 || $remainingReturnAdjustment > 0;
             }
 
             if ($isActionable) {
@@ -24466,16 +24475,22 @@ Route::get('/admin/payments/data', function () {
                     );
 
                     $paid = (float) ($paidRow->paid_total ?? 0);
+                    $recordedAdjustment = (float) ($paidRow->adjustment_total ?? 0);
 
                     $returned = $returnAmountFor(
                         [$invoiceNo],
                         $onlineReturnMap
                     );
 
-                    $isActionable = max(
-                        $amount - $paid - $returned,
-                        0
-                    ) > 0;
+                    $due = max($amount - $paid - $returned, 0);
+                    $remainingReturnAdjustment = min(
+                        max($returned - $recordedAdjustment, 0),
+                        max($amount - $paid, 0)
+                    );
+
+                    // Same rule as finalized ONL orders: a pre-payment return is
+                    // still actionable even when it temporarily makes due = 0.
+                    $isActionable = $due > 0 || $remainingReturnAdjustment > 0;
                 }
 
                 if ($isActionable) {
@@ -24692,10 +24707,6 @@ Route::get('/admin/payments/data', function () {
             ->map(function ($docs) use ($customerTermsMap, $today) {
                 $unpaidDocs = $docs->filter(fn ($doc) => $doc->due_amount > 0);
                 $actionableDocs = $docs->filter(function ($doc) {
-                    if ($doc->source_type === 'online_report') {
-                        return $doc->due_amount > 0;
-                    }
-
                     return $doc->due_amount > 0
                         || (float) ($doc->remaining_return_adjustment ?? 0) > 0;
                 });
@@ -25032,10 +25043,9 @@ Route::get('/admin/payments/customer/{customerId}', function ($customerId) {
                 ];
             })
             ->filter(function ($doc) {
-                if (($doc['source_type'] ?? '') === 'online_report') {
-                    return (float) ($doc['due'] ?? 0) > 0;
-                }
-
+                // W68_PAYMENTS_ONLINE_RETURN_IN_PROCESS_MODAL_20261015
+                // Keep invoices that have no cash due but still have a return
+                // adjustment waiting to be recorded in Process Payment.
                 return (float) ($doc['due'] ?? 0) > 0
                     || (float) ($doc['adjustment'] ?? 0) > 0;
             })
@@ -25064,6 +25074,14 @@ Route::get('/admin/payments/customer/{customerId}/returns', function ($customerI
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
+        // W68_PAYMENTS_SHOPEE_RETURN_CUSTOMER_ALIAS_20261015
+        // Payments normalizes historical Shopee customer IDs 1029 and 1433 into
+        // one payor. Returns must read both IDs as well or the Return step can miss
+        // a valid Sales Return created under the alternate Shopee identity.
+        $returnCustomerIds = in_array((int) $customerId, [1029, 1433], true)
+            ? [1029, 1433]
+            : [(int) $customerId];
+
         $usageRows = DB::connection('accounting')->table('process_payment_returns')
             ->whereNotNull('sales_return_id')
             ->orderByDesc('id')
@@ -25071,7 +25089,7 @@ Route::get('/admin/payments/customer/{customerId}/returns', function ($customerI
             ->groupBy('sales_return_id');
 
         $returns = DB::connection('sales')->table('sales_returns as sr')
-            ->where('sr.customer_id', $customerId)
+            ->whereIn('sr.customer_id', $returnCustomerIds)
             ->whereRaw("UPPER(TRIM(COALESCE(sr.status, ''))) NOT IN ('CANCELLED', 'VOID')")
             ->select(
                 'sr.id',
