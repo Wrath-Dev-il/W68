@@ -605,6 +605,7 @@ function renderInvoiceTabs() {
             <table class="w-full">
                 <thead>
                     <tr class="text-[9px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                        <th class="p-4 text-center w-16">Return</th>
                         <th class="p-4 text-left">Product Code</th>
                         <th class="p-4 text-left">Description</th>
                         <th class="p-4 text-center">Return QTY</th>
@@ -642,7 +643,7 @@ function renderInvoiceTabs() {
 
 function renderInvoiceItems(invNo, items) {
     if (!items || items.length === 0) {
-        return `<tr><td colspan="8" class="p-8 text-center text-[10px] text-slate-400 italic">No items found for this invoice.</td></tr>`;
+        return `<tr><td colspan="9" class="p-8 text-center text-[10px] text-slate-400 italic">No items found for this invoice.</td></tr>`;
     }
     const cleanDesc = (d) => (d || '').replace(/\s*Converted from Partial\s*/gi, '');
     return items.map(item => {
@@ -658,6 +659,9 @@ function renderInvoiceItems(invNo, items) {
         const disc = parseFloat(item.discount) || 0;
         return `
             <tr data-part-number="${partNumber}" data-application="${application}" data-product-id="${productId}" data-additional-discount="${addlDisc}">
+                <td class="p-4 text-center">
+                    <input type="checkbox" class="return-item-check accent-maroon cursor-pointer w-4 h-4" title="Check this item to include it in the Sales Return">
+                </td>
                 <td class="p-4 font-mono font-bold">${item.product_code || '---'}</td>
                 <td class="p-4 text-slate-600">${cleanDesc(item.description)}</td>
                 <td class="p-4">
@@ -773,11 +777,12 @@ function populateReturnReview() {
         const inputs = itemsContent ? itemsContent.querySelectorAll('.return-qty-input') : [];
         const rows = Array.from(inputs).map(inp => {
             const row = inp.closest('tr');
+            if (!row?.querySelector('.return-item-check')?.checked) return null;
             const cells = row.querySelectorAll('td');
             const productId = row.getAttribute('data-product-id') || '';
-            const productCode = cells[0]?.innerText || '---';
+            const productCode = cells[1]?.innerText || '---';
             const partNumber = row.getAttribute('data-part-number') || '';
-            const description = cells[1]?.innerText || '---';
+            const description = cells[2]?.innerText || '---';
             const application = row.getAttribute('data-application') || '';
             const qty = parseInt(inp.value) || 0;
             const goodItems = parseInt(row.querySelector('.good-items-input')?.value) || 0;
@@ -789,7 +794,7 @@ function populateReturnReview() {
             const amount = parseFloat(returnAmountText.replace(/[₱,\s]/g, '')) || 0;
             
             return { productId, productCode, partNumber, description, application, qty, goodItems, amount, remarks };
-        }).filter(r => r.qty > 0);
+        }).filter(r => r !== null);
 
         totalItems += rows.reduce((s, r) => s + r.qty, 0);
         totalAmount += rows.reduce((s, r) => s + r.amount, 0);
@@ -833,7 +838,7 @@ function populateReturnReview() {
                             <td class="p-4 text-slate-500 italic">${r.remarks || '---'}</td>
                             <td class="p-4 text-right font-bold text-maroon">₱ ${r.amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                         </tr>
-                    `).join('') : `<tr><td colspan="8" class="p-8 text-center text-[10px] text-slate-400 italic">No items with quantity selected for this invoice.</td></tr>`}
+                    `).join('') : `<tr><td colspan="8" class="p-8 text-center text-[10px] text-slate-400 italic">No items checked for return on this invoice.</td></tr>`}
                 </tbody>
             </table>
             ${genRemarks ? `
@@ -881,7 +886,7 @@ window.finalizeReturn = async function() {
         const inputs = itemsContent.querySelectorAll('.return-qty-input');
         const items = Array.from(inputs).map(inp => {
             const row = inp.closest('tr');
-            if (!row) return null;
+            if (!row || !row.querySelector('.return-item-check')?.checked) return null;
 
             const cells = row.querySelectorAll('td');
             const qty = parseInt(inp.value) || 0;
@@ -896,9 +901,9 @@ window.finalizeReturn = async function() {
             
             return {
                 product_id: row.getAttribute('data-product-id'),
-                product_code: cells[0]?.innerText?.trim() || '',
+                product_code: cells[1]?.innerText?.trim() || '',
                 part_number: row.getAttribute('data-part-number') || '',
-                description: cells[1]?.innerText?.trim() || '',
+                description: cells[2]?.innerText?.trim() || '',
                 application: row.getAttribute('data-application') || '',
                 qty: qty,
                 good_items: Math.min(goodItems, qty),
@@ -909,32 +914,33 @@ window.finalizeReturn = async function() {
                 gross_subtotal: grossReturn,
                 additional_discount: additionalDiscount
             };
-        }).filter(item => item !== null && item.qty > 0);
+        }).filter(item => item !== null);
 
-        // W68_SALES_RETURN_ALLOW_ZERO_QTY_20261015
-        // A selected invoice may be recorded as a Sales Return even when its
-        // Return QTY is 0. The backend stores the return header with total_items=0,
-        // while SalesReturnProductLedgerService produces no stock movement.
-        const genRemarks = document.getElementById(`general-remarks-${uiKey}`)?.value || '';
-        const totalGross = items.reduce((sum, item) => sum + item.gross_subtotal, 0);
-        const totalAfterItemDisc = items.reduce((sum, item) => sum + (item.gross_subtotal * (1 - item.discount / 100)), 0);
-        const totalAfterAddlDisc = items.reduce((sum, item) => sum + item.amount, 0);
-        returns.push({
-            invoice_no: inv.no,
-            customer_id: inv.customer_id,
-            customer_name: inv.customer_name,
-            total_items: items.reduce((sum, item) => sum + item.qty, 0),
-            total_amount: totalAfterAddlDisc,
-            subtotal: totalAfterItemDisc,
-            gross_subtotal: totalGross,
-            additional_discount: additionalDiscount,
-            remarks: genRemarks.trim(),
-            items: items
-        });
+        // W68_SALES_RETURN_ITEM_CHECKBOX_20261015
+        // Checkbox selection is authoritative. A checked row is a return item
+        // even when Return QTY is 0; unchecked rows are not sent at all.
+        if (items.length > 0) {
+            const genRemarks = document.getElementById(`general-remarks-${uiKey}`)?.value || '';
+            const totalGross = items.reduce((sum, item) => sum + item.gross_subtotal, 0);
+            const totalAfterItemDisc = items.reduce((sum, item) => sum + (item.gross_subtotal * (1 - item.discount / 100)), 0);
+            const totalAfterAddlDisc = items.reduce((sum, item) => sum + item.amount, 0);
+            returns.push({
+                invoice_no: inv.no,
+                customer_id: inv.customer_id,
+                customer_name: inv.customer_name,
+                total_items: items.reduce((sum, item) => sum + item.qty, 0),
+                total_amount: totalAfterAddlDisc,
+                subtotal: totalAfterItemDisc,
+                gross_subtotal: totalGross,
+                additional_discount: additionalDiscount,
+                remarks: genRemarks.trim(),
+                items: items
+            });
+        }
     });
 
     if (returns.length === 0) {
-        alert('Please select at least one invoice to return.');
+        alert('Please check at least one item to return. Return QTY may be 0.');
         return;
     }
 
@@ -1010,7 +1016,7 @@ function renderEditItems(invoiceItems, existingItems) {
     if (!tbody) return;
 
     if (!invoiceItems || invoiceItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-[10px] text-slate-400 italic">No items found for this invoice.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-[10px] text-slate-400 italic">No items found for this invoice.</td></tr>';
         return;
     }
 
@@ -1039,6 +1045,9 @@ function renderEditItems(invoiceItems, existingItems) {
 
         return `
             <tr class="hover:bg-slate-50 transition-colors${blinkRowBg}" data-product-id="${item.product_id}" data-product-code="${item.product_code || ''}">
+                <td class="p-4 text-center${blinkClass}">
+                    <input type="checkbox" class="edit-return-item-check accent-maroon cursor-pointer w-4 h-4" ${isExisting ? 'checked' : ''} title="Check this item to include it in the Sales Return">
+                </td>
                 <td class="p-4 font-mono font-bold text-maroon${blinkClass}">${item.product_code || '---'}</td>
                 <td class="p-4 text-slate-600${blinkClass}">${(item.description || '').replace(/\s*Converted from Partial\s*/gi, '')}</td>
                 <td class="p-4 text-center${blinkClass}">
@@ -1101,13 +1110,14 @@ window.submitEditReturn = async function() {
     const tbody = document.getElementById('edit-return-items-tbody');
     const rows = tbody.querySelectorAll('tr');
     const items = [];
-    let hasAnyValue = false;
+    let hasSelectedItem = false;
 
     rows.forEach(row => {
         const productId = row.getAttribute('data-product-id');
         if (!productId) return;
 
         const cells = row.querySelectorAll('td');
+        const selected = !!row.querySelector('.edit-return-item-check')?.checked;
         const qtyInput = row.querySelector('.edit-return-qty-input');
         const goodInput = row.querySelector('.edit-good-items-input');
         const remarksInput = row.querySelector('.edit-return-item-remarks');
@@ -1120,12 +1130,13 @@ window.submitEditReturn = async function() {
         const grossSubtotal = qty * unitPrice;
         const amount = grossSubtotal * (1 - discount / 100);
 
-        if (qty > 0) hasAnyValue = true;
+        if (selected) hasSelectedItem = true;
 
         items.push({
+            selected: selected,
             product_id: productId,
-            product_code: cells[0]?.innerText?.trim() || '',
-            description: cells[1]?.innerText?.trim() || '',
+            product_code: cells[1]?.innerText?.trim() || '',
+            description: cells[2]?.innerText?.trim() || '',
             qty: qty,
             good_items: Math.min(goodItems, qty),
             remarks: remarksInput?.value?.trim() || '',
@@ -1141,8 +1152,8 @@ window.submitEditReturn = async function() {
 
     toggleModal('edit-return-confirm-modal', false);
 
-    if (!hasAnyValue) {
-        alert('Please enter return quantity for at least one item.');
+    if (!hasSelectedItem) {
+        alert('Please check at least one item to return. Return QTY may be 0.');
         return;
     }
 
