@@ -174,15 +174,39 @@ function createPrintSlip(template, header, items) {
     clone.querySelector('.p-date').textContent = ': ' + new Date(header.created_at).toLocaleDateString();
     clone.querySelector('.p-invoice-no').textContent = ': ' + (header.invoice_no || '---');
     
-    // Collect unique remarks from items
-    const itemRemarks = (items || []).map(i => i.remarks).filter(r => r && r.trim() !== '' && r !== '---');
+    // W68_SALES_RETURN_A5_COMPACT_PRINT_20261016
+    // Print only actual item rows. Never add/keep blank filler rows; a return with
+    // one real item prints exactly one item row. Checked zero-QTY items are still
+    // real return lines when they contain product/item information.
+    const printItems = (items || []).filter(item => {
+        const qty = parseInt(item.quantity ?? item.qty ?? 0) || 0;
+        const meaningfulText = [
+            item.product_code,
+            item.part_number,
+            item.description,
+            item.application,
+            item.position,
+            item.remarks
+        ].some(value => String(value ?? '').trim() !== '' && String(value ?? '').trim() !== '---');
+
+        return qty !== 0 || meaningfulText;
+    });
+
+    // Collect unique remarks from the rows that are actually printed.
+    const itemRemarks = printItems.map(i => i.remarks).filter(r => r && r.trim() !== '' && r !== '---');
     const uniqueRemarks = [...new Set(itemRemarks)];
-    clone.querySelector('.p-reason').textContent = uniqueRemarks.length > 0 ? uniqueRemarks.join('; ') : (header.remarks || '---');
+    const reasonText = uniqueRemarks.length > 0 ? uniqueRemarks.join('; ') : String(header.remarks || '').trim();
+    const reasonBlock = clone.querySelector('.print-reason-block');
+    if (reasonText && reasonText !== '---') {
+        clone.querySelector('.p-reason').textContent = reasonText;
+    } else if (reasonBlock) {
+        reasonBlock.remove();
+    }
     
     const cleanDesc = (d) => (d || '').replace(/\s*Converted from Partial\s*/gi, '');
 
     const itemsTbody = clone.querySelector('.p-items-tbody');
-    itemsTbody.innerHTML = (items || []).map(item => {
+    itemsTbody.innerHTML = printItems.map(item => {
         const qty = parseInt(item.quantity || item.qty || 0);
         const unitPrice = parseFloat(item.unit_price || 0);
         const discPct = parseFloat(item.discount || 0);
@@ -206,9 +230,9 @@ function createPrintSlip(template, header, items) {
         </tr>`;
     }).join('');
 
-    // Calculate per-item subtotals (gross - discount) for the print formula
+    // Calculate totals from the same real rows shown on the print.
     let calcSubtotal = 0;
-    (items || []).forEach(item => {
+    printItems.forEach(item => {
         const q = parseInt(item.quantity || item.qty || 0);
         const up = parseFloat(item.unit_price || 0);
         const dp = parseFloat(item.discount || 0);

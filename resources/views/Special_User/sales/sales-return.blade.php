@@ -565,95 +565,306 @@
 </div>
 
 <!-- ============== PRINT TEMPLATE (HIDDEN) ============== -->
-<div id="print-area" class="hidden print:block p-8 text-sm font-sans bg-white">
+<div id="print-area" class="hidden print:block font-sans bg-white">
     <style>
+        /* W68_SALES_RETURN_A5_7_ITEMS_PRINT_20261016 */
         @media print {
-            @page { margin: 0.5in; size: auto; }
-            body { margin: 0; padding: 0; background: #fff !important; font-size: 13px !important; }
-            body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; font-size: 13px !important; }
-            #print-area { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 100%; 
-                display: block !important; 
+            @page {
+                size: A5 portrait;
+                margin: 5mm;
+            }
+
+            html,
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 148mm !important;
                 background: #fff !important;
             }
-            .print-slip { 
-                page-break-after: always; 
-                page-break-inside: avoid;
-                padding: 10px 0;
+
+            body * {
+                visibility: hidden;
+            }
+
+            #print-area,
+            #print-area * {
+                visibility: visible;
+                box-sizing: border-box;
+            }
+
+            #print-area {
+                position: absolute;
+                inset: 0 auto auto 0;
+                width: 138mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 display: block !important;
+                background: #fff !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+                font-size: 8px !important;
+                line-height: 1.15 !important;
+                color: #000 !important;
             }
-            .print-slip:last-child { 
-                page-break-after: avoid !important; 
+
+            .print-slip {
+                width: 138mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+                page-break-after: always;
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
-            .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #000; }
-            .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 13px !important; }
-            .text-red-600 { color: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .font-bold { font-weight: bold !important; }
-            .uppercase { text-transform: uppercase !important; }
+
+            .print-slip:last-child {
+                page-break-after: avoid !important;
+                break-after: auto !important;
+            }
+
+            .print-header {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) 53mm;
+                gap: 4mm;
+                align-items: start;
+                margin: 0 0 3mm !important;
+            }
+
+            .print-customer-block {
+                min-width: 0;
+                padding-top: 0.5mm;
+            }
+
+            .print-meta-line {
+                display: grid !important;
+                grid-template-columns: 20mm minmax(0, 1fr);
+                gap: 1mm;
+                margin: 0 0 1mm !important;
+                line-height: 1.15 !important;
+            }
+
+            .print-meta-box {
+                border: 1px solid #000 !important;
+                border-radius: 1.5mm !important;
+                padding: 2mm !important;
+                min-width: 0 !important;
+            }
+
+            .print-meta-box .print-meta-line {
+                grid-template-columns: 18mm minmax(0, 1fr);
+                margin-bottom: 0.8mm !important;
+            }
+
+            .print-meta-box .print-meta-line:last-child {
+                border-top: 0.5px solid #000;
+                padding-top: 1mm;
+                margin-bottom: 0 !important;
+            }
+
+            .print-meta-line span:last-child {
+                overflow-wrap: anywhere;
+            }
+
+            .print-reason-block {
+                margin: 0 0 2.5mm !important;
+            }
+
+            .print-reason-label {
+                margin: 0 0 0.8mm !important;
+                font-size: 7.5px !important;
+            }
+
+            .p-reason {
+                margin: 0 !important;
+                padding: 1.5mm 2mm !important;
+                min-height: 0 !important;
+                border: 0.5px solid #999 !important;
+                border-radius: 1mm !important;
+                line-height: 1.15 !important;
+                overflow-wrap: anywhere;
+            }
+
+            .print-table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                table-layout: fixed !important;
+                margin: 0 !important;
+                border: 0.7px solid #000 !important;
+                font-size: 7.5px !important;
+            }
+
+            .print-table th,
+            .print-table td {
+                border: 0.7px solid #000 !important;
+                padding: 1.2mm 1mm !important;
+                vertical-align: top !important;
+                line-height: 1.12 !important;
+                font-size: 7.5px !important;
+                overflow-wrap: anywhere;
+            }
+
+            .print-table th {
+                padding-top: 1mm !important;
+                padding-bottom: 1mm !important;
+                font-size: 7px !important;
+                white-space: nowrap;
+            }
+
+            .print-table tbody tr {
+                height: auto !important;
+                min-height: 0 !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .print-item-main {
+                font-weight: 700 !important;
+                margin: 0 !important;
+                line-height: 1.12 !important;
+            }
+
+            .print-item-sub {
+                margin-top: 0.4mm !important;
+                font-size: 6.7px !important;
+                line-height: 1.08 !important;
+            }
+
+            .print-nowrap {
+                white-space: nowrap !important;
+            }
+
+            .print-totals {
+                margin-top: 2.5mm !important;
+                padding-top: 1.5mm !important;
+                border-top: 1px solid #000 !important;
+                display: flex !important;
+                justify-content: flex-end !important;
+            }
+
+            .print-totals-inner {
+                width: 56mm !important;
+                font-size: 7.5px !important;
+            }
+
+            .print-total-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                gap: 3mm;
+                margin-bottom: 0.8mm !important;
+            }
+
+            .print-total-row.print-grand {
+                border-top: 0.7px solid #000 !important;
+                padding-top: 0.8mm !important;
+            }
+
+            .text-red-600 {
+                color: #000 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .font-bold,
+            .font-black {
+                font-weight: 700 !important;
+            }
+
+            .uppercase {
+                text-transform: uppercase !important;
+            }
+
+            .text-right {
+                text-align: right !important;
+            }
+
+            .text-center {
+                text-align: center !important;
+            }
         }
     </style>
+
     <div id="print-slips-container">
         <!-- Multiple slips will be injected here for bulk printing -->
     </div>
 </div>
 
-<!-- Template for a single slip (used by JS) -->
+<!-- Compact half-A4/A5 template: no blank/filler item rows. -->
 <template id="single-slip-template">
     <div class="print-slip">
-        <div class="flex justify-between mb-10">
-            <div class="space-y-2">
-                <div class="flex"><span class="w-32 font-bold uppercase">Customer</span><span class="p-customer">: ---</span></div>
-                <div class="flex"><span class="w-32 font-bold uppercase">Address</span><span class="p-address">: ---</span></div>
+        <div class="print-header">
+            <div class="print-customer-block">
+                <div class="print-meta-line">
+                    <span class="font-bold uppercase">Customer</span>
+                    <span class="p-customer">: ---</span>
+                </div>
+                <div class="print-meta-line">
+                    <span class="font-bold uppercase">Address</span>
+                    <span class="p-address">: ---</span>
+                </div>
             </div>
-            <div class="p-4 border-2 border-black rounded-lg space-y-2 min-w-[300px]">
-                <div class="flex justify-between"><span class="font-bold uppercase">Return No</span><span class="p-return-no font-bold text-red-600 ml-4">: ---</span></div>
-                <div class="flex justify-between"><span class="font-bold uppercase">Date</span><span class="p-date ml-4">: ---</span></div>
-                <div class="flex justify-between border-t border-black pt-2"><span class="font-bold uppercase">Invoice No.</span><span class="p-invoice-no font-bold text-red-600 ml-4">: ---</span></div>
+
+            <div class="print-meta-box">
+                <div class="print-meta-line">
+                    <span class="font-bold uppercase">Return No</span>
+                    <span class="p-return-no font-bold">: ---</span>
+                </div>
+                <div class="print-meta-line">
+                    <span class="font-bold uppercase">Date</span>
+                    <span class="p-date">: ---</span>
+                </div>
+                <div class="print-meta-line">
+                    <span class="font-bold uppercase">Invoice No.</span>
+                    <span class="p-invoice-no font-bold">: ---</span>
+                </div>
             </div>
         </div>
 
-        <div class="mb-8">
-            <p class="font-bold uppercase mb-2">Reason for Cancellation:</p>
-            <p class="p-reason italic p-4 bg-slate-50 border border-slate-100 rounded-lg min-h-[60px]">---</p>
+        <div class="print-reason-block">
+            <p class="print-reason-label font-bold uppercase">Reason for Cancellation:</p>
+            <p class="p-reason italic">---</p>
         </div>
 
         <table class="print-table">
+            <colgroup>
+                <col style="width:7%">
+                <col style="width:8%">
+                <col style="width:48%">
+                <col style="width:13%">
+                <col style="width:9%">
+                <col style="width:15%">
+            </colgroup>
             <thead>
-                <tr class="uppercase text-xs bg-slate-100">
-                    <th class="w-12">Qty</th>
-                    <th class="w-12">Unit</th>
-                    <th style="width:auto">Description</th>
-                    <th class="w-28 text-right">Unit Price</th>
-                    <th class="w-20 text-center">Disc %</th>
-                    <th class="w-28 text-right">Sub Total</th>
+                <tr class="uppercase">
+                    <th class="text-center">Qty</th>
+                    <th>Unit</th>
+                    <th>Description</th>
+                    <th class="text-right">Unit Price</th>
+                    <th class="text-center">Disc %</th>
+                    <th class="text-right">Sub Total</th>
                 </tr>
             </thead>
             <tbody class="p-items-tbody">
-                <!-- Items injected here -->
+                <!-- Only actual items are injected here. -->
             </tbody>
         </table>
 
-        <div class="mt-10 border-t-2 border-black pt-6">
-            <div class="flex flex-col items-end space-y-2">
-                <div class="flex w-64 justify-between">
+        <div class="print-totals">
+            <div class="print-totals-inner">
+                <div class="print-total-row">
                     <span class="uppercase font-bold">Subtotal</span>
                     <span class="p-subtotal font-bold">₱ 0.00</span>
                 </div>
-                <div class="flex w-64 justify-between p-addl-disc-row">
+                <div class="print-total-row p-addl-disc-row">
                     <span class="uppercase font-bold">Additional Disc (<span class="p-addl-disc-pct">0</span>%)</span>
-                    <span class="p-addl-disc-amt font-bold text-red-600">- ₱ 0.00</span>
+                    <span class="p-addl-disc-amt font-bold">- ₱ 0.00</span>
                 </div>
-                <div class="flex w-64 justify-between border-t border-black pt-2">
+                <div class="print-total-row print-grand">
                     <span class="uppercase font-bold">Total Amount</span>
                     <span class="p-total-amount font-bold">₱ 0.00</span>
                 </div>
-                <div class="flex w-64 justify-between">
+                <div class="print-total-row">
                     <span class="uppercase font-bold">Report Total</span>
-                    <span class="p-report-total font-black text-lg">₱ 0.00</span>
+                    <span class="p-report-total font-bold">₱ 0.00</span>
                 </div>
             </div>
         </div>
