@@ -48,6 +48,9 @@ function manualReturnRowHtml(ret = null, scope = 'payment') {
     const sourceLabel = isFetched
         ? '<div class="mt-1 text-[8px] font-black uppercase tracking-wider text-emerald-600">Fetched Sales Return</div>'
         : '';
+    const printButton = isFetched && returnId
+        ? `<button type="button" onclick="window.printPaymentReturn(${returnId})" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-maroon text-white hover:bg-maroon-800" title="Print Sales Return"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>`
+        : '<button type="button" onclick="window.printManualReturnFromRow(this)" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-maroon text-white hover:bg-maroon-800" title="Print Manual Return"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>';
 
     return `
         <tr class="manual-return-row" data-return-scope="${escapeAttr(scope)}" data-fetched-return="${isFetched ? '1' : '0'}" data-return-id="${escapeAttr(returnId || '')}">
@@ -65,7 +68,7 @@ function manualReturnRowHtml(ret = null, scope = 'payment') {
                 ${actionButton}
             </td>
             <td class="p-3 text-center">
-                <button type="button" onclick="window.printManualReturnFromRow(this)" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-maroon text-white hover:bg-maroon-800" title="Print Return"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
+                ${printButton}
             </td>
         </tr>`;
 }
@@ -213,8 +216,19 @@ async function renderSuddenReturns() {
     tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">Fetching customer Sales Returns...</td></tr>';
 
     try {
-        const url = routes().customerReturns.replace(':customerId', String(customerId));
-        const data = await fetchPaymentsJson(url, 'Unable to fetch customer Sales Returns.');
+        const url = new URL(
+            routes().customerReturns.replace(':customerId', String(customerId)),
+            window.location.origin
+        );
+        if (currentPayment.customer?.name) {
+            url.searchParams.set('customer_name', String(currentPayment.customer.name));
+        }
+        (currentPayment.invoices || []).slice(0, 200).forEach(invoice => {
+            const invoiceNo = String(invoice?.invoice_no || '').trim();
+            if (invoiceNo) url.searchParams.append('invoice_nos[]', invoiceNo);
+        });
+
+        const data = await fetchPaymentsJson(url.toString(), 'Unable to fetch customer Sales Returns.');
         if (requestSeq !== paymentReturnsRequestSeq) return;
 
         const currentPaymentId = Number(currentPayment.paymentId || 0);
@@ -2706,6 +2720,32 @@ function checkPayload() {
     }));
 }
 
+function paymentFetchedReturnPayload(invoices = selectedInvoicePayload()) {
+    // W68_PAYMENTS_LINK_FETCHED_RETURNS_20261015
+    // Only real fetched Sales Returns are persisted. Manual fallback rows remain
+    // print-only. A return is linked only when its invoice is selected here.
+    const selected = Array.isArray(invoices) ? invoices : [];
+
+    return (Array.isArray(currentPayment.returns) ? currentPayment.returns : [])
+        .map(ret => {
+            const salesReturnId = Number(ret?.sales_return_id ?? ret?.return_order_id ?? ret?.id ?? 0);
+            if (!salesReturnId) return null;
+
+            const matchingInvoice = selected.find(invoice => returnMatchesInvoice(ret, invoice));
+            if (!matchingInvoice) return null;
+
+            return {
+                sales_return_id: salesReturnId,
+                return_number: String(ret?.return_number || ''),
+                return_amount: Number(ret?.wallet_adjustment ?? ret?.return_amount ?? ret?.total_amount ?? 0),
+                source_type: matchingInvoice.source_type || null,
+                source_id: Number(matchingInvoice.source_id || 0) || null,
+                invoice_no: String(ret?.invoice_no || matchingInvoice.invoice_no || '')
+            };
+        })
+        .filter(ret => ret && ret.return_number);
+}
+
 function populateReview() {
     const container = document.getElementById('review-content');
     if (!container) return;
@@ -3190,7 +3230,8 @@ window.submitFinalizePayment = async function() {
                 payment_no: currentPayment.paymentNo,
                 payment_date: document.getElementById('p-date')?.textContent || new Date().toISOString().split('T')[0],
                 invoices,
-                checks: checkPayload()
+                checks: checkPayload(),
+                returns: paymentFetchedReturnPayload(invoices)
             })
         });
 

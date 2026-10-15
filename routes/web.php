@@ -25069,18 +25069,57 @@ Route::get('/admin/payments/customer/{customerId}', function ($customerId) {
     }
 })->name('admin.payments.customer');
 
-Route::get('/admin/payments/customer/{customerId}/returns', function ($customerId) {
+Route::get('/admin/payments/customer/{customerId}/returns', function (Request $request, $customerId) {
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        // W68_PAYMENTS_SHOPEE_RETURN_CUSTOMER_ALIAS_20261015
-        // Payments normalizes historical Shopee customer IDs 1029 and 1433 into
-        // one payor. Returns must read both IDs as well or the Return step can miss
-        // a valid Sales Return created under the alternate Shopee identity.
+        // W68_PAYMENTS_RETURN_MATCH_ID_NAME_INVOICE_20261015
+        // Historical Online/Shopee Sales Returns are not guaranteed to retain the
+        // same customer_id as Payments. Some migrated returns have customer_id=0
+        // even though customer_name/invoice_no still identify the correct payor.
         $returnCustomerIds = in_array((int) $customerId, [1029, 1433], true)
             ? [1029, 1433]
             : [(int) $customerId];
+
+        $returnCustomerNames = DB::connection('masterlist')->table('customers')
+            ->whereIn('id', $returnCustomerIds)
+            ->pluck('name')
+            ->map(fn ($name) => mb_strtoupper(trim((string) $name)))
+            ->filter()
+            ->values();
+
+        $salesOrderNames = DB::connection('sales')->table('sales_orders')
+            ->whereIn('customer_id', $returnCustomerIds)
+            ->whereNotNull('customer_name')
+            ->pluck('customer_name')
+            ->map(fn ($name) => mb_strtoupper(trim((string) $name)))
+            ->filter()
+            ->values();
+
+        $requestCustomerName = mb_strtoupper(trim((string) $request->query('customer_name', '')));
+        if ($requestCustomerName !== '') {
+            $returnCustomerNames->push($requestCustomerName);
+        }
+        if (array_intersect($returnCustomerIds, [1029, 1433])) {
+            $returnCustomerNames->push('SHOPEE ONLINE BUYERS');
+        }
+        $returnCustomerNames = $returnCustomerNames
+            ->merge($salesOrderNames)
+            ->unique()
+            ->values();
+
+        $invoiceValues = $request->query('invoice_nos', []);
+        if (!is_array($invoiceValues)) {
+            $invoiceValues = [$invoiceValues];
+        }
+        $returnInvoiceKeys = collect($invoiceValues)
+            ->flatMap(fn ($value) => preg_split('/[,\r\n]+/', (string) $value))
+            ->map(fn ($value) => mb_strtoupper(preg_replace('/\s+/', '', trim((string) $value))))
+            ->filter()
+            ->unique()
+            ->take(200)
+            ->values();
 
         $usageRows = DB::connection('accounting')->table('process_payment_returns')
             ->whereNotNull('sales_return_id')
@@ -25089,12 +25128,32 @@ Route::get('/admin/payments/customer/{customerId}/returns', function ($customerI
             ->groupBy('sales_return_id');
 
         $returns = DB::connection('sales')->table('sales_returns as sr')
-            ->whereIn('sr.customer_id', $returnCustomerIds)
+            ->where(function ($match) use ($returnCustomerIds, $returnCustomerNames, $returnInvoiceKeys) {
+                $match->whereIn('sr.customer_id', $returnCustomerIds);
+
+                if ($returnCustomerNames->isNotEmpty()) {
+                    $placeholders = implode(',', array_fill(0, $returnCustomerNames->count(), '?'));
+                    $match->orWhereRaw(
+                        "UPPER(TRIM(COALESCE(sr.customer_name, ''))) IN ({$placeholders})",
+                        $returnCustomerNames->all()
+                    );
+                }
+
+                if ($returnInvoiceKeys->isNotEmpty()) {
+                    $invoicePlaceholders = implode(',', array_fill(0, $returnInvoiceKeys->count(), '?'));
+                    $match->orWhereRaw(
+                        "UPPER(REPLACE(TRIM(COALESCE(sr.invoice_no, '')), ' ', '')) IN ({$invoicePlaceholders})",
+                        $returnInvoiceKeys->all()
+                    );
+                }
+            })
             ->whereRaw("UPPER(TRIM(COALESCE(sr.status, ''))) NOT IN ('CANCELLED', 'VOID')")
             ->select(
                 'sr.id',
                 'sr.return_number',
                 'sr.created_at',
+                'sr.customer_id',
+                'sr.customer_name',
                 'sr.invoice_no',
                 'sr.total_amount',
                 'sr.remarks'
@@ -25112,6 +25171,8 @@ Route::get('/admin/payments/customer/{customerId}/returns', function ($customerI
                     'return_order_id' => (int) $ret->id,
                     'return_number' => (string) $ret->return_number,
                     'return_date' => (string) ($ret->created_at ? date('Y-m-d', strtotime($ret->created_at)) : ''),
+                    'customer_id' => (int) ($ret->customer_id ?? 0),
+                    'customer_name' => (string) ($ret->customer_name ?? ''),
                     'invoice_no' => (string) ($ret->invoice_no ?? ''),
                     'total_amount' => (float) ($ret->total_amount ?? 0),
                     'wallet_adjustment' => (float) ($ret->total_amount ?? 0),
