@@ -465,6 +465,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50 border-b border-slate-100">
                             <tr class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                <th class="p-4 text-center w-16">Return</th>
                                 <th class="p-4">Product Code</th>
                                 <th class="p-4">Description</th>
                                 <th class="p-4 text-center">Return QTY</th>
