@@ -26774,6 +26774,19 @@ Route::post('/admin/sales/sales-return/finalize', function (Request $request) {
             return response()->json(['success' => false, 'message' => 'No items to return.'], 422);
         }
 
+        // W68_SALES_RETURN_ITEM_CHECKBOX_BACKEND_20261015
+        // The browser sends only checked rows. QTY 0 is valid for a checked row,
+        // but every Sales Return must contain at least one explicitly selected item.
+        foreach ($returns as $ret) {
+            $selectedItems = $ret['items'] ?? [];
+            if (!is_array($selectedItems) || count($selectedItems) === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please check at least one item to return. Return QTY may be 0.',
+                ], 422);
+            }
+        }
+
         $actor = hatdogAuditActor($user);
         $affectedProductIds = [];
 
@@ -27021,13 +27034,20 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
         $returnNo = $header->return_number;
         $actor = hatdogAuditActor($user);
 
-        $positiveEditItems = collect($items)
-            ->filter(fn ($item) => (int) ($item['qty'] ?? 0) > 0)
+        $selectedEditItems = collect($items)
+            ->filter(function ($item) {
+                if (array_key_exists('selected', $item)) {
+                    return filter_var($item['selected'], FILTER_VALIDATE_BOOLEAN);
+                }
+
+                // Compatibility with older cached JS: positive QTY meant selected.
+                return (int) ($item['qty'] ?? 0) > 0;
+            })
             ->values();
 
-        if ($positiveEditItems->isEmpty()) {
+        if ($selectedEditItems->isEmpty()) {
             throw new \InvalidArgumentException(
-                'Return quantity must be greater than 0 for at least one item.'
+                'Please check at least one item to return. Return QTY may be 0.'
             );
         }
 
@@ -27060,6 +27080,9 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
             $productId = (int) ($item['product_id'] ?? 0);
             if ($productId <= 0) continue;
 
+            $isSelected = array_key_exists('selected', $item)
+                ? filter_var($item['selected'], FILTER_VALIDATE_BOOLEAN)
+                : ((int) ($item['qty'] ?? 0) > 0);
             $qty = max(0, (int) ($item['qty'] ?? 0));
             $goodItems = max(0, (int) ($item['good_items'] ?? 0));
             $goodItems = min($goodItems, $qty);
@@ -27069,9 +27092,10 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
             $product = $productsById->get($productId);
             $existingItem = $existingItemsByProduct->get($productId);
 
-            // Setting an existing line to 0 removes that line from the return;
-            // it must never remain as a stored Sales Return item with quantity 0.
-            if ($qty <= 0) {
+            // Checkbox is authoritative in Edit Sales Return:
+            // unchecked removes an existing return line; checked keeps/creates
+            // the line even with QTY 0. A zero-QTY line produces no ledger stock movement.
+            if (!$isSelected) {
                 if ($existingItem) {
                     DB::connection('sales')->table('sales_return_items')
                         ->where('id', $existingItem->id)
