@@ -20998,6 +20998,8 @@ Route::get('/admin/sales/sales-return/items/{noteId}', function (Request $reques
             }
         }
 
+        // W68_SALES_RETURN_HIDE_ZERO_REMAINING_20261015
+        // Fully returned items (remaining = 0) are not returnable again.
         $finalItems = $items
             ->map(function ($item) use ($prevMap) {
                 $qty = (int) ($item['quantity'] ?? 0);
@@ -26785,6 +26787,20 @@ Route::post('/admin/sales/sales-return/finalize', function (Request $request) {
         $nextNum = ($maxNum ?: 0) + 1;
 
         foreach ($returns as $ret) {
+            // W68_SALES_RETURN_POSITIVE_QTY_ONLY_20261015
+            // Never create a Sales Return item with quantity 0. The browser already
+            // filters these rows, but this server-side rule protects Admin, Regular,
+            // and Special even if a stale browser or direct request submits them.
+            $positiveItems = collect($ret['items'] ?? [])
+                ->filter(fn ($item) => (int) ($item['qty'] ?? 0) > 0)
+                ->values();
+
+            if ($positiveItems->isEmpty()) {
+                throw new \InvalidArgumentException(
+                    'Return quantity must be greater than 0 for at least one item.'
+                );
+            }
+
             $returnNo = 'SR-' . str_pad($nextNum, 7, '0', STR_PAD_LEFT);
             $nextNum++;
 
@@ -26793,13 +26809,14 @@ Route::post('/admin/sales/sales-return/finalize', function (Request $request) {
             $subtotalValue = (float) ($ret['subtotal'] ?? 0);
             $totalAmountValue = (float) ($ret['total_amount'] ?? 0);
             $addlDiscAmount = $subtotalValue - $totalAmountValue;
+            $totalItemsValue = (int) $positiveItems->sum(fn ($item) => (int) ($item['qty'] ?? 0));
 
             $returnId = DB::connection('sales')->table('sales_returns')->insertGetId([
                 'return_number' => $returnNo,
                 'invoice_no' => $ret['invoice_no'],
                 'customer_id' => $ret['customer_id'],
                 'customer_name' => $ret['customer_name'],
-                'total_items' => $ret['total_items'],
+                'total_items' => $totalItemsValue,
                 'total_amount' => $totalAmountValue,
                 'subtotal' => $subtotalValue,
                 'additional_discount_percent' => $addlDiscPercent,
@@ -26810,9 +26827,9 @@ Route::post('/admin/sales/sales-return/finalize', function (Request $request) {
                 'updated_at' => now(),
             ]);
 
-            foreach (($ret['items'] ?? []) as $item) {
+            foreach ($positiveItems as $item) {
                 $itemRemarks = isset($item['remarks']) ? (string) $item['remarks'] : '';
-                $returnQty = max(0, (int) ($item['qty'] ?? 0));
+                $returnQty = (int) ($item['qty'] ?? 0);
                 $goodItemsQty = max(0, (int) ($item['good_items'] ?? 0));
                 $goodItemsQty = min($goodItemsQty, $returnQty);
                 $itemDisc = (float) ($item['discount'] ?? 0);
@@ -27004,6 +27021,16 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
         $returnNo = $header->return_number;
         $actor = hatdogAuditActor($user);
 
+        $positiveEditItems = collect($items)
+            ->filter(fn ($item) => (int) ($item['qty'] ?? 0) > 0)
+            ->values();
+
+        if ($positiveEditItems->isEmpty()) {
+            throw new \InvalidArgumentException(
+                'Return quantity must be greater than 0 for at least one item.'
+            );
+        }
+
         DB::connection('sales')->beginTransaction();
         DB::connection('ledger')->beginTransaction();
 
@@ -27042,6 +27069,17 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
             $product = $productsById->get($productId);
             $existingItem = $existingItemsByProduct->get($productId);
 
+            // Setting an existing line to 0 removes that line from the return;
+            // it must never remain as a stored Sales Return item with quantity 0.
+            if ($qty <= 0) {
+                if ($existingItem) {
+                    DB::connection('sales')->table('sales_return_items')
+                        ->where('id', $existingItem->id)
+                        ->delete();
+                }
+                continue;
+            }
+
             $grossSubtotal = $qty * $unitPrice;
             $afterItemDisc = $grossSubtotal * (1 - $itemDisc / 100);
             $amount = $afterItemDisc;
@@ -27059,10 +27097,6 @@ Route::post('/admin/sales/sales-return/update/{id}', function (Request $request,
                         'updated_at' => now(),
                     ]);
             } else {
-                if ($qty <= 0 && $goodItems <= 0) {
-                    continue;
-                }
-
                 DB::connection('sales')->table('sales_return_items')->insert([
                     'sales_return_id' => $id,
                     'product_id' => $productId,
