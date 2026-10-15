@@ -911,28 +911,30 @@ window.finalizeReturn = async function() {
             };
         }).filter(item => item !== null && item.qty > 0);
 
-        if (items.length > 0) {
-            const genRemarks = document.getElementById(`general-remarks-${uiKey}`)?.value || '';
-            const totalGross = items.reduce((sum, item) => sum + item.gross_subtotal, 0);
-            const totalAfterItemDisc = items.reduce((sum, item) => sum + (item.gross_subtotal * (1 - item.discount / 100)), 0);
-            const totalAfterAddlDisc = items.reduce((sum, item) => sum + item.amount, 0);
-            returns.push({
-                invoice_no: inv.no,
-                customer_id: inv.customer_id,
-                customer_name: inv.customer_name,
-                total_items: items.reduce((sum, item) => sum + item.qty, 0),
-                total_amount: totalAfterAddlDisc,
-                subtotal: totalAfterItemDisc,
-                gross_subtotal: totalGross,
-                additional_discount: additionalDiscount,
-                remarks: genRemarks.trim(),
-                items: items
-            });
-        }
+        // W68_SALES_RETURN_ALLOW_ZERO_QTY_20261015
+        // A selected invoice may be recorded as a Sales Return even when its
+        // Return QTY is 0. The backend stores the return header with total_items=0,
+        // while SalesReturnProductLedgerService produces no stock movement.
+        const genRemarks = document.getElementById(`general-remarks-${uiKey}`)?.value || '';
+        const totalGross = items.reduce((sum, item) => sum + item.gross_subtotal, 0);
+        const totalAfterItemDisc = items.reduce((sum, item) => sum + (item.gross_subtotal * (1 - item.discount / 100)), 0);
+        const totalAfterAddlDisc = items.reduce((sum, item) => sum + item.amount, 0);
+        returns.push({
+            invoice_no: inv.no,
+            customer_id: inv.customer_id,
+            customer_name: inv.customer_name,
+            total_items: items.reduce((sum, item) => sum + item.qty, 0),
+            total_amount: totalAfterAddlDisc,
+            subtotal: totalAfterItemDisc,
+            gross_subtotal: totalGross,
+            additional_discount: additionalDiscount,
+            remarks: genRemarks.trim(),
+            items: items
+        });
     });
 
     if (returns.length === 0) {
-        alert('Please enter return quantity for at least one item.');
+        alert('Please select at least one invoice to return.');
         return;
     }
 
