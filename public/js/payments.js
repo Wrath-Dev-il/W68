@@ -38,23 +38,34 @@ function manualReturnRowHtml(ret = null, scope = 'payment') {
     const walletRaw = ret?.wallet_adjustment ?? ret?.return_amount ?? ret?.total_amount ?? '';
     const walletAdjustment = walletRaw === null || walletRaw === undefined ? '' : String(walletRaw);
     const returnNo = String(ret?.return_number ?? '');
+    const isFetched = scope === 'payment' && !!ret?.__fetched;
+    const readonlyAttr = isFetched ? 'readonly' : '';
+    const fetchedInputClass = isFetched ? ' bg-slate-50 cursor-default' : ' bg-white';
+    const returnId = Number(ret?.return_order_id ?? ret?.sales_return_id ?? ret?.id ?? 0);
+    const actionButton = isFetched && returnId
+        ? `<button type="button" onclick="window.openReturnDetailsModal(${returnId})" class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100" title="View Return Details"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>`
+        : `<button type="button" onclick="window.removeManualReturnRow(this, '${escapeAttr(scope)}')" class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200" title="Remove Row"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`;
+    const sourceLabel = isFetched
+        ? '<div class="mt-1 text-[8px] font-black uppercase tracking-wider text-emerald-600">Fetched Sales Return</div>'
+        : '';
 
     return `
-        <tr class="manual-return-row" data-return-scope="${escapeAttr(scope)}">
+        <tr class="manual-return-row" data-return-scope="${escapeAttr(scope)}" data-fetched-return="${isFetched ? '1' : '0'}" data-return-id="${escapeAttr(returnId || '')}">
             <td class="p-3 min-w-[170px]">
-                <input type="text" value="${escapeAttr(returnOrderId)}" class="manual-return-id w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Return Order ID">
+                <input type="text" value="${escapeAttr(returnOrderId)}" ${readonlyAttr} class="manual-return-id w-full rounded-xl border border-slate-200${fetchedInputClass} px-3 py-2 text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Return Order ID">
+                ${sourceLabel}
             </td>
             <td class="p-3 min-w-[180px]">
-                <input type="text" value="${escapeAttr(walletAdjustment)}" class="manual-return-amount-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Text or number">
+                <input type="text" value="${escapeAttr(walletAdjustment)}" ${readonlyAttr} class="manual-return-amount-input w-full rounded-xl border border-slate-200${fetchedInputClass} px-3 py-2 text-right text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Text or number">
             </td>
             <td class="p-3 min-w-[170px]">
-                <input type="text" value="${escapeAttr(returnNo)}" class="manual-return-number-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Return No.">
+                <input type="text" value="${escapeAttr(returnNo)}" ${readonlyAttr} class="manual-return-number-input w-full rounded-xl border border-slate-200${fetchedInputClass} px-3 py-2 text-xs font-black text-maroon outline-none focus:border-maroon" placeholder="Return No.">
             </td>
             <td class="p-3 text-center whitespace-nowrap">
-                <button type="button" onclick="window.removeManualReturnRow(this, '${escapeAttr(scope)}')" class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200" title="Remove Row"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                ${actionButton}
             </td>
             <td class="p-3 text-center">
-                <button type="button" onclick="window.printManualReturnFromRow(this)" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-maroon text-white hover:bg-maroon-800" title="Print Manual Return"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
+                <button type="button" onclick="window.printManualReturnFromRow(this)" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-maroon text-white hover:bg-maroon-800" title="Print Return"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
             </td>
         </tr>`;
 }
@@ -179,9 +190,61 @@ window.printManualReturnFromRow = function(button) {
     popup.document.close();
 };
 
-function renderSuddenReturns() {
-    // Manual print-only fields: never auto-load saved returns or Sales Return data.
-    renderManualReturns('payment', []);
+let paymentReturnsRequestSeq = 0;
+
+async function renderSuddenReturns() {
+    const tbody = returnTbodyForScope('payment');
+    if (!tbody) return;
+
+    // Preserve fetched/manual rows when the user moves Back/Next inside the same
+    // payment instead of wiping their Return step every time it is reopened.
+    if (currentPayment.returnsLoaded && tbody.querySelector('.manual-return-row')) {
+        return;
+    }
+
+    const customerId = Number(currentPayment.customer?.id || 0);
+    if (!customerId || !routes().customerReturns) {
+        currentPayment.returnsLoaded = true;
+        renderManualReturns('payment', []);
+        return;
+    }
+
+    const requestSeq = ++paymentReturnsRequestSeq;
+    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">Fetching customer Sales Returns...</td></tr>';
+
+    try {
+        const url = routes().customerReturns.replace(':customerId', String(customerId));
+        const data = await fetchPaymentsJson(url, 'Unable to fetch customer Sales Returns.');
+        if (requestSeq !== paymentReturnsRequestSeq) return;
+
+        const currentPaymentId = Number(currentPayment.paymentId || 0);
+        const fetchedReturns = (Array.isArray(data.returns) ? data.returns : [])
+            .filter(ret => {
+                if (!ret?.is_used) return true;
+                return currentPayment.mode === 'edit'
+                    && currentPaymentId > 0
+                    && Number(ret.used_by_payment_id || 0) === currentPaymentId;
+            })
+            .map(ret => ({ ...ret, __fetched: true }));
+
+        currentPayment.returns = fetchedReturns;
+        currentPayment.returnsLoaded = true;
+        renderManualReturns('payment', fetchedReturns);
+
+        if (!fetchedReturns.length) {
+            showNotification('No available Sales Returns found for this customer. You can still add a manual Return row.', 'success');
+        }
+    } catch (error) {
+        if (requestSeq !== paymentReturnsRequestSeq) return;
+        currentPayment.returnsLoaded = true;
+
+        const fallback = Array.isArray(currentPayment.returns)
+            ? currentPayment.returns.map(ret => ({ ...ret, __fetched: !!(ret?.sales_return_id || ret?.return_order_id || ret?.id) }))
+            : [];
+
+        renderManualReturns('payment', fallback);
+        showNotification(error.message || 'Unable to fetch customer Sales Returns.', 'error');
+    }
 }
 
 let currentPayment = {
@@ -2119,6 +2182,7 @@ window.openProceedModal = async function(customerId) {
             invoices: data.invoices || [],
             checks: [],
             returns: [],
+            returnsLoaded: false,
             paymentNo: data.payment_no,
             termsDays: data.terms_days === null || data.terms_days === undefined || data.terms_days === ''
                 ? null
@@ -2139,6 +2203,7 @@ window.openProceedModal = async function(customerId) {
         calculateStep1Total();
 
         currentPayment.returns = [];
+        currentPayment.returnsLoaded = false;
         maxSteps = 4;
         const srIndicator = document.querySelector('.sudden-returns-step-indicator');
         if (srIndicator) srIndicator.classList.remove('hidden');
@@ -2197,6 +2262,7 @@ window.openEditPaymentModal = async function(paymentId) {
             invoices: Array.from(merged.values()),
             checks: detail.checks || [],
             returns: detail.returns || [],
+            returnsLoaded: false,
             paymentNo: detail.payment?.payment_no || '---',
             termsDays: detail.terms_days === null || detail.terms_days === undefined || detail.terms_days === '' ? null : Number(detail.terms_days),
             mode: 'edit',
@@ -2215,7 +2281,7 @@ window.openEditPaymentModal = async function(paymentId) {
         calculateStep1Total();
         window.switchProcessLeftTab('current', false);
 
-        currentPayment.returns = [];
+        currentPayment.returnsLoaded = false;
         maxSteps = 4;
         document.querySelector('.sudden-returns-step-indicator')?.classList.remove('hidden');
         showStep(1);
@@ -2475,7 +2541,11 @@ function showStep(step) {
         calculateCheckTotal();
     }
     if (isReviewStep) populateReview();
-    if (step === 3 && maxSteps === 4) renderSuddenReturns();
+    if (step === 3 && maxSteps === 4) {
+        // W68_PAYMENTS_RETURN_FETCH_RESTORE_20261015
+        // The Return step again loads the customer's Sales Returns for all roles.
+        void renderSuddenReturns();
+    }
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 

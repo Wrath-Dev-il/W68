@@ -890,7 +890,7 @@
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Returns</h4>
-                                <p class="text-[10px] text-slate-400 font-semibold mt-1">Optional print-only fields. Enter Return Order ID, Wallet & Adjustment, and Return No. manually, or leave the row blank. Nothing is auto-filled or saved to the payment.</p>
+                                <p class="text-[10px] text-slate-400 font-semibold mt-1">Sales Returns for this customer are fetched automatically when this step opens. Fetched rows can be viewed or printed, and you can still add a manual Return row when needed.</p>
                             </div>
                             <button type="button" onclick="window.addManualReturnRow('payment')" class="px-4 py-2 rounded-xl border border-maroon/20 bg-maroon/5 text-maroon text-[9px] font-black uppercase tracking-widest hover:bg-maroon/10 flex items-center gap-2"><i data-lucide="plus" class="w-3.5 h-3.5"></i>Add Return</button>
                         </div>
@@ -906,7 +906,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="sudden-returns-tbody" class="text-[10px] divide-y divide-slate-50">
-                                    <!-- Manual Return rows rendered by payments.js -->
+                                    <!-- Customer Sales Returns are fetched by payments.js; manual rows remain available. -->
                                 </tbody>
                             </table>
                         </div>
