@@ -1424,6 +1424,17 @@ window.handleSelectAll = async function(checkbox) {
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
     const originalProductStates = Array.from(productCheckboxes).map(cb => cb.checked);
 
+    // W68_PRODUCT_MASTER_PRICELIST_GROUP_SELECT_20261016
+    // With an active Product Master search, the header checkbox updates the
+    // complete matching group across pagination instead of every product.
+    const activeSearch = Object.fromEntries(
+        Object.entries(filters.search || {})
+            .filter(([, value]) => String(value ?? '').trim() !== '')
+    );
+    const hasScopedSelection = Object.keys(activeSearch).length > 0 || currentTab !== 'all';
+    const selectionId = hasScopedSelection ? 'filtered' : 'all';
+    const pricelistCode = String(activeSearch.pricelistCode || '').trim();
+
     // Revert master and individual checkboxes immediately
     checkbox.checked = !isSelected;
     productCheckboxes.forEach((cb, i) => cb.checked = originalProductStates[i]);
@@ -1444,18 +1455,33 @@ window.handleSelectAll = async function(checkbox) {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     },
-                    body: JSON.stringify({ id: 'all', is_selected: isSelected })
+                    body: JSON.stringify({
+                        id: selectionId,
+                        is_selected: isSelected,
+                        search: activeSearch,
+                        tab: currentTab
+                    })
                 });
-                if (!res.ok) throw new Error('Selection update failed');
+                const result = await res.json().catch(() => ({}));
+                if (!res.ok || result.success === false) {
+                    throw new Error(result.message || 'Selection update failed');
+                }
             } catch (error) {
-                console.error('Error updating all selections:', error);
+                console.error('Error updating grouped selections:', error);
                 productCheckboxes.forEach((cb, i) => cb.checked = originalProductStates[i]);
                 products.forEach((p, i) => p.is_selected_for_report = originalProductStates[i]);
+                checkbox.checked = !isSelected;
+                alert(error.message || 'Selection update failed.');
             }
         }
     };
+
+    const scopeText = pricelistCode
+        ? ' products in Pricelist Code group "' + pricelistCode + '"'
+        : (hasScopedSelection ? ' products matching the current search/filter' : ' products');
+
     document.getElementById('confirm-checkbox-msg').textContent =
-        'Are you sure you want to ' + (isSelected ? 'select ALL' : 'deselect ALL') + ' products for the report?';
+        'Are you sure you want to ' + (isSelected ? 'select ALL' : 'deselect ALL') + scopeText + ' for the report?';
     toggleModal('confirm-checkbox-modal', true);
     if (window.lucide) lucide.createIcons();
 }
@@ -2561,6 +2587,7 @@ window.parseApplicationString = function(applicationStr, mode = 'edit') {
 window.applySpecificSearch = function() {
     const code = document.getElementById('search-product-code')?.value?.trim() || '';
     const part = document.getElementById('search-part-number')?.value?.trim() || '';
+    const pricelistCode = document.getElementById('search-pricelist-code')?.value?.trim() || '';
     const category = document.getElementById('search-category')?.value?.trim() || '';
     const date = document.getElementById('search-date')?.value?.trim() || '';
 
@@ -2568,8 +2595,12 @@ window.applySpecificSearch = function() {
     filters.search = {};
     if (code) filters.search.productCode = code;
     if (part) filters.search.partNumber = part;
+    if (pricelistCode) filters.search.pricelistCode = pricelistCode;
     if (category) filters.search.category = category;
     if (date) filters.search.dateAdded = date;
+
+    const selectAll = document.getElementById('select-all-checkbox');
+    if (selectAll) selectAll.checked = false;
 
     toggleModal('search-specific-modal', false);
     fetchProducts(1);
