@@ -7330,6 +7330,7 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     $searchMap = [
         'productCode' => 'product_code',
                     'productCode2' => 'product_code2',
+        'pricelistCode' => 'pricelist_code',
         'partNumber' => 'part_number',
         'description' => 'description',
         'application' => 'application',
@@ -7718,7 +7719,10 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
     try {
         $validator = Validator::make($request->all(), [
             'id' => 'required',
-            'is_selected' => 'required|boolean'
+            'is_selected' => 'required|boolean',
+            'search' => 'nullable|array',
+            'search.*' => 'nullable|string|max:255',
+            'tab' => 'nullable|string|in:all,newly,low',
         ]);
 
         if ($validator->fails()) {
@@ -7727,15 +7731,81 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
 
         $id = $request->input('id');
         $isSelected = (bool) $request->input('is_selected');
+        $updated = 0;
 
         if ($id === 'all') {
-            DB::connection('masterlist')->table('products')->update(['is_selected_for_report' => $isSelected]);
+            $updated = DB::connection('masterlist')->table('products')
+                ->update(['is_selected_for_report' => $isSelected]);
+        } elseif ($id === 'filtered') {
+            // W68_PRODUCT_MASTER_PRICELIST_GROUP_SELECT_20261016
+            // Select/deselect the complete filtered Product Master group across
+            // pagination. This is used for Pricelist Code group selection.
+            $search = $request->input('search', []);
+            $search = is_array($search) ? $search : [];
+            $tab = (string) $request->input('tab', 'all');
+
+            $query = DB::connection('masterlist')->table('products');
+
+            if ($tab === 'newly') {
+                $query->where('status', 'Newly');
+            } elseif ($tab === 'low') {
+                $query->whereNotNull('Re_order_level')
+                    ->whereColumn('on_hand', '<=', 'Re_order_level');
+            }
+
+            $searchMap = [
+                'productCode' => 'product_code',
+                'productCode2' => 'product_code2',
+                'pricelistCode' => 'pricelist_code',
+                'partNumber' => 'part_number',
+                'description' => 'description',
+                'application' => 'application',
+                'specification' => 'specification',
+                'position' => 'position',
+                'category' => 'category',
+                'onHand' => 'on_hand',
+                'restockLevel' => 'Re_order_level',
+                'sellingPrice' => 'selling_price',
+                'priceOnline' => 'price_online',
+                'dateAdded' => 'date_added',
+            ];
+
+            $escapeLike = static fn ($value) => str_replace(
+                ['\\', '%', '_'],
+                ['\\\\', '\\%', '\\_'],
+                (string) $value
+            );
+
+            foreach ($searchMap as $requestColumn => $databaseColumn) {
+                if (!isset($search[$requestColumn]) || trim((string) $search[$requestColumn]) === '') {
+                    continue;
+                }
+
+                $term = $escapeLike($search[$requestColumn]);
+
+                if ($requestColumn === 'onHand') {
+                    $query->whereRaw('CAST(on_hand AS CHAR) LIKE ?', ['%' . $term . '%']);
+                } elseif ($requestColumn === 'restockLevel') {
+                    $query->whereRaw('CAST(Re_order_level AS CHAR) LIKE ?', ['%' . $term . '%']);
+                } elseif ($requestColumn === 'priceOnline') {
+                    $query->whereRaw('CAST(price_online AS CHAR) LIKE ?', ['%' . $term . '%']);
+                } else {
+                    $query->where($databaseColumn, 'LIKE', '%' . $term . '%');
+                }
+            }
+
+            $updated = $query->update(['is_selected_for_report' => $isSelected]);
         } else {
             $product = \App\Models\Product::findOrFail($id);
             $product->update(['is_selected_for_report' => $isSelected]);
+            $updated = 1;
         }
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'updated_count' => $updated,
+            'scope' => $id,
+        ]);
     } catch (\Exception $e) {
         Log::error('Selection Error: ' . $e->getMessage());
         return response()->json(['success' => false, 'message' => 'Failed to update selection: ' . $e->getMessage()], 422);
