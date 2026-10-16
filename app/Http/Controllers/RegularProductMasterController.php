@@ -54,9 +54,10 @@ class RegularProductMasterController extends Controller
         }
 
         $searchMap = [
-            'productCode'  => 'product_code',
-            'productCode2' => 'product_code2',
-            'partNumber'   => 'part_number',
+            'productCode'   => 'product_code',
+            'productCode2'  => 'product_code2',
+            'pricelistCode' => 'pricelist_code',
+            'partNumber'    => 'part_number',
             'description'  => 'description',
             'application'  => 'application',
             'specification'=> 'specification',
