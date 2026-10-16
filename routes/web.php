@@ -3894,6 +3894,7 @@ Route::prefix('regular')->name('regular.')->group(function () {
         );
     })->name('prod-master.price-list.export-excel');
     Route::match(['GET', 'POST'], '/master-list/product-master/selected-filters', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.selected-filters'))->name('prod-master.selected-filters');
+    Route::match(['GET', 'POST'], '/master-list/product-master/pricelist-groups', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.pricelist-groups'))->name('prod-master.pricelist-groups');
 
     Route::match(['GET', 'POST'], '/master-list/online-product-config/dashboard-counts', fn () => hatdogRegularProxyToAdminRoute('admin.prod-online-config.dashboard-counts'))->name('prod-online-config.dashboard-counts');
     Route::match(['GET', 'POST'], '/master-list/online-product-config/converted-products', fn () => hatdogRegularProxyToAdminRoute('admin.prod-online-config.converted-products'))->name('prod-online-config.converted-products');
@@ -7723,6 +7724,7 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
             'search' => 'nullable|array',
             'search.*' => 'nullable|string|max:255',
             'tab' => 'nullable|string|in:all,newly,low',
+            'pricelist_code' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -7735,6 +7737,18 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
 
         if ($id === 'all') {
             $updated = DB::connection('masterlist')->table('products')
+                ->update(['is_selected_for_report' => $isSelected]);
+        } elseif ($id === 'pricelist-group') {
+            // W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
+            // Exact group selection from Search Parameters. TRIM keeps legacy
+            // rows with accidental surrounding spaces inside the intended group.
+            $pricelistCode = trim((string) $request->input('pricelist_code', ''));
+            if ($pricelistCode === '') {
+                throw new \InvalidArgumentException('Pricelist Code is required.');
+            }
+
+            $updated = DB::connection('masterlist')->table('products')
+                ->whereRaw('TRIM(pricelist_code) = ?', [$pricelistCode])
                 ->update(['is_selected_for_report' => $isSelected]);
         } elseif ($id === 'filtered') {
             // W68_PRODUCT_MASTER_PRICELIST_GROUP_SELECT_20261016
@@ -7811,6 +7825,44 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
         return response()->json(['success' => false, 'message' => 'Failed to update selection: ' . $e->getMessage()], 422);
     }
 })->name('admin.prod-master.select');
+
+// W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
+// Dynamic Pricelist Code groups for Search Parameters (Admin + Regular proxy).
+Route::get('/admin/masterlist/product/pricelist-groups', function () {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        $groups = DB::connection('masterlist')->table('products')
+            ->whereNotNull('pricelist_code')
+            ->whereRaw("TRIM(pricelist_code) <> ''")
+            ->selectRaw("
+                TRIM(pricelist_code) AS pricelist_code,
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN COALESCE(is_selected_for_report, 0) = 1 THEN 1 ELSE 0 END) AS selected_count
+            ")
+            ->groupBy(DB::raw('TRIM(pricelist_code)'))
+            ->orderBy('pricelist_code')
+            ->get()
+            ->map(fn ($group) => [
+                'pricelist_code' => (string) $group->pricelist_code,
+                'total_count' => (int) $group->total_count,
+                'selected_count' => (int) $group->selected_count,
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'groups' => $groups,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Product Master Pricelist Code groups error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load Pricelist Code groups: ' . $e->getMessage(),
+        ], 422);
+    }
+})->name('admin.prod-master.pricelist-groups');
 
 // Get available filter options from selected products for report generation
 Route::get('/admin/masterlist/product/selected-filters', function (Request $request) {

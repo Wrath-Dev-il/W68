@@ -17,6 +17,7 @@
         'catalog': '{{ route("regular.prod-master.catalog") }}',
         'priceList': '{{ route("regular.prod-master.price-list") }}',
         'selectedFilters': '{{ route("regular.prod-master.selected-filters") }}',
+        'pricelistGroups': '{{ route("regular.prod-master.pricelist-groups") }}',
         'activeNotes': '{{ route("regular.prod-master.active-notes", ["id" => ":id"]) }}',
         'priceCodesUpdate': '{{ route("regular.prod-master.price-codes.update", ["id" => ":id"]) }}'
     };
@@ -53,7 +54,7 @@
             </button>
 
             <!-- Search Specific Button -->
-            <button onclick="toggleModal('search-specific-modal', true)" class="px-4 py-2.5 bg-white border border-slate-200 hover:border-blue-200 hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-sm flex items-center space-x-2 transition-all">
+            <button onclick="openProductSearchModal()" class="px-4 py-2.5 bg-white border border-slate-200 hover:border-blue-200 hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-sm flex items-center space-x-2 transition-all">
                 <i data-lucide="search" class="w-4 h-4 text-blue-500"></i>
                 <span>Search Specific</span>
             </button>
@@ -984,7 +985,7 @@
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div onclick="toggleModal('search-specific-modal', false)" class="fixed inset-0 bg-maroon-900/60 transition-opacity backdrop-blur-sm" aria-hidden="true"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="modal-animate-in inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full border-2 border-goldlining-500/20">
+            <div class="modal-animate-in inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border-2 border-goldlining-500/20">
                 <div class="bg-maroon-gradient px-6 py-4 flex items-center justify-between border-b border-goldlining-500">
                     <div class="flex items-center space-x-2">
                         <i data-lucide="search" class="w-5 h-5 text-gold"></i>
@@ -997,12 +998,25 @@
                 <div class="p-6 space-y-4">
                     <input type="text" id="search-product-code" placeholder="Search by Product Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="text" id="search-part-number" placeholder="Search by Part Number..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
-                    <div>
-                        <input type="text" id="search-pricelist-code" placeholder="Search by Pricelist Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
-                        <p class="mt-1.5 text-[9px] text-slate-400 font-semibold">After searching, use the table header checkbox to select or deselect the entire matching Pricelist Code group across all pages.</p>
-                    </div>
+                    <input type="text" id="search-pricelist-code" placeholder="Search by Pricelist Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="text" id="search-category" placeholder="Search by Category..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="date" id="search-date" class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+
+                    <div class="border-t border-slate-100 pt-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div>
+                                <p class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Select by Pricelist Code</p>
+                                <p class="mt-1 text-[9px] text-slate-400 font-semibold">Check a group to select every product under that exact Pricelist Code across all pages.</p>
+                            </div>
+                            <button type="button" onclick="loadPricelistCodeGroups()" class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[9px] font-bold text-slate-500 hover:text-maroon hover:border-maroon/20">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="search-pricelist-group-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                            <div class="col-span-full py-5 text-center text-[10px] font-semibold text-slate-400 italic">Open Search Parameters to load Pricelist Code groups.</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="bg-slate-50 px-6 py-4 flex justify-center border-t border-slate-100">
                     <button onclick="applySpecificSearch()" class="px-8 py-2 bg-maroon text-white text-xs font-bold rounded-xl shadow-md">Search</button>

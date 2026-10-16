@@ -2591,6 +2591,117 @@ window.parseApplicationString = function(applicationStr, mode = 'edit') {
 }
 
 // ===== SEARCH SPECIFIC MODAL =====
+// W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
+// Search by Pricelist Code filters the table. The group checkboxes below use
+// the same persisted is_selected_for_report state as each Product Master row.
+window.openProductSearchModal = function() {
+    toggleModal('search-specific-modal', true);
+    void window.loadPricelistCodeGroups();
+};
+
+window.loadPricelistCodeGroups = async function() {
+    const container = document.getElementById('search-pricelist-group-list');
+    if (!container || !window.prodRoutes?.pricelistGroups) return;
+
+    container.innerHTML = '<div class="col-span-full py-5 text-center text-[10px] font-bold text-slate-400">Loading Pricelist Code groups...</div>';
+
+    try {
+        const response = await fetch(window.prodRoutes.pricelistGroups, {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Unable to load Pricelist Code groups.');
+        }
+
+        const groups = Array.isArray(data.groups) ? data.groups : [];
+        if (!groups.length) {
+            container.innerHTML = '<div class="col-span-full py-5 text-center text-[10px] font-semibold text-slate-400 italic">No Pricelist Codes found.</div>';
+            return;
+        }
+
+        container.innerHTML = groups.map((group, index) => {
+            const code = String(group.pricelist_code || '').trim();
+            const total = Number(group.total_count || 0);
+            const selected = Number(group.selected_count || 0);
+            const checked = total > 0 && selected >= total;
+
+            return `
+                <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 cursor-pointer hover:border-maroon/30 hover:bg-maroon/5 transition-all">
+                    <input
+                        type="checkbox"
+                        class="pricelist-group-checkbox w-4 h-4 accent-maroon cursor-pointer"
+                        data-pricelist-code="${escapeHtml(code)}"
+                        data-total-count="${total}"
+                        data-selected-count="${selected}"
+                        ${checked ? 'checked' : ''}
+                        onchange="togglePricelistGroupSelection(this)"
+                    >
+                    <span class="min-w-0 flex-1 text-[10px] font-black text-slate-700 uppercase tracking-wide break-words">${escapeHtml(code)}</span>
+                    <span class="shrink-0 text-[9px] font-bold text-slate-400">${selected}/${total}</span>
+                </label>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.pricelist-group-checkbox').forEach((checkbox) => {
+            const total = Number(checkbox.dataset.totalCount || 0);
+            const selected = Number(checkbox.dataset.selectedCount || 0);
+            checkbox.indeterminate = selected > 0 && selected < total;
+        });
+    } catch (error) {
+        console.error('Pricelist Code group load failed:', error);
+        container.innerHTML = '<div class="col-span-full py-5 text-center text-[10px] font-bold text-red-500">Unable to load Pricelist Code groups.</div>';
+    }
+};
+
+window.togglePricelistGroupSelection = async function(checkbox) {
+    if (!checkbox || !window.prodRoutes?.select) return;
+
+    const code = String(checkbox.dataset.pricelistCode || '').trim();
+    if (!code) return;
+
+    const targetState = !!checkbox.checked;
+    const previousState = !targetState;
+    const previousIndeterminate = !!checkbox.indeterminate;
+
+    checkbox.disabled = true;
+    checkbox.indeterminate = false;
+
+    try {
+        const response = await fetch(window.prodRoutes.select, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                id: 'pricelist-group',
+                pricelist_code: code,
+                is_selected: targetState
+            })
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            throw new Error(result.message || 'Failed to update Pricelist Code group selection.');
+        }
+
+        // Refresh both the group counts and Product Master rows so their
+        // checkboxes immediately reflect the persisted selection.
+        await Promise.all([
+            window.loadPricelistCodeGroups(),
+            fetchProducts(1)
+        ]);
+    } catch (error) {
+        console.error('Pricelist Code group selection failed:', error);
+        checkbox.checked = previousState;
+        checkbox.indeterminate = previousIndeterminate;
+        checkbox.disabled = false;
+        alert(error.message || 'Failed to update Pricelist Code group selection.');
+    }
+};
+
 window.applySpecificSearch = function() {
     const code = document.getElementById('search-product-code')?.value?.trim() || '';
     const part = document.getElementById('search-part-number')?.value?.trim() || '';
