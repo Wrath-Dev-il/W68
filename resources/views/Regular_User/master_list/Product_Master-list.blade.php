@@ -997,6 +997,10 @@
                 <div class="p-6 space-y-4">
                     <input type="text" id="search-product-code" placeholder="Search by Product Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="text" id="search-part-number" placeholder="Search by Part Number..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+                    <div>
+                        <input type="text" id="search-pricelist-code" placeholder="Search by Pricelist Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+                        <p class="mt-1.5 text-[9px] text-slate-400 font-semibold">After searching, use the table header checkbox to select or deselect the entire matching Pricelist Code group across all pages.</p>
+                    </div>
                     <input type="text" id="search-category" placeholder="Search by Category..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="date" id="search-date" class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                 </div>
