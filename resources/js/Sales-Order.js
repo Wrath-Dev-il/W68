@@ -3122,13 +3122,37 @@ async function checkEditSalesOrderStock() {
 
         if (actualQty <= 0) continue;
 
+        // W68_EDIT_SO_SKIP_UNCHANGED_STOCK_20261016
+        // Editing header-only fields (Terms, Order Type, dates, remarks, etc.) must
+        // not re-check stock already consumed by this invoice. Only stock-check a
+        // line when its served quantity actually increased, or when it is a newly
+        // added Sales Note item that still needs its first ledger movement.
+        const itemId = parseInt(row.getAttribute('data-item-id')) || 0;
+        const originalItem = Array.isArray(window._originalEditItems)
+            ? window._originalEditItems.find(item => Number(item.id || 0) === itemId)
+            : null;
+        const originalActualQty = originalItem
+            ? (parseFloat(originalItem.actual_qty) || 0)
+            : (hasLedger ? oldQty : 0);
+        const actualQtyIncreased = actualQty > originalActualQty;
+        const isTrackedNewItem = Boolean(
+            window._editAddedItems &&
+            typeof window._editAddedItems.has === 'function' &&
+            window._editAddedItems.has(String(productCode || '').trim())
+        );
+
+        if (!actualQtyIncreased && !isTrackedNewItem) {
+            console.log(`[STOCK CHECK] Skipping unchanged item: ${productCode}`);
+            continue;
+        }
+
         items.push({
             product_id: productId,
             product_code: productCode,
             description: description,
             actual_qty: actualQty,
             additional_qty: additionalQty,
-            old_qty: oldQty,
+            old_qty: hasLedger ? oldQty : 0,
         });
     }
 
