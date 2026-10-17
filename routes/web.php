@@ -2858,7 +2858,7 @@ Route::prefix('special')->name('special.')->group(function () {
                 $codes = array_unique(array_filter(array_column($items, 'product_code')));
                 $productsByCode = [];
                 if (!empty($codes)) {
-                    $productRows = DB::connection('masterlist')->table('products')->whereIn('product_code', $codes)->get(['product_code', 'application', 'position']);
+                    $productRows = DB::connection('masterlist')->table('products')->whereIn('product_code', $codes)->get(['id', 'product_code', 'application', 'position', 'category']);
                     foreach ($productRows as $p) {
                         $productsByCode[strtoupper(trim($p->product_code))] = $p;
                     }
@@ -2867,8 +2867,18 @@ Route::prefix('special')->name('special.')->group(function () {
                     $code = strtoupper(trim($item['product_code'] ?? ''));
                     if ($code && isset($productsByCode[$code])) {
                         $p = $productsByCode[$code];
+                        // W68_SALES_INVOICE_CATEGORY_BRAND_PAYLOAD_20261017
+                        $item['product_id'] = (int) ($item['product_id'] ?? 0) > 0
+                            ? (int) $item['product_id']
+                            : (int) ($p->id ?? 0);
                         $item['application'] = $item['application'] ?? ($p->application ?? '');
                         $item['position'] = $item['position'] ?? ($p->position ?? '');
+                        $item['category'] = trim((string) ($item['category'] ?? '')) !== ''
+                            ? $item['category']
+                            : trim((string) ($p->category ?? ''));
+                        $item['brand'] = trim((string) ($item['brand'] ?? '')) !== ''
+                            ? $item['brand']
+                            : $item['category'];
                     }
                 }
                 unset($item);
@@ -18123,7 +18133,7 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
             $codes = array_unique(array_filter(array_column($items, 'product_code')));
             $productsByCode = [];
             if (!empty($codes)) {
-                $productRows = DB::connection('masterlist')->table('products')->whereIn('product_code', $codes)->get(['product_code', 'application', 'position']);
+                $productRows = DB::connection('masterlist')->table('products')->whereIn('product_code', $codes)->get(['id', 'product_code', 'application', 'position', 'category']);
                 foreach ($productRows as $p) {
                     $productsByCode[strtoupper(trim($p->product_code))] = $p;
                 }
@@ -18132,8 +18142,18 @@ Route::match(['GET', 'POST'], '/admin/sales/sales-order/receipt-print', function
                 $code = strtoupper(trim($item['product_code'] ?? ''));
                 if ($code && isset($productsByCode[$code])) {
                     $p = $productsByCode[$code];
+                    // W68_SALES_INVOICE_CATEGORY_BRAND_PAYLOAD_20261017
+                    $item['product_id'] = (int) ($item['product_id'] ?? 0) > 0
+                        ? (int) $item['product_id']
+                        : (int) ($p->id ?? 0);
                     $item['application'] = $item['application'] ?? ($p->application ?? '');
                     $item['position'] = $item['position'] ?? ($p->position ?? '');
+                    $item['category'] = trim((string) ($item['category'] ?? '')) !== ''
+                        ? $item['category']
+                        : trim((string) ($p->category ?? ''));
+                    $item['brand'] = trim((string) ($item['brand'] ?? '')) !== ''
+                        ? $item['brand']
+                        : $item['category'];
                 }
             }
             unset($item);
