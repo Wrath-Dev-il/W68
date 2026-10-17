@@ -1146,6 +1146,111 @@
 
         <div class="sep-dash sales-order-header-separator"></div>
 
+        @php
+            // W68_SALES_ORDER_ITEM_BRAND_20261017
+            // Product Master Brand is stored in products.category.
+            // Resolve it once per print so the Sales Order ITEM column can append it.
+            $salesOrderBrandById = collect();
+            $salesOrderBrandByCode = collect();
+
+            try {
+                $salesOrderPrintRows = collect($items ?? []);
+
+                $salesOrderProductIds = $salesOrderPrintRows
+                    ->map(static fn ($row) => (int) ($row['product_id'] ?? 0))
+                    ->filter(static fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
+
+                $salesOrderProductCodes = $salesOrderPrintRows
+                    ->map(static fn ($row) => trim((string) ($row['product_code'] ?? '')))
+                    ->filter(static fn ($code) => $code !== '')
+                    ->unique()
+                    ->values();
+
+                if ($salesOrderProductIds->isNotEmpty() || $salesOrderProductCodes->isNotEmpty()) {
+                    $salesOrderBrandQuery = \Illuminate\Support\Facades\DB::connection('masterlist')
+                        ->table('products')
+                        ->select(['id', 'product_code', 'category'])
+                        ->where(function ($query) use ($salesOrderProductIds, $salesOrderProductCodes) {
+                            if ($salesOrderProductIds->isNotEmpty()) {
+                                $query->whereIn('id', $salesOrderProductIds->all());
+                            }
+
+                            if ($salesOrderProductCodes->isNotEmpty()) {
+                                if ($salesOrderProductIds->isNotEmpty()) {
+                                    $query->orWhereIn('product_code', $salesOrderProductCodes->all());
+                                } else {
+                                    $query->whereIn('product_code', $salesOrderProductCodes->all());
+                                }
+                            }
+                        });
+
+                    $salesOrderBrandProducts = $salesOrderBrandQuery->get();
+
+                    $salesOrderBrandById = $salesOrderBrandProducts
+                        ->mapWithKeys(static fn ($product) => [
+                            (int) $product->id => trim((string) ($product->category ?? ''))
+                        ]);
+
+                    $salesOrderBrandByCode = $salesOrderBrandProducts
+                        ->mapWithKeys(static fn ($product) => [
+                            strtoupper(trim((string) ($product->product_code ?? ''))) =>
+                                trim((string) ($product->category ?? ''))
+                        ]);
+                }
+            } catch (\Throwable $salesOrderBrandError) {
+                $salesOrderBrandById = collect();
+                $salesOrderBrandByCode = collect();
+            }
+
+            $resolveSalesOrderBrand = static function ($item) use (
+                $salesOrderBrandById,
+                $salesOrderBrandByCode
+            ): string {
+                $brand = trim((string) ($item['brand'] ?? $item['category'] ?? ''));
+                if ($brand !== '') {
+                    return $brand;
+                }
+
+                $productId = (int) ($item['product_id'] ?? 0);
+                if ($productId > 0) {
+                    $brand = trim((string) ($salesOrderBrandById->get($productId) ?? ''));
+                }
+                if ($brand !== '') {
+                    return $brand;
+                }
+
+                $productCode = strtoupper(trim((string) ($item['product_code'] ?? '')));
+                return $productCode !== ''
+                    ? trim((string) ($salesOrderBrandByCode->get($productCode) ?? ''))
+                    : '';
+            };
+
+            $salesOrderTextContainsDetail = static function ($existing, $candidate): bool {
+                $normalize = static function ($value): string {
+                    $value = strtoupper(trim((string) $value));
+                    $value = preg_replace('/[^A-Z0-9]+/u', ' ', $value) ?? '';
+                    return trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+                };
+
+                $existingNormalized = $normalize($existing);
+                $candidateNormalized = $normalize($candidate);
+
+                if ($candidateNormalized === '') {
+                    return true;
+                }
+                if ($existingNormalized === '') {
+                    return false;
+                }
+
+                return str_contains(
+                    ' ' . $existingNormalized . ' ',
+                    ' ' . $candidateNormalized . ' '
+                );
+            };
+        @endphp
+
                 <table class="items-table {{ $showDiscountColumn ? '' : 'no-discount' }}">
             <thead>
                 <tr class="sales-order-items-heading">
@@ -1216,6 +1321,15 @@
                             $details[] = $detailValue;
                         }
                     }
+
+                    $salesOrderBrand = $resolveSalesOrderBrand($item);
+                    if (
+                        $salesOrderBrand !== ''
+                        && !$salesOrderTextContainsDetail(implode(' ', $details), $salesOrderBrand)
+                    ) {
+                        $details[] = $salesOrderBrand;
+                    }
+
                     $formatPrintQty = static function ($value): string {
                         $number = (float) $value;
                         return floor($number) == $number
