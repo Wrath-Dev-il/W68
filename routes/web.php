@@ -16381,13 +16381,45 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
         $page = max(1, (int)$request->query('page', 1));
         $search = trim($request->query('search', ''));
         $query = \App\Models\SalesOrder::on('sales');
+
+        // W68_SO_HISTORY_SEARCH_ONLINE_ADDRESS_20261017
+        // Online invoice addresses live in online_reports.addresses, not
+        // sales_orders.remarks. Resolve matching address indexes back to the
+        // corresponding ONL-{reportId}-{index} Sales Order numbers so the
+        // History search matches exactly what is displayed in REMARKS.
+        $onlineAddressOrderNumbers = collect();
+
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
+            $matchingOnlineReports = \App\Models\OnlineReport::on('sales')
+                ->where('addresses', 'like', "%{$search}%")
+                ->get(['id', 'addresses']);
+
+            $onlineAddressOrderNumbers = $matchingOnlineReports
+                ->flatMap(function ($report) use ($search) {
+                    $addresses = is_array($report->addresses) ? $report->addresses : [];
+
+                    return collect($addresses)
+                        ->filter(function ($address) use ($search) {
+                            return stripos((string) $address, $search) !== false;
+                        })
+                        ->keys()
+                        ->map(function ($index) use ($report) {
+                            return 'ONL-' . (int) $report->id . '-' . (int) $index;
+                        });
+                })
+                ->unique()
+                ->values();
+
+            $query->where(function ($q) use ($search, $onlineAddressOrderNumbers) {
                 $q->where('order_number', 'like', "%{$search}%")
                   ->orWhere('customer_name', 'like', "%{$search}%")
                   ->orWhere('invoice_numbers', 'like', "%{$search}%")
                   ->orWhere('waybill_no', 'like', "%{$search}%")
                   ->orWhere('remarks', 'like', "%{$search}%");
+
+                if ($onlineAddressOrderNumbers->isNotEmpty()) {
+                    $q->orWhereIn('order_number', $onlineAddressOrderNumbers->all());
+                }
             });
         }
         $total = $query->count();
