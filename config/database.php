@@ -17,7 +17,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => 'mysql',
 
     /*
     |--------------------------------------------------------------------------
@@ -46,12 +46,12 @@ return [
 
         'mysql' => [
     'driver' => 'mysql',
-    'url' => env('DB_URL'),
-    'host' => env('DB_HOST', '127.0.0.1'),
-    'port' => env('DB_PORT', '3306'),
-    'database' => env('DB_DATABASE', 'core4_system_proposal'),
-    'username' => env('DB_USERNAME', 'root'),
-    'password' => env('DB_PASSWORD', ''),
+    'url' => env('CORE_SYSTEM_DB_URL'),
+    'host' => env('CORE_SYSTEM_DB_HOST'),
+    'port' => env('CORE_SYSTEM_DB_PORT', '3306'),
+    'database' => env('CORE_SYSTEM_DB_DATABASE'),
+    'username' => env('CORE_SYSTEM_DB_USERNAME'),
+    'password' => env('CORE_SYSTEM_DB_PASSWORD'),
     'unix_socket' => env('DB_SOCKET', ''),
     'charset' => env('DB_CHARSET', 'utf8mb4'),
     'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
