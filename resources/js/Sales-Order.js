@@ -969,6 +969,8 @@ window.submitPrintReceipt = async function() {
                 // Reverse-calculate the "before additional discount" subtotal
                 const subtotalBeforeAddl = rate > 0 ? Math.round(storedSubtotal / (1 - rate / 100) * 100) / 100 : storedSubtotal;
                 return {
+                    // W68_SALES_INVOICE_PRODUCT_ID_SOURCE_SYNC_20261017
+                    product_id: parseInt(item.product_id || '0', 10) || null,
                     product_code: item.product_code || '',
                     price_code: item.price_code || '',
                     description: item.description || '',
@@ -1016,6 +1018,8 @@ window.submitPrintReceipt = async function() {
                 const printSubtotal = actualQty * price * (1 - disc / 100);
                 const pCodeInput = row.querySelector('.p-item-code');
                 return {
+                    // W68_SALES_INVOICE_PRODUCT_ID_SOURCE_SYNC_20261017
+                    product_id: parseInt(row.getAttribute('data-product-id') || '0', 10) || null,
                     product_code: pCodeInput?.dataset?.originalCode || pCodeInput?.value || '',
                     price_code: row.querySelector('.p-item-price-code')?.value || '',
                     description: row.querySelector('.p-item-desc')?.value || '',
