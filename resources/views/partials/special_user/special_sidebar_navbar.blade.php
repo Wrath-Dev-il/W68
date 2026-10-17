@@ -76,37 +76,38 @@
     $activeSystemTheme = function_exists('hatdogActiveSystemTheme') ? hatdogActiveSystemTheme() : 'default';
     $systemThemeIconMap = [
         'default' => ['notification' => null],
-        'christmas' => ['notification' => 'build/assets/images/SYSTEM DESIGNS/XMASS/snowflakes.gif'],
-        'holy-week' => ['notification' => 'build/assets/images/SYSTEM DESIGNS/HOLYWEEK/religious.gif'],
-        'halloween' => ['notification' => 'build/assets/images/SYSTEM DESIGNS/HOLLOWEEN/spiderweb.gif'],
-        'new-year' => ['notification' => 'build/assets/images/SYSTEM DESIGNS/NEWYEAR/new-years-eye.gif'],
-        'chinese-new-year' => ['notification' => 'build/assets/images/SYSTEM DESIGNS/chinese new year/lantern.gif'],
+        'christmas' => ['notification' => 'images/system-designs/xmas/snowflakes.webp'],
+        'holy-week' => ['notification' => 'images/system-designs/holyweek/religious.webp'],
+        'halloween' => ['notification' => 'images/system-designs/halloween/spiderweb.webp'],
+        'new-year' => ['notification' => 'images/system-designs/newyear/new-years-eve.webp'],
+        'chinese-new-year' => ['notification' => 'images/system-designs/chinese-new-year/lantern.webp'],
     ];
     $activeSystemThemeIcons = $systemThemeIconMap[$activeSystemTheme] ?? $systemThemeIconMap['default'];
+    // W68_NAVBAR_SYSTEM_DESIGN_ASSETS_20261017 - navbar bell/time assets use public/images/system-designs.
     $dateTimeThemeDesignMap = [
         'christmas' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/XMASS/snowman.gif',
+            'asset' => 'images/system-designs/xmas/snowman.webp',
             'class' => 'theme-datetime-snow',
             'alt' => 'Christmas snow animation',
         ],
         'holy-week' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/HOLYWEEK/peace-dove.gif',
+            'asset' => 'images/system-designs/holyweek/peace-dove.webp',
             'class' => 'theme-datetime-holy',
             'alt' => 'Holy Week design',
         ],
         'halloween' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/HOLLOWEEN/cauldron.gif',
+            'asset' => 'images/system-designs/halloween/cauldron.webp',
             'class' => 'theme-datetime-halloween',
             'alt' => 'Halloween cauldron design',
         ],
         'new-year' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/NEWYEAR/fireworks.gif',
+            'asset' => 'images/system-designs/newyear/fireworks.webp',
             'class' => 'theme-datetime-fireworks',
             'alt' => 'New Year fireworks animation',
         ],
         'chinese-new-year' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/chinese new year/dragon.gif',
-            'class' => 'theme-datetime-dragon',
+            'asset' => 'images/system-designs/chinese-new-year/lantern.webp',
+            'class' => 'theme-datetime-lantern',
             'alt' => 'Chinese New Year dragon animation',
         ],
     ];
@@ -1801,14 +1802,14 @@
             color: #fef3c7;
         }
 
-        #theme-datetime-card[data-system-theme="chinese-new-year"] .theme-datetime-dragon {
+        #theme-datetime-card[data-system-theme="chinese-new-year"] .theme-datetime-lantern {
             right: 0.25rem;
             top: 50%;
             width: 3rem;
             height: 3rem;
             transform: translateY(-50%);
             opacity: 0.42;
-            animation: themeDateTimeDragon 4s ease-in-out infinite;
+            animation: themeDateTimeLantern 4s ease-in-out infinite;
         }
 
         @keyframes themeDateTimeFloat {
@@ -1821,7 +1822,7 @@
             50% { transform: translateY(-50%) scale(1.04); }
         }
 
-        @keyframes themeDateTimeDragon {
+        @keyframes themeDateTimeLantern {
             0%, 100% { transform: translateY(-50%) translateX(0) scale(0.96); }
             50% { transform: translateY(-52%) translateX(-0.25rem) scale(1.04); }
         }

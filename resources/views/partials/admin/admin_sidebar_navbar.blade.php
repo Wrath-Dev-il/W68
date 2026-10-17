@@ -82,61 +82,62 @@
             'chat_label' => 'Default AI Chat',
         ],
         'christmas' => [
-            'notification' => 'build/assets/images/SYSTEM DESIGNS/XMASS/snowflakes.gif',
+            'notification' => 'images/system-designs/xmas/snowflakes.webp',
             'chat_image' => null,
             'chat_lucide' => 'snowflake',
             'chat_label' => 'Snow flakes',
         ],
         'holy-week' => [
-            'notification' => 'build/assets/images/SYSTEM DESIGNS/HOLYWEEK/religious.gif',
+            'notification' => 'images/system-designs/holyweek/religious.webp',
             'chat_image' => null,
             'chat_lucide' => 'book-open-text',
             'chat_label' => 'Bibble',
         ],
         'halloween' => [
-            'notification' => 'build/assets/images/SYSTEM DESIGNS/HOLLOWEEN/spiderweb.gif',
+            'notification' => 'images/system-designs/halloween/spiderweb.webp',
             'chat_image' => null,
             'chat_lucide' => 'shopping-basket',
             'chat_label' => 'Pumpkin basket',
         ],
         'new-year' => [
-            'notification' => 'build/assets/images/SYSTEM DESIGNS/NEWYEAR/new-years-eye.gif',
+            'notification' => 'images/system-designs/newyear/new-years-eve.webp',
             'chat_image' => null,
             'chat_lucide' => 'party-popper',
             'chat_label' => 'Fire Cracker',
         ],
         'chinese-new-year' => [
-            'notification' => 'build/assets/images/SYSTEM DESIGNS/chinese new year/lantern.gif',
-            'chat_image' => 'build/assets/images/SYSTEM DESIGNS/chinese new year/dragon.gif',
+            'notification' => 'images/system-designs/chinese-new-year/lantern.webp',
+            'chat_image' => 'images/system-designs/chinese-new-year/lantern.webp',
             'chat_lucide' => null,
             'chat_label' => 'Dragon',
         ],
     ];
     $activeSystemThemeIcons = $systemThemeIconMap[$activeSystemTheme] ?? $systemThemeIconMap['default'];
+    // W68_NAVBAR_SYSTEM_DESIGN_ASSETS_20261017 - navbar bell/time assets use public/images/system-designs.
     $dateTimeThemeDesignMap = [
         'christmas' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/XMASS/snowman.gif',
+            'asset' => 'images/system-designs/xmas/snowman.webp',
             'class' => 'theme-datetime-snow',
             'alt' => 'Christmas snow animation',
         ],
         'holy-week' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/HOLYWEEK/peace-dove.gif',
+            'asset' => 'images/system-designs/holyweek/peace-dove.webp',
             'class' => 'theme-datetime-holy',
             'alt' => 'Holy Week design',
         ],
         'halloween' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/HOLLOWEEN/cauldron.gif',
+            'asset' => 'images/system-designs/halloween/cauldron.webp',
             'class' => 'theme-datetime-halloween',
             'alt' => 'Halloween cauldron design',
         ],
         'new-year' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/NEWYEAR/fireworks.gif',
+            'asset' => 'images/system-designs/newyear/fireworks.webp',
             'class' => 'theme-datetime-fireworks',
             'alt' => 'New Year fireworks animation',
         ],
         'chinese-new-year' => [
-            'asset' => 'build/assets/images/SYSTEM DESIGNS/chinese new year/dragon.gif',
-            'class' => 'theme-datetime-dragon',
+            'asset' => 'images/system-designs/chinese-new-year/lantern.webp',
+            'class' => 'theme-datetime-lantern',
             'alt' => 'Chinese New Year dragon animation',
         ],
     ];
@@ -2058,14 +2059,14 @@
             color: #fef3c7;
         }
 
-        #theme-datetime-card[data-system-theme="chinese-new-year"] .theme-datetime-dragon {
+        #theme-datetime-card[data-system-theme="chinese-new-year"] .theme-datetime-lantern {
             right: 0.25rem;
             top: 50%;
             width: 3rem;
             height: 3rem;
             transform: translateY(-50%);
             opacity: 0.42;
-            animation: themeDateTimeDragon 4s ease-in-out infinite;
+            animation: themeDateTimeLantern 4s ease-in-out infinite;
         }
 
         @keyframes themeDateTimeFloat {
@@ -2078,7 +2079,7 @@
             50% { transform: translateY(-50%) scale(1.04); }
         }
 
-        @keyframes themeDateTimeDragon {
+        @keyframes themeDateTimeLantern {
             0%, 100% { transform: translateY(-50%) translateX(0) scale(0.96); }
             50% { transform: translateY(-52%) translateX(-0.25rem) scale(1.04); }
         }
