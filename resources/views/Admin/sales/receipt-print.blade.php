@@ -420,9 +420,13 @@
                     return false;
                 }
 
+                // W68_SALES_INVOICE_ITEM_BRAND_20261017
+                // Compare complete normalized tokens/phrases so a short brand such
+                // as "WIN" is not incorrectly treated as already present in words
+                // such as "WINDOW".
                 return str_contains(
-                    $existingNormalized,
-                    $candidateNormalized
+                    ' ' . $existingNormalized . ' ',
+                    ' ' . $candidateNormalized . ' '
                 );
             };
 
