@@ -19975,7 +19975,8 @@ Route::post('/admin/sales/waybill/finalize', function (Request $request) {
                 'waybill_no' => $waybillSequence,
                 'waybill_id' => $waybillId,
                 'waybill_date' => now()->toDateString(),
-                'remarks' => DB::raw("CONCAT(IFNULL(CONCAT(remarks, ' '), ''), '[Forwarder: $forwarder]')"),
+                // W68_WAYBILL_DO_NOT_WRITE_FORWARDER_TO_SO_REMARKS_20261017
+                // Forwarder belongs to the waybills table. Preserve sales_orders.remarks exactly as-is.
                 'updated_at' => now()
             ]);
 
