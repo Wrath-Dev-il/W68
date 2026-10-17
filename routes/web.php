@@ -16314,8 +16314,44 @@ Route::get('/admin/sales/sales-order/history', function () {
         // Show ALL invoices regardless of partial/closed status
         $orders = \App\Models\SalesOrder::on('sales')
             ->orderBy('created_at', 'desc')
-            ->get()
+            ->get();
+
+        // W68_SO_HISTORY_ONLINE_ADDRESS_REMARKS_20261017
+        // Online Sales Orders use ONL-{online_report_id}-{note_index}.
+        // Show that online invoice's saved address in the History REMARKS column
+        // without modifying sales_orders.remarks in the database.
+        $historyOnlineReportIds = $orders
             ->map(function ($so) {
+                return preg_match('/^ONL-(\\d+)-(\\d+)$/i', (string) ($so->order_number ?? ''), $match)
+                    ? (int) $match[1]
+                    : 0;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        $historyOnlineReports = $historyOnlineReportIds->isNotEmpty()
+            ? \App\Models\OnlineReport::on('sales')
+                ->whereIn('id', $historyOnlineReportIds->all())
+                ->get(['id', 'addresses'])
+                ->keyBy('id')
+            : collect();
+
+        $orders = $orders->map(function ($so) use ($historyOnlineReports) {
+                $historyRemarks = (string) ($so->remarks ?? '');
+
+                if (preg_match('/^ONL-(\\d+)-(\\d+)$/i', (string) ($so->order_number ?? ''), $match)) {
+                    $onlineReport = $historyOnlineReports->get((int) $match[1]);
+                    $addresses = $onlineReport && is_array($onlineReport->addresses)
+                        ? $onlineReport->addresses
+                        : [];
+                    $onlineAddress = trim((string) ($addresses[(int) $match[2]] ?? ''));
+
+                    if ($onlineAddress !== '') {
+                        $historyRemarks = $onlineAddress;
+                    }
+                }
+
                 return [
                     'id' => $so->id, // This is now sales_order.id (per invoice)
                     'sales_number' => $so->order_number, // Link to sales note
@@ -16326,7 +16362,7 @@ Route::get('/admin/sales/sales-order/history', function () {
                     'waybill_no' => $so->waybill_no ?? '',
                     'waybill_date' => $so->waybill_date ?? '',
                     'total_amount' => $so->total_amount,
-                    'remarks' => $so->remarks ?? '',
+                    'remarks' => $historyRemarks,
                     'status' => $so->status ?? 'Confirmed',
                 ];
             });
@@ -16358,8 +16394,42 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
         $orders = $query->orderBy('created_at', 'desc')
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
-            ->get()
+            ->get();
+
+        // W68_SO_HISTORY_ONLINE_ADDRESS_REMARKS_20261017
+        // Resolve only the Online Reports represented on this history page.
+        $historyOnlineReportIds = $orders
             ->map(function ($so) {
+                return preg_match('/^ONL-(\\d+)-(\\d+)$/i', (string) ($so->order_number ?? ''), $match)
+                    ? (int) $match[1]
+                    : 0;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        $historyOnlineReports = $historyOnlineReportIds->isNotEmpty()
+            ? \App\Models\OnlineReport::on('sales')
+                ->whereIn('id', $historyOnlineReportIds->all())
+                ->get(['id', 'addresses'])
+                ->keyBy('id')
+            : collect();
+
+        $orders = $orders->map(function ($so) use ($historyOnlineReports) {
+                $historyRemarks = (string) ($so->remarks ?? '');
+
+                if (preg_match('/^ONL-(\\d+)-(\\d+)$/i', (string) ($so->order_number ?? ''), $match)) {
+                    $onlineReport = $historyOnlineReports->get((int) $match[1]);
+                    $addresses = $onlineReport && is_array($onlineReport->addresses)
+                        ? $onlineReport->addresses
+                        : [];
+                    $onlineAddress = trim((string) ($addresses[(int) $match[2]] ?? ''));
+
+                    if ($onlineAddress !== '') {
+                        $historyRemarks = $onlineAddress;
+                    }
+                }
+
                 return [
                     'id' => $so->id,
                     'sales_number' => $so->order_number,
@@ -16370,7 +16440,7 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
                     'waybill_no' => $so->waybill_no ?? '',
                     'waybill_date' => $so->waybill_date ?? '',
                     'total_amount' => $so->total_amount,
-                    'remarks' => $so->remarks ?? '',
+                    'remarks' => $historyRemarks,
                     'status' => $so->status ?? 'Confirmed',
                 ];
             });
