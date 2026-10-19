@@ -210,7 +210,7 @@
         <div class="company-header">
             <div class="company-name">W68 Autoparts &amp; Service Center</div>
             <div class="company-address">48 Timothy St. Multinational Village Parañaque City</div>
-            <div class="company-contact">Tel. Nos. 8553-9092 / 8829-0480 Fax. No. 8846-3985 Mobile No. 09338137652 Mobile/Viber 09173239605</div>
+            <div class="company-contact">Tel. Nos. 8553-9092 / 8829-0480 Mobile No. 0917-3239-605 Mobile/Viber. 0949-881</div>
             <div class="statement-title">STATEMENT OF ACCOUNT</div>
             <div class="soa-date">{{ date('F d, Y') }}</div>
         </div>
