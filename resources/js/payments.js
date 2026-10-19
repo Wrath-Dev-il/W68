@@ -698,35 +698,82 @@ window.loadPaymentsHistoryTable = async function() {
     const tbody = document.getElementById('payments-history-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
 
     try {
-        const url = new URL(routes().payors, window.location.origin);
+        const url = new URL(routes().historyData, window.location.origin);
         url.searchParams.set('page', paymentsHistoryPage);
-        url.searchParams.set('per_page', '15'); // W68_PAYMENTS_HISTORY_JS_15_20260909
+        url.searchParams.set('per_page', '15');
         if (paymentsHistorySearch) url.searchParams.set('search', paymentsHistorySearch);
+
+        // Column-level search filters
+        const nameSearch   = (document.getElementById('ph-search-name')?.value   || '').trim();
+        const paynoSearch  = (document.getElementById('ph-search-payno')?.value  || '').trim();
+        const invSearch    = (document.getElementById('ph-search-invoices')?.value|| '').trim();
+        const dateSearch   = (document.getElementById('ph-search-date')?.value   || '').trim();
+        const amountSearch = (document.getElementById('ph-search-amount')?.value || '').trim();
+        if (nameSearch)   url.searchParams.set('search',       nameSearch);
+        if (paynoSearch)  url.searchParams.set('payment_no',   paynoSearch);
+        if (invSearch)    url.searchParams.set('invoices',      invSearch);
+        if (dateSearch)   url.searchParams.set('payment_date',  dateSearch);
+        if (amountSearch) url.searchParams.set('amount',        amountSearch);
+
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.message || 'Unable to load payment history.');
 
         const rows = data.rows || [];
-        tbody.innerHTML = rows.length ? rows.map(row => `
-            <tr class="hover:bg-slate-50/50 transition-colors">
+        tbody.innerHTML = rows.length ? rows.map(row => {
+            const invoiceNumbers = Array.isArray(row.invoice_numbers) ? row.invoice_numbers.filter(Boolean) : [];
+            const visible = invoiceNumbers.slice(0, 3);
+            const moreCount = Math.max(invoiceNumbers.length - visible.length, 0);
+            const preview = visible.length
+                ? visible.map(no => `<span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-600">${escapeHtml(no)}</span>`).join(' ')
+                : '<span class="text-slate-400">---</span>';
+            const hoverList = invoiceNumbers.length > visible.length ? `
+                <div class="pointer-events-none invisible absolute left-1/2 top-full z-[920] mt-2 w-80 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 opacity-0 shadow-2xl transition-all group-hover/inv:visible group-hover/inv:opacity-100">
+                    <p class="mb-2 text-[9px] font-black uppercase tracking-widest text-maroon">All Invoices</p>
+                    <div class="max-h-48 overflow-y-auto text-[10px] font-bold text-slate-600">${invoiceNumbers.map((no, i) => `<div class="border-b border-slate-50 py-1 last:border-0"><span class="mr-1 text-slate-300">${i+1}.</span>${escapeHtml(no)}</div>`).join('')}</div>
+                </div>` : '';
+            const pid = Number(row.id || 0);
+            const paymentStatus = String(row.payment_status || 'Partial');
+            const isFullyPaid = paymentStatus.toLowerCase() === 'fully paid';
+            const statusClass = isFullyPaid
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200';
+            // W68_PAYMENT_HISTORY_DETAIL_AMOUNTS_20261014
+            // One Payment No. stays on one row; each saved payment-detail/check
+            // amount is displayed on its own line in the Check Amount column.
+            const checkAmounts = Array.isArray(row.check_amounts) && row.check_amounts.length
+                ? row.check_amounts.map(value => Number(value || 0))
+                : [Number(row.total_paid || 0)];
+            const checkAmountHtml = checkAmounts
+                .map(value => `<div class="whitespace-nowrap">${money.format(value)}</div>`)
+                .join('');
+            return `
+            <tr class="cursor-pointer hover:bg-maroon/5 focus:bg-maroon/5 transition-colors border-b border-slate-100 outline-none" onclick="window.openPaymentsHistoryView(${pid})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openPaymentsHistoryView(${pid});}" tabindex="0" role="button" aria-label="View payment ${escapeAttr(row.payment_no || '')}">
                 <td class="py-4 px-5 font-black text-slate-800">${escapeHtml(row.customer_name || '---')}</td>
-                <td class="py-4 px-5 text-center font-black text-maroon">${Number(row.paid_invoices || 0)}</td>
-                <td class="py-4 px-5 text-center font-bold text-slate-500">${escapeHtml(row.latest_paid_date || '---')}</td>
-                <td class="py-4 px-5 text-center">
-                    <button onclick="window.openPayorHistoryModal(${Number(row.customer_id || 0)}, '${escapeAttr(row.customer_name || '')}')" class="payments-history-action" style="background:#00FFFF;color:#4A0E0E" title="View Payment History"><i data-lucide="eye" class="w-3.5 h-3.5"></i><span>View</span></button>
+                <td class="py-4 px-5 font-black text-maroon">${escapeHtml(row.payment_no || '---')}</td>
+                <td class="py-4 px-5">
+                    <div class="group/inv relative inline-flex flex-wrap items-center gap-1 cursor-help">
+                        ${preview}${moreCount ? `<span class="text-[9px] font-black text-maroon">+${moreCount}</span>` : ''}${hoverList}
+                    </div>
                 </td>
-            </tr>
-        `).join('') : `<tr><td colspan="4" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
+                <td class="py-4 px-5 font-bold text-slate-500">${escapeHtml(row.payment_date || '---')}</td>
+                <td class="py-4 px-5 text-right font-black text-emerald-700"><div class="space-y-1">${checkAmountHtml}</div></td>
+                <td class="py-4 px-5 text-center">
+                    <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
+                </td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
 
         updatePaymentsHistoryPagination(data);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
     }
 };
+
 
 function renderStatusCount(count, newCount, latestDate, tagClass, textClass) {
     return `
@@ -3526,6 +3573,43 @@ window.printWholePaymentHistory = async function(paymentId) {
     }
 };
 
+function currentHistoryModalPaymentIdentity() {
+    const payment = currentHistoryPayment?.payment || {};
+    return {
+        id: Number(payment.id || 0),
+        paymentNo: String(payment.payment_no || '').trim()
+    };
+}
+
+window.printCurrentPaymentHistory = function() {
+    const { id } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.printWholePaymentHistory(id);
+};
+
+window.editCurrentPaymentHistory = function() {
+    const { id } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.closePaymentsHistoryViewModal();
+    window.openEditPaymentModal(id);
+};
+
+window.deleteCurrentPaymentHistory = function() {
+    const { id, paymentNo } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.confirmDeletePaymentHistory(id, paymentNo);
+};
+
+// W68_PAYMENT_HISTORY_ACTIONS_IN_VIEW_MODAL_20261019
 window.confirmDeletePaymentHistory = async function(paymentId, paymentNo) {
     const label = paymentNo || 'this payment';
     const ok = window.confirm(`Delete ${label}?\n\nAll invoices under this Payment No. will become unpaid again and return to Process Payment.`);
@@ -3561,6 +3645,11 @@ window.submitDeletePaymentHistory = async function() {
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Unable to delete payment.');
+
+        const deletedPaymentId = Number(pendingDeletePaymentId || 0);
+        if (Number(currentHistoryPayment?.payment?.id || 0) === deletedPaymentId) {
+            window.closePaymentsHistoryViewModal();
+        }
 
         closePaymentDeleteConfirmModal();
         setText('payment-delete-success-message', `${pendingDeletePaymentNo || 'The selected payment'} was deleted successfully.`);
