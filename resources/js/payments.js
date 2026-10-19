@@ -753,10 +753,6 @@ window.loadPaymentsHistoryTable = async function() {
             const checkAmounts = Array.isArray(row.check_amounts) && row.check_amounts.length
                 ? row.check_amounts.map(value => Number(value || 0))
                 : [Number(row.total_paid || 0)];
-            const checkAmountHtml = checkAmounts
-                .map(value => `<div class="whitespace-nowrap">${money.format(value)}</div>`)
-                .join('');
-
             const bankNames = Array.isArray(row.bank_names) && row.bank_names.length
                 ? row.bank_names
                 : ['---'];
@@ -767,14 +763,67 @@ window.loadPaymentsHistoryTable = async function() {
                 ? row.check_nos
                 : ['---'];
 
-            const bankNameHtml = bankNames
-                .map(value => `<div class="whitespace-nowrap">${escapeHtml(value || '---')}</div>`)
+            // W68_PAYMENT_HISTORY_FILTER_MATCHING_CHECK_LINES_20261019
+            // Server-side search finds the Payment No.; this second-stage filter
+            // keeps only the individual saved check rows that match the active
+            // Bank / Account / Check No. / Amount filters.
+            const normalizeDetailText = value => String(value ?? '').trim().toLowerCase();
+            const normalizeDetailAmount = value => String(value ?? '')
+                .replace(/php/ig, '')
+                .replace(/[₱,\s]/g, '')
+                .trim()
+                .toLowerCase();
+
+            const detailRowCount = Math.max(
+                checkAmounts.length,
+                bankNames.length,
+                accountNumbers.length,
+                checkNumbers.length,
+                1
+            );
+
+            const detailRows = Array.from({ length: detailRowCount }, (_, index) => ({
+                amount: Number(checkAmounts[index] ?? 0),
+                bank: String(bankNames[index] ?? '---'),
+                account: String(accountNumbers[index] ?? '---'),
+                checkNo: String(checkNumbers[index] ?? '---')
+            })).filter(detail => {
+                if (bankSearch && !normalizeDetailText(detail.bank).includes(normalizeDetailText(bankSearch))) {
+                    return false;
+                }
+                if (accountSearch && !normalizeDetailText(detail.account).includes(normalizeDetailText(accountSearch))) {
+                    return false;
+                }
+                if (checkNoSearch && !normalizeDetailText(detail.checkNo).includes(normalizeDetailText(checkNoSearch))) {
+                    return false;
+                }
+                if (amountSearch) {
+                    const needle = normalizeDetailAmount(amountSearch);
+                    const amountCandidates = [
+                        detail.amount,
+                        detail.amount.toFixed(2),
+                        money.format(detail.amount)
+                    ].map(normalizeDetailAmount);
+                    if (!amountCandidates.some(value => value.includes(needle))) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            const visibleDetailRows = detailRows.length ? detailRows : [];
+
+            const bankNameHtml = visibleDetailRows
+                .map(detail => `<div class="whitespace-nowrap">${escapeHtml(detail.bank || '---')}</div>`)
                 .join('');
-            const accountNumberHtml = accountNumbers
-                .map(value => `<div class="whitespace-nowrap font-mono">${escapeHtml(value || '---')}</div>`)
+            const accountNumberHtml = visibleDetailRows
+                .map(detail => `<div class="whitespace-nowrap font-mono">${escapeHtml(detail.account || '---')}</div>`)
                 .join('');
-            const checkNumberHtml = checkNumbers
-                .map(value => `<div class="whitespace-nowrap font-mono">${escapeHtml(value || '---')}</div>`)
+            const checkNumberHtml = visibleDetailRows
+                .map(detail => `<div class="whitespace-nowrap font-mono">${escapeHtml(detail.checkNo || '---')}</div>`)
+                .join('');
+            const checkAmountHtml = visibleDetailRows
+                .map(detail => `<div class="whitespace-nowrap">${money.format(detail.amount)}</div>`)
                 .join('');
             return `
             <tr class="cursor-pointer hover:bg-maroon/5 focus:bg-maroon/5 transition-colors border-b border-slate-100 outline-none" onclick="window.openPaymentsHistoryView(${pid})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openPaymentsHistoryView(${pid});}" tabindex="0" role="button" aria-label="View payment ${escapeAttr(row.payment_no || '')}">
