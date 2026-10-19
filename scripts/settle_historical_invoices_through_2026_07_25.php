@@ -5,11 +5,12 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-chdir(dirname(__DIR__));
+$basePath = is_dir('/app/vendor') ? '/app' : dirname(__DIR__);
+chdir($basePath);
 
-require __DIR__ . '/../vendor/autoload.php';
+require $basePath . '/vendor/autoload.php';
 
-$app = require __DIR__ . '/../bootstrap/app.php';
+$app = require $basePath . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
 $apply = in_array('--apply', $argv ?? [], true);
