@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ShopeeAuthController;
+use App\Http\Controllers\CustomerPaymentHistoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +36,30 @@ Route::get('/admin/shopee/callback', [ShopeeAuthController::class, 'handleCallba
     ->name('w68.shopee.callback');
 Route::post('/admin/shopee/refresh', [ShopeeAuthController::class, 'manualRefresh'])
     ->name('w68.shopee.refresh');
+
+
+/*
+|--------------------------------------------------------------------------
+| Customer Master payment status backend (Admin + Special + Regular)
+|--------------------------------------------------------------------------
+|
+| W68_CUSTOMER_PAYMENT_HISTORY_STATUS_20261019
+| These routes are loaded after routes/web.php and replace only the existing
+| Customer Master payment-history endpoints. Special and Regular Customer
+| Master routes already proxy to these named Admin endpoints.
+|
+| /admin/payments is intentionally untouched.
+|
+*/
+Route::get(
+    '/admin/masterlist/customer/payment-history/{id}',
+    [CustomerPaymentHistoryController::class, 'index']
+)->whereNumber('id')->name('admin.customer-master.payment-history');
+
+Route::get(
+    '/admin/masterlist/customer/payment-history/{id}/invoice/{salesOrderId}',
+    [CustomerPaymentHistoryController::class, 'show']
+)->whereNumber('id')->whereNumber('salesOrderId')->name('admin.customer-master.payment-history-detail');
 
 
 /*
