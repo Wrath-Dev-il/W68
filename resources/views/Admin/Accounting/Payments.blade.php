@@ -629,7 +629,6 @@
                             <th class="py-4 px-5">Date</th>
                             <th class="py-4 px-5 text-right">Check Amount</th>
                             <th class="py-4 px-5 text-center">Status</th>
-                            <th class="py-4 px-5 text-center">Action</th>
                         </tr>
                         <tr class="bg-white border-t border-slate-100">
                             <th class="p-2 px-5"><input id="ph-search-name"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Name..."></th>
@@ -638,11 +637,10 @@
                             <th class="p-2 px-5"><input id="ph-search-date"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Date..."></th>
                             <th class="p-2 px-5"><input id="ph-search-amount"   type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Amount..."></th>
                             <th class="p-2 px-5"></th>
-                            <th class="p-2 px-5"></th>
                         </tr>
                     </thead>
                     <tbody id="payments-history-tbody" class="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
-                        <tr><td colspan="7" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
+                        <tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1078,7 +1076,26 @@
     <div onclick="window.closePaymentsHistoryViewModal()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
     <div class="relative flex max-h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl modal-animate-in">
         <div class="bg-maroon p-5 text-white flex flex-wrap items-center gap-4"><div class="min-w-0 flex-1"><p class="text-[9px] font-black uppercase tracking-[0.24em] text-gold">Payment History</p><h3 id="history-view-payment-no" class="mt-1 text-lg font-black">---</h3></div><div class="rounded-xl bg-white/10 px-4 py-2"><div class="text-[8px] font-black uppercase text-white/50">Payment Date</div><div id="history-view-payment-date" class="text-xs font-black">---</div></div><div class="rounded-xl bg-white/10 px-4 py-2 text-right"><div class="text-[8px] font-black uppercase text-white/50">Total</div><div id="history-view-total-paid" class="text-base font-black text-gold">PHP 0.00</div></div><button onclick="window.closePaymentsHistoryViewModal()" class="text-white/60 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
-        <div class="border-b border-slate-100 bg-white p-3 flex flex-wrap gap-2"><button id="history-detail-tab-invoices" onclick="window.switchPaymentHistoryDetailTab('invoices')">Invoices</button><button id="history-detail-tab-bank" onclick="window.switchPaymentHistoryDetailTab('bank')">Bank Details</button><button id="history-detail-tab-ledger" onclick="window.switchPaymentHistoryDetailTab('ledger')">Ledger</button><button id="history-detail-tab-items" onclick="window.switchPaymentHistoryDetailTab('items')" class="hidden">Item Details</button></div>
+        <div class="border-b border-slate-100 bg-white p-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap gap-2">
+                <button id="history-detail-tab-invoices" onclick="window.switchPaymentHistoryDetailTab('invoices')">Invoices</button>
+                <button id="history-detail-tab-bank" onclick="window.switchPaymentHistoryDetailTab('bank')">Bank Details</button>
+                <button id="history-detail-tab-ledger" onclick="window.switchPaymentHistoryDetailTab('ledger')">Ledger</button>
+                <button id="history-detail-tab-items" onclick="window.switchPaymentHistoryDetailTab('items')" class="hidden">Item Details</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="mr-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Payment Actions</span>
+                <button type="button" onclick="window.printCurrentPaymentHistory()" class="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-teal-800" title="Print this payment">
+                    <i data-lucide="printer" class="h-3.5 w-3.5"></i><span>Print</span>
+                </button>
+                <button type="button" onclick="window.editCurrentPaymentHistory()" class="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-maroon shadow-sm transition hover:bg-yellow-300" title="Edit this payment">
+                    <i data-lucide="pencil" class="h-3.5 w-3.5"></i><span>Edit</span>
+                </button>
+                <button type="button" onclick="window.deleteCurrentPaymentHistory()" class="inline-flex items-center gap-2 rounded-xl bg-maroon px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-maroon-800" title="Delete this payment">
+                    <i data-lucide="trash-2" class="h-3.5 w-3.5"></i><span>Delete</span>
+                </button>
+            </div>
+        </div>
         <div class="flex-1 min-h-0 overflow-auto custom-scrollbar p-4">
             <div id="history-detail-panel-invoices"><div class="overflow-auto rounded-xl border border-slate-100"><table class="w-full min-w-[1100px] text-left text-[10px]"><thead class="sticky top-0 z-10 bg-slate-50 text-slate-400 uppercase tracking-wider"><tr><th class="p-3">Invoices</th><th class="p-3 text-right">Invoice Amount</th><th class="p-3">Return</th><th class="p-3 text-right">Return Amount</th><th class="p-3 text-right">Paid Amount</th><th class="p-3">Date Created</th><th class="p-3">Payment Date</th></tr><tr id="history-invoices-filter-row" class="bg-white border-t"><th class="p-1"><input data-col="0" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search invoice..."></th><th class="p-1"><input data-col="1" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search amount..."></th><th class="p-1"><input data-col="2" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search return..."></th><th class="p-1"><input data-col="3" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search return amt..."></th><th class="p-1"><input data-col="4" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search paid..."></th><th class="p-1"><input data-col="5" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search created..."></th><th class="p-1"><input data-col="6" oninput="window.filterHistoryDetailTable('payments-history-view-invoices-tbody','history-invoices-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search payment date..."></th></tr></thead><tbody id="payments-history-view-invoices-tbody" class="divide-y divide-slate-100"></tbody></table></div><p class="mt-2 text-[9px] font-semibold text-slate-400">Click an invoice row to open its Item Details.</p></div>
             <div id="history-detail-panel-bank" class="hidden"><div class="overflow-auto rounded-xl border border-slate-100"><table class="w-full min-w-[760px] text-left text-[10px]"><thead class="sticky top-0 z-10 bg-slate-50 text-slate-400 uppercase tracking-wider"><tr><th class="p-3">Bank Name</th><th class="p-3">Account No</th><th class="p-3">Check No</th><th class="p-3">Check Date</th><th class="p-3 text-right">Check Amount</th></tr><tr id="history-bank-filter-row" class="bg-white border-t"><th class="p-1"><input data-col="0" oninput="window.filterHistoryDetailTable('payments-history-view-bank-tbody','history-bank-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search..."></th><th class="p-1"><input data-col="1" oninput="window.filterHistoryDetailTable('payments-history-view-bank-tbody','history-bank-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search..."></th><th class="p-1"><input data-col="2" oninput="window.filterHistoryDetailTable('payments-history-view-bank-tbody','history-bank-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search..."></th><th class="p-1"><input data-col="3" oninput="window.filterHistoryDetailTable('payments-history-view-bank-tbody','history-bank-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search..."></th><th class="p-1"><input data-col="4" oninput="window.filterHistoryDetailTable('payments-history-view-bank-tbody','history-bank-filter-row')" class="col-search-input w-full text-[9px]" placeholder="Search..."></th></tr></thead><tbody id="payments-history-view-bank-tbody" class="divide-y divide-slate-100"></tbody></table></div></div>
