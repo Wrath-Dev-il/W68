@@ -698,7 +698,7 @@ window.loadPaymentsHistoryTable = async function() {
     const tbody = document.getElementById('payments-history-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
 
     try {
         const url = new URL(routes().historyData, window.location.origin);
@@ -712,11 +712,17 @@ window.loadPaymentsHistoryTable = async function() {
         const invSearch    = (document.getElementById('ph-search-invoices')?.value|| '').trim();
         const dateSearch   = (document.getElementById('ph-search-date')?.value   || '').trim();
         const amountSearch = (document.getElementById('ph-search-amount')?.value || '').trim();
-        if (nameSearch)   url.searchParams.set('search',       nameSearch);
-        if (paynoSearch)  url.searchParams.set('payment_no',   paynoSearch);
-        if (invSearch)    url.searchParams.set('invoices',      invSearch);
-        if (dateSearch)   url.searchParams.set('payment_date',  dateSearch);
-        if (amountSearch) url.searchParams.set('amount',        amountSearch);
+        const bankSearch   = (document.getElementById('ph-search-bank')?.value || '').trim();
+        const accountSearch = (document.getElementById('ph-search-account')?.value || '').trim();
+        const checkNoSearch = (document.getElementById('ph-search-checkno')?.value || '').trim();
+        if (nameSearch)    url.searchParams.set('search',       nameSearch);
+        if (paynoSearch)   url.searchParams.set('payment_no',   paynoSearch);
+        if (invSearch)     url.searchParams.set('invoices',     invSearch);
+        if (dateSearch)    url.searchParams.set('payment_date', dateSearch);
+        if (amountSearch)  url.searchParams.set('amount',       amountSearch);
+        if (bankSearch)    url.searchParams.set('bank_name',    bankSearch);
+        if (accountSearch) url.searchParams.set('account_no',   accountSearch);
+        if (checkNoSearch) url.searchParams.set('check_no',     checkNoSearch);
 
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
@@ -750,6 +756,26 @@ window.loadPaymentsHistoryTable = async function() {
             const checkAmountHtml = checkAmounts
                 .map(value => `<div class="whitespace-nowrap">${money.format(value)}</div>`)
                 .join('');
+
+            const bankNames = Array.isArray(row.bank_names) && row.bank_names.length
+                ? row.bank_names
+                : ['---'];
+            const accountNumbers = Array.isArray(row.account_numbers) && row.account_numbers.length
+                ? row.account_numbers
+                : ['---'];
+            const checkNumbers = Array.isArray(row.check_nos) && row.check_nos.length
+                ? row.check_nos
+                : ['---'];
+
+            const bankNameHtml = bankNames
+                .map(value => `<div class="whitespace-nowrap">${escapeHtml(value || '---')}</div>`)
+                .join('');
+            const accountNumberHtml = accountNumbers
+                .map(value => `<div class="whitespace-nowrap font-mono">${escapeHtml(value || '---')}</div>`)
+                .join('');
+            const checkNumberHtml = checkNumbers
+                .map(value => `<div class="whitespace-nowrap font-mono">${escapeHtml(value || '---')}</div>`)
+                .join('');
             return `
             <tr class="cursor-pointer hover:bg-maroon/5 focus:bg-maroon/5 transition-colors border-b border-slate-100 outline-none" onclick="window.openPaymentsHistoryView(${pid})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openPaymentsHistoryView(${pid});}" tabindex="0" role="button" aria-label="View payment ${escapeAttr(row.payment_no || '')}">
                 <td class="py-4 px-5 font-black text-slate-800">${escapeHtml(row.customer_name || '---')}</td>
@@ -761,16 +787,19 @@ window.loadPaymentsHistoryTable = async function() {
                 </td>
                 <td class="py-4 px-5 font-bold text-slate-500">${escapeHtml(row.payment_date || '---')}</td>
                 <td class="py-4 px-5 text-right font-black text-emerald-700"><div class="space-y-1">${checkAmountHtml}</div></td>
+                <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${bankNameHtml}</div></td>
+                <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${accountNumberHtml}</div></td>
+                <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${checkNumberHtml}</div></td>
                 <td class="py-4 px-5 text-center">
                     <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
                 </td>
             </tr>`;
-        }).join('') : `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
+        }).join('') : `<tr><td colspan="9" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
 
         updatePaymentsHistoryPagination(data);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
     }
 };
 
