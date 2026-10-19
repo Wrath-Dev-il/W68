@@ -460,10 +460,10 @@
                             <th class="py-4 px-5">Payment No</th>
                             <th class="py-4 px-5">Invoices</th>
                             <th class="py-4 px-5">Date</th>
-                            <th class="py-4 px-5 text-right">Check Amount</th>
                             <th class="py-4 px-5">Bank Name</th>
                             <th class="py-4 px-5">Account No.</th>
                             <th class="py-4 px-5">Check No.</th>
+                            <th class="py-4 px-5 text-right">Check Amount</th>
                             <th class="py-4 px-5 text-center">Status</th>
                         </tr>
                         <tr class="bg-white border-t border-slate-100">
@@ -471,10 +471,10 @@
                             <th class="p-2 px-5"><input id="ph-search-payno"    type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Pay No..."></th>
                             <th class="p-2 px-5"><input id="ph-search-invoices" type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Invoice..."></th>
                             <th class="p-2 px-5"><input id="ph-search-date"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Date..."></th>
-                            <th class="p-2 px-5"><input id="ph-search-amount"   type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Amount..."></th>
                             <th class="p-2 px-5"><input id="ph-search-bank"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Bank..."></th>
                             <th class="p-2 px-5"><input id="ph-search-account"  type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Account No..."></th>
                             <th class="p-2 px-5"><input id="ph-search-checkno"  type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Check No..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-amount"   type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Amount..."></th>
                             <th class="p-2 px-5"></th>
                         </tr>
                     </thead>
