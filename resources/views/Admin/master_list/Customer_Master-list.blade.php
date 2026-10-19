@@ -361,7 +361,7 @@
                                                 <th class="py-3 px-4">Date</th>
                                                 <th class="py-3 px-4">Code</th>
                                                 <th class="py-3 px-4">Module Type</th>
-                                                <th class="py-3 px-4">Title</th>
+                                                <th class="py-3 px-4">Payment Status</th>
                                                 <th class="py-3 px-4 text-right">Debit Amount</th>
                                                 <th class="py-3 px-4 text-right">Credit Amount</th>
                                                 <th class="py-3 px-4 text-right">Balance</th>
