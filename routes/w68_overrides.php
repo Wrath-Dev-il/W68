@@ -900,3 +900,264 @@ Route::post('/regular/master-list/product-master/ai-part-search', $w68ProductPar
 
 Route::post('/special/master-list/product-master/ai-part-search', $w68ProductPartAiSearch)
     ->name('special.prod-master.ai-part-search');
+
+
+/*
+|--------------------------------------------------------------------------
+| Payments History bank/check columns (Admin + Regular + Special)
+|--------------------------------------------------------------------------
+|
+| W68_PAYMENT_HISTORY_BANK_COLUMNS_20261019
+| Loaded after routes/web.php so this replaces only the shared Admin History
+| data endpoint. Regular and Special Payments history routes already proxy to
+| admin.payments.history.data.
+|
+*/
+$w68PaymentsHistoryDataWithBankColumns = function (Request $request) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    try {
+        $page = max((int) $request->query('page', 1), 1);
+        $perPage = 15;
+
+        $search = trim((string) $request->query('search', ''));
+        $paymentNo = trim((string) $request->query('payment_no', ''));
+        $invoiceSearch = trim((string) $request->query('invoices', ''));
+        $paymentDate = trim((string) $request->query('payment_date', ''));
+        $amount = trim((string) $request->query('amount', ''));
+        $bankName = trim((string) $request->query('bank_name', ''));
+        $accountNo = trim((string) $request->query('account_no', ''));
+        $checkNo = trim((string) $request->query('check_no', ''));
+
+        $baseQuery = DB::connection('accounting')->table('process_payments');
+
+        $applyCheckSearch = static function ($query, string $column, string $value) {
+            if ($value === '') {
+                return;
+            }
+
+            $query->whereExists(function ($checkSub) use ($column, $value) {
+                $checkSub->select(DB::raw(1))
+                    ->from('process_payment_checks as ppc_filter')
+                    ->whereColumn('ppc_filter.process_payment_id', 'process_payments.id')
+                    ->where('ppc_filter.' . $column, 'LIKE', '%' . $value . '%');
+            });
+        };
+
+        if ($search !== '') {
+            $like = "%{$search}%";
+            $normalizedSearchAmount = str_replace([',', 'PHP', 'php', '₱', ' '], '', $search);
+
+            $baseQuery->where(function ($q) use ($like, $normalizedSearchAmount) {
+                $q->where('customer_name', 'LIKE', $like)
+                    ->orWhere('payment_no', 'LIKE', $like)
+                    ->orWhere('payment_date', 'LIKE', $like)
+                    ->orWhereIn('id', function ($sub) use ($like) {
+                        $sub->select('process_payment_id')
+                            ->from('process_payment_invoices')
+                            ->where('invoice_no', 'LIKE', $like);
+                    })
+                    ->orWhereExists(function ($checkSub) use ($like) {
+                        $checkSub->select(DB::raw(1))
+                            ->from('process_payment_checks as ppc_search_text')
+                            ->whereColumn('ppc_search_text.process_payment_id', 'process_payments.id')
+                            ->where(function ($checkFields) use ($like) {
+                                $checkFields->where('ppc_search_text.bank_name', 'LIKE', $like)
+                                    ->orWhere('ppc_search_text.account_number', 'LIKE', $like)
+                                    ->orWhere('ppc_search_text.check_no', 'LIKE', $like);
+                            });
+                    });
+
+                if ($normalizedSearchAmount !== '') {
+                    $q->orWhereExists(function ($checkSub) use ($normalizedSearchAmount) {
+                        $checkSub->select(DB::raw(1))
+                            ->from('process_payment_checks as ppc_search_amount')
+                            ->whereColumn('ppc_search_amount.process_payment_id', 'process_payments.id')
+                            ->whereRaw(
+                                'CAST(ppc_search_amount.credit_amount AS CHAR) LIKE ?',
+                                ['%' . $normalizedSearchAmount . '%']
+                            );
+                    })->orWhere(function ($legacyAmount) use ($normalizedSearchAmount) {
+                        $legacyAmount->whereNotExists(function ($checkExists) {
+                            $checkExists->select(DB::raw(1))
+                                ->from('process_payment_checks as ppc_existing')
+                                ->whereColumn('ppc_existing.process_payment_id', 'process_payments.id');
+                        })->whereRaw(
+                            'CAST(total_paid AS CHAR) LIKE ?',
+                            ['%' . $normalizedSearchAmount . '%']
+                        );
+                    });
+                }
+            });
+        }
+
+        if ($paymentNo !== '') {
+            $baseQuery->where('payment_no', 'LIKE', '%' . $paymentNo . '%');
+        }
+
+        if ($invoiceSearch !== '') {
+            $baseQuery->whereIn('id', function ($sub) use ($invoiceSearch) {
+                $sub->select('process_payment_id')
+                    ->from('process_payment_invoices')
+                    ->where('invoice_no', 'LIKE', '%' . $invoiceSearch . '%');
+            });
+        }
+
+        if ($paymentDate !== '') {
+            $baseQuery->where('payment_date', 'LIKE', '%' . $paymentDate . '%');
+        }
+
+        if ($amount !== '') {
+            $normalizedAmount = str_replace([',', 'PHP', 'php', '₱', ' '], '', $amount);
+
+            $baseQuery->where(function ($amountQuery) use ($normalizedAmount) {
+                $amountQuery->whereExists(function ($checkSub) use ($normalizedAmount) {
+                    $checkSub->select(DB::raw(1))
+                        ->from('process_payment_checks as ppc_amount')
+                        ->whereColumn('ppc_amount.process_payment_id', 'process_payments.id')
+                        ->whereRaw(
+                            'CAST(ppc_amount.credit_amount AS CHAR) LIKE ?',
+                            ['%' . $normalizedAmount . '%']
+                        );
+                })->orWhere(function ($legacyAmount) use ($normalizedAmount) {
+                    $legacyAmount->whereNotExists(function ($checkExists) {
+                        $checkExists->select(DB::raw(1))
+                            ->from('process_payment_checks as ppc_existing')
+                            ->whereColumn('ppc_existing.process_payment_id', 'process_payments.id');
+                    })->whereRaw(
+                        'CAST(total_paid AS CHAR) LIKE ?',
+                        ['%' . $normalizedAmount . '%']
+                    );
+                });
+            });
+        }
+
+        $applyCheckSearch($baseQuery, 'bank_name', $bankName);
+        $applyCheckSearch($baseQuery, 'account_number', $accountNo);
+        $applyCheckSearch($baseQuery, 'check_no', $checkNo);
+
+        $total = (clone $baseQuery)->count();
+
+        $payments = $baseQuery
+            ->orderByDesc('payment_date')
+            ->orderByDesc('id')
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        $paymentIds = $payments->pluck('id')->values();
+
+        $invoiceGroups = $paymentIds->isEmpty()
+            ? collect()
+            : DB::connection('accounting')
+                ->table('process_payment_invoices')
+                ->whereIn('process_payment_id', $paymentIds)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('process_payment_id');
+
+        $checkGroups = $paymentIds->isEmpty()
+            ? collect()
+            : DB::connection('accounting')
+                ->table('process_payment_checks')
+                ->whereIn('process_payment_id', $paymentIds)
+                ->orderBy('id')
+                ->get([
+                    'id',
+                    'process_payment_id',
+                    'bank_name',
+                    'account_number',
+                    'check_no',
+                    'credit_amount',
+                ])
+                ->groupBy('process_payment_id');
+
+        $rows = $payments->map(function ($payment) use ($invoiceGroups, $checkGroups) {
+            $invoiceRows = $invoiceGroups->get($payment->id, collect());
+            $invoiceNumbers = $invoiceRows->pluck('invoice_no')->filter()->unique()->values();
+
+            $totalPayment = round((float) ($payment->total_paid ?? 0), 2);
+            $totalAmount = round(
+                (float) $invoiceRows->sum(fn ($row) => (float) ($row->due_amount ?? 0)),
+                2
+            );
+
+            $checks = $checkGroups->get((int) $payment->id, collect());
+
+            $checkAmounts = $checks
+                ->map(fn ($check) => round((float) ($check->credit_amount ?? 0), 2))
+                ->values();
+
+            if ($checkAmounts->isEmpty()) {
+                $checkAmounts = collect([$totalPayment]);
+            }
+
+            $bankNames = $checks
+                ->map(fn ($check) => trim((string) ($check->bank_name ?? '')))
+                ->map(fn ($value) => $value !== '' ? $value : '---')
+                ->values();
+
+            $accountNumbers = $checks
+                ->map(fn ($check) => trim((string) ($check->account_number ?? '')))
+                ->map(fn ($value) => $value !== '' ? $value : '---')
+                ->values();
+
+            $checkNumbers = $checks
+                ->map(fn ($check) => trim((string) ($check->check_no ?? '')))
+                ->map(fn ($value) => $value !== '' ? $value : '---')
+                ->values();
+
+            if ($checks->isEmpty()) {
+                $bankNames = collect(['---']);
+                $accountNumbers = collect(['---']);
+                $checkNumbers = collect(['---']);
+            }
+
+            $settlementStatus = abs($totalPayment - $totalAmount) <= 0.01
+                ? 'Fully Paid'
+                : 'Partial';
+
+            return [
+                'id' => (int) $payment->id,
+                'payment_no' => (string) $payment->payment_no,
+                'customer_name' => (string) $payment->customer_name,
+                'invoice_paid' => $invoiceNumbers->implode(', ') ?: '---',
+                'invoice_numbers' => $invoiceNumbers->all(),
+                'invoice_count' => $invoiceRows->count(),
+                'payment_date' => $payment->payment_date
+                    ? \Carbon\Carbon::parse($payment->payment_date)->format('Y-m-d')
+                    : '---',
+                'total_paid' => $totalPayment,
+                'check_amounts' => $checkAmounts->all(),
+                'bank_names' => $bankNames->all(),
+                'account_numbers' => $accountNumbers->all(),
+                'check_nos' => $checkNumbers->all(),
+                'total_amount' => $totalAmount,
+                'payment_status' => $settlementStatus,
+                'status' => (string) ($payment->status ?? 'Posted'),
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'rows' => $rows,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'last_page' => max((int) ceil($total / $perPage), 1),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Payments history bank-column data error: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 422);
+    }
+};
+
+Route::get('/admin/payments/history/data', $w68PaymentsHistoryDataWithBankColumns)
+    ->name('admin.payments.history.data');
