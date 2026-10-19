@@ -698,7 +698,7 @@ window.loadPaymentsHistoryTable = async function() {
     const tbody = document.getElementById('payments-history-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>`;
 
     try {
         const url = new URL(routes().historyData, window.location.origin);
@@ -736,7 +736,6 @@ window.loadPaymentsHistoryTable = async function() {
                     <div class="max-h-48 overflow-y-auto text-[10px] font-bold text-slate-600">${invoiceNumbers.map((no, i) => `<div class="border-b border-slate-50 py-1 last:border-0"><span class="mr-1 text-slate-300">${i+1}.</span>${escapeHtml(no)}</div>`).join('')}</div>
                 </div>` : '';
             const pid = Number(row.id || 0);
-            const payno = escapeAttr(row.payment_no || '');
             const paymentStatus = String(row.payment_status || 'Partial');
             const isFullyPaid = paymentStatus.toLowerCase() === 'fully paid';
             const statusClass = isFullyPaid
@@ -752,7 +751,7 @@ window.loadPaymentsHistoryTable = async function() {
                 .map(value => `<div class="whitespace-nowrap">${money.format(value)}</div>`)
                 .join('');
             return `
-            <tr class="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+            <tr class="cursor-pointer hover:bg-maroon/5 focus:bg-maroon/5 transition-colors border-b border-slate-100 outline-none" onclick="window.openPaymentsHistoryView(${pid})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.openPaymentsHistoryView(${pid});}" tabindex="0" role="button" aria-label="View payment ${escapeAttr(row.payment_no || '')}">
                 <td class="py-4 px-5 font-black text-slate-800">${escapeHtml(row.customer_name || '---')}</td>
                 <td class="py-4 px-5 font-black text-maroon">${escapeHtml(row.payment_no || '---')}</td>
                 <td class="py-4 px-5">
@@ -765,21 +764,13 @@ window.loadPaymentsHistoryTable = async function() {
                 <td class="py-4 px-5 text-center">
                     <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
                 </td>
-                <td class="py-4 px-5">
-                    <div class="flex items-center justify-center gap-1.5">
-                        <button onclick="window.openPaymentsHistoryView(${pid})" class="payments-history-action" style="background:#00FFFF;color:#4A0E0E;width:30px;height:30px;padding:0;justify-content:center;gap:0;border-radius:8px;" title="View" aria-label="View"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>
-                        <button onclick="window.printWholePaymentHistory(${pid})" class="payments-history-action text-white" style="background:#0F766E;width:30px;height:30px;padding:0;justify-content:center;gap:0;border-radius:8px;" title="Print" aria-label="Print"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
-                        <button onclick="window.openEditPaymentModal(${pid})" class="payments-history-action" style="background:#EAB308;color:#4A0E0E;width:30px;height:30px;padding:0;justify-content:center;gap:0;border-radius:8px;" title="Edit" aria-label="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                        <button onclick="window.confirmDeletePaymentHistory(${pid}, '${payno}')" class="payments-history-action text-white" style="background:#4A0E0E;width:30px;height:30px;padding:0;justify-content:center;gap:0;border-radius:8px;" title="Delete" aria-label="Delete"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-                    </div>
-                </td>
             </tr>`;
-        }).join('') : `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">No payment history found.</td></tr>`;
 
         updatePaymentsHistoryPagination(data);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500 font-bold">${escapeHtml(error.message)}</td></tr>`;
     }
 };
 
@@ -3617,6 +3608,43 @@ window.printWholePaymentHistory = async function(paymentId) {
     }
 };
 
+function currentHistoryModalPaymentIdentity() {
+    const payment = currentHistoryPayment?.payment || {};
+    return {
+        id: Number(payment.id || 0),
+        paymentNo: String(payment.payment_no || '').trim()
+    };
+}
+
+window.printCurrentPaymentHistory = function() {
+    const { id } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.printWholePaymentHistory(id);
+};
+
+window.editCurrentPaymentHistory = function() {
+    const { id } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.closePaymentsHistoryViewModal();
+    window.openEditPaymentModal(id);
+};
+
+window.deleteCurrentPaymentHistory = function() {
+    const { id, paymentNo } = currentHistoryModalPaymentIdentity();
+    if (!id) {
+        showNotification('Payment details are still loading.', 'error');
+        return;
+    }
+    window.confirmDeletePaymentHistory(id, paymentNo);
+};
+
+// W68_PAYMENT_HISTORY_ACTIONS_IN_VIEW_MODAL_20261019
 window.confirmDeletePaymentHistory = async function(paymentId, paymentNo) {
     const label = paymentNo || 'this payment';
     const ok = window.confirm(`Delete ${label}?\n\nAll invoices under this Payment No. will become unpaid again and return to Process Payment.`);
@@ -3652,6 +3680,11 @@ window.submitDeletePaymentHistory = async function() {
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Unable to delete payment.');
+
+        const deletedPaymentId = Number(pendingDeletePaymentId || 0);
+        if (Number(currentHistoryPayment?.payment?.id || 0) === deletedPaymentId) {
+            window.closePaymentsHistoryViewModal();
+        }
 
         closePaymentDeleteConfirmModal();
         setText('payment-delete-success-message', `${pendingDeletePaymentNo || 'The selected payment'} was deleted successfully.`);
