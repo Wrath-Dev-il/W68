@@ -786,10 +786,10 @@ window.loadPaymentsHistoryTable = async function() {
                     </div>
                 </td>
                 <td class="py-4 px-5 font-bold text-slate-500">${escapeHtml(row.payment_date || '---')}</td>
-                <td class="py-4 px-5 text-right font-black text-emerald-700"><div class="space-y-1">${checkAmountHtml}</div></td>
                 <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${bankNameHtml}</div></td>
                 <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${accountNumberHtml}</div></td>
                 <td class="py-4 px-5 font-bold text-slate-600"><div class="space-y-1">${checkNumberHtml}</div></td>
+                <td class="py-4 px-5 text-right font-black text-emerald-700"><div class="space-y-1">${checkAmountHtml}</div></td>
                 <td class="py-4 px-5 text-center">
                     <span class="inline-flex items-center justify-center rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${statusClass}" title="Total Payment: ${escapeAttr(money.format(Number(row.total_paid || 0)))} · Total Amount: ${escapeAttr(money.format(Number(row.total_amount || 0)))}">${escapeHtml(paymentStatus)}</span>
                 </td>
