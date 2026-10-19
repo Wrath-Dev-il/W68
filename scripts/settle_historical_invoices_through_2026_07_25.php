@@ -288,9 +288,78 @@ $buildCandidates = static function () use ($fromDate, $toDate, $normalizeInvoice
 };
 
 $candidates = $buildCandidates();
+
+/*
+|--------------------------------------------------------------------------
+| Resolve historical placeholder/stale customer IDs by exact customer name.
+|--------------------------------------------------------------------------
+|
+| Old imported Sales Orders can reuse customer_id=1 for many unrelated
+| customer names. /admin/payments groups by customer_id, so writing those
+| payments with the stale ID would merge unrelated customers.
+|
+| Keep the source ID only when its Masterlist name matches. Otherwise resolve
+| an exact normalized customer name. Ambiguous/unmatched rows are NOT written
+| and are reported for manual review.
+|
+*/
+$masterCustomers = DB::connection('masterlist')
+    ->table('customers')
+    ->select('id', 'name')
+    ->get();
+
+$customerById = $masterCustomers->keyBy(fn ($row) => (int) $row->id);
+$customersByName = $masterCustomers
+    ->groupBy(fn ($row) => mb_strtoupper(trim((string) ($row->name ?? ''))));
+
+$resolvedCandidates = [];
+$unresolvedCandidates = [];
+
+foreach ($candidates as $candidate) {
+    $sourceCustomerId = (int) ($candidate['customer_id'] ?? 0);
+    $sourceCustomerName = trim((string) ($candidate['customer_name'] ?? ''));
+    $normalizedName = mb_strtoupper($sourceCustomerName);
+
+    $currentCustomer = $sourceCustomerId > 0
+        ? $customerById->get($sourceCustomerId)
+        : null;
+
+    $currentNameMatches = $currentCustomer
+        && $normalizedName !== ''
+        && mb_strtoupper(trim((string) ($currentCustomer->name ?? ''))) === $normalizedName;
+
+    if ($currentNameMatches) {
+        $candidate['customer_name'] = (string) $currentCustomer->name;
+        $resolvedCandidates[] = $candidate;
+        continue;
+    }
+
+    $nameMatches = $normalizedName !== ''
+        ? $customersByName->get($normalizedName, collect())
+        : collect();
+
+    if ($nameMatches->count() === 1) {
+        $resolved = $nameMatches->first();
+        $candidate['customer_id'] = (int) $resolved->id;
+        $candidate['customer_name'] = (string) $resolved->name;
+        $resolvedCandidates[] = $candidate;
+        continue;
+    }
+
+    $candidate['resolution_reason'] = $normalizedName === ''
+        ? 'missing_customer_name'
+        : ($nameMatches->isEmpty() ? 'customer_name_not_found' : 'customer_name_ambiguous');
+    $unresolvedCandidates[] = $candidate;
+}
+
+$candidates = $resolvedCandidates;
+
 $totalDue = round((float) collect($candidates)->sum('remaining_due'), 2);
+$unresolvedDue = round((float) collect($unresolvedCandidates)->sum('remaining_due'), 2);
 
 echo 'ELIGIBLE_UNPAID_INVOICES=' . count($candidates) . "\n";
+echo 'UNRESOLVED_INVOICES=' . count($unresolvedCandidates) . "\n";
+echo 'UNRESOLVED_TOTAL=' . number_format($unresolvedDue, 2, '.', '') . "\n";
 echo 'TOTAL_TO_SETTLE=' . number_format($totalDue, 2, '.', '') . "\n";
 
 $backupDirectory = storage_path('app/backups');
@@ -308,6 +377,9 @@ $manifest = [
     'candidate_count' => count($candidates),
     'candidate_total_due' => $totalDue,
     'candidates' => $candidates,
+    'unresolved_candidate_count' => count($unresolvedCandidates),
+    'unresolved_candidate_total' => $unresolvedDue,
+    'unresolved_candidates' => $unresolvedCandidates,
     'inserted_payment_ids' => [],
     'inserted_payment_invoice_ids' => [],
     'linked_group_item_ids' => [],
@@ -322,8 +394,22 @@ echo "BACKUP_MANIFEST={$backupFile}\n";
 
 if (!$apply) {
     echo "PREVIEW_COMPLETE=YES\n";
-    echo "Run again with --apply to create the settlement records.\n";
+    if ($unresolvedCandidates) {
+        echo "APPLY_BLOCKED=YES\n";
+        echo "Resolve the unresolved customer mappings before applying.\n";
+    } else {
+        echo "APPLY_READY=YES\n";
+        echo "Run again with --apply to create the settlement records.\n";
+    }
     exit(0);
+}
+
+if ($unresolvedCandidates) {
+    throw new RuntimeException(
+        'Apply blocked: ' . count($unresolvedCandidates)
+        . ' invoice(s) have ambiguous or missing customer mappings. '
+        . 'See the backup manifest before retrying.'
+    );
 }
 
 if (
