@@ -453,7 +453,7 @@
                 <span class="rounded-full bg-maroon/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-maroon">Per Payment</span>
             </div>
             <div class="overflow-x-auto custom-scrollbar">
-                <table class="w-full min-w-[900px] text-left border-collapse">
+                <table class="w-full min-w-[1350px] text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                             <th class="py-4 px-5">Name</th>
@@ -461,6 +461,9 @@
                             <th class="py-4 px-5">Invoices</th>
                             <th class="py-4 px-5">Date</th>
                             <th class="py-4 px-5 text-right">Check Amount</th>
+                            <th class="py-4 px-5">Bank Name</th>
+                            <th class="py-4 px-5">Account No.</th>
+                            <th class="py-4 px-5">Check No.</th>
                             <th class="py-4 px-5 text-center">Status</th>
                         </tr>
                         <tr class="bg-white border-t border-slate-100">
@@ -469,11 +472,14 @@
                             <th class="p-2 px-5"><input id="ph-search-invoices" type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Invoice..."></th>
                             <th class="p-2 px-5"><input id="ph-search-date"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Date..."></th>
                             <th class="p-2 px-5"><input id="ph-search-amount"   type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Amount..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-bank"     type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Bank..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-account"  type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Account No..."></th>
+                            <th class="p-2 px-5"><input id="ph-search-checkno"  type="text" oninput="window.filterPaymentsHistoryTable()" class="col-search-input w-full text-[9px]" placeholder="Check No..."></th>
                             <th class="p-2 px-5"></th>
                         </tr>
                     </thead>
                     <tbody id="payments-history-tbody" class="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
-                        <tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
+                        <tr><td colspan="9" class="py-12 text-center text-slate-400 font-bold">Loading payment history...</td></tr>
                     </tbody>
                 </table>
             </div>
