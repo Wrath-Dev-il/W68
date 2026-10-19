@@ -46,12 +46,17 @@ return [
 
         'mysql' => [
     'driver' => 'mysql',
-    'url' => env('CORE_SYSTEM_DB_URL'),
-    'host' => env('CORE_SYSTEM_DB_HOST'),
-    'port' => env('CORE_SYSTEM_DB_PORT', '3306'),
-    'database' => env('CORE_SYSTEM_DB_DATABASE'),
-    'username' => env('CORE_SYSTEM_DB_USERNAME'),
-    'password' => env('CORE_SYSTEM_DB_PASSWORD'),
+    // W68_HOSTFORGE_CORE_SYSTEM_OVERRIDE_20261019
+    // HostForge can keep stale CORE_SYSTEM_DB_* process variables after a
+    // database reprovision. Prefer W68_CORE_SYSTEM_DB_* values from /app/.env
+    // so the live W68 app can be repointed without waiting for platform env
+    // propagation.
+    'url' => env('W68_CORE_SYSTEM_DB_URL', env('CORE_SYSTEM_DB_URL')),
+    'host' => env('W68_CORE_SYSTEM_DB_HOST', env('CORE_SYSTEM_DB_HOST')),
+    'port' => env('W68_CORE_SYSTEM_DB_PORT', env('CORE_SYSTEM_DB_PORT', '3306')),
+    'database' => env('W68_CORE_SYSTEM_DB_DATABASE', env('CORE_SYSTEM_DB_DATABASE')),
+    'username' => env('W68_CORE_SYSTEM_DB_USERNAME', env('CORE_SYSTEM_DB_USERNAME')),
+    'password' => env('W68_CORE_SYSTEM_DB_PASSWORD', env('CORE_SYSTEM_DB_PASSWORD')),
     'unix_socket' => env('DB_SOCKET', ''),
     'charset' => env('DB_CHARSET', 'utf8mb4'),
     'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
