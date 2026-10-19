@@ -291,16 +291,17 @@ $candidates = $buildCandidates();
 
 /*
 |--------------------------------------------------------------------------
-| Resolve historical placeholder/stale customer IDs by exact customer name.
+| Resolve current customers when safe; preserve legacy identity otherwise.
 |--------------------------------------------------------------------------
 |
-| Old imported Sales Orders can reuse customer_id=1 for many unrelated
-| customer names. /admin/payments groups by customer_id, so writing those
-| payments with the stale ID would merge unrelated customers.
+| Historical imported Sales Orders can use a deleted placeholder customer_id
+| (commonly 1) for unrelated customer names. Payment settlement itself is
+| keyed by source_type/source_id (and invoice_no for online reports), so we
+| must not guess a current customer ID just to settle an old invoice.
 |
-| Keep the source ID only when its Masterlist name matches. Otherwise resolve
-| an exact normalized customer name. Ambiguous/unmatched rows are NOT written
-| and are reported for manual review.
+| If an exact unique Masterlist name exists, use it for the payment header.
+| Otherwise preserve the original historical customer_id and customer_name.
+| No Sales Order or Customer Master ownership is modified by this script.
 |
 */
 $masterCustomers = DB::connection('masterlist')
@@ -313,7 +314,7 @@ $customersByName = $masterCustomers
     ->groupBy(fn ($row) => mb_strtoupper(trim((string) ($row->name ?? ''))));
 
 $resolvedCandidates = [];
-$unresolvedCandidates = [];
+$legacyPreservedCandidates = [];
 
 foreach ($candidates as $candidate) {
     $sourceCustomerId = (int) ($candidate['customer_id'] ?? 0);
@@ -330,6 +331,7 @@ foreach ($candidates as $candidate) {
 
     if ($currentNameMatches) {
         $candidate['customer_name'] = (string) $currentCustomer->name;
+        $candidate['customer_resolution'] = 'current_id_name_match';
         $resolvedCandidates[] = $candidate;
         continue;
     }
@@ -342,24 +344,28 @@ foreach ($candidates as $candidate) {
         $resolved = $nameMatches->first();
         $candidate['customer_id'] = (int) $resolved->id;
         $candidate['customer_name'] = (string) $resolved->name;
+        $candidate['customer_resolution'] = 'unique_name_match';
         $resolvedCandidates[] = $candidate;
         continue;
     }
 
-    $candidate['resolution_reason'] = $normalizedName === ''
+    $candidate['customer_resolution'] = 'legacy_identity_preserved';
+    $candidate['legacy_resolution_reason'] = $normalizedName === ''
         ? 'missing_customer_name'
         : ($nameMatches->isEmpty() ? 'customer_name_not_found' : 'customer_name_ambiguous');
-    $unresolvedCandidates[] = $candidate;
+
+    $legacyPreservedCandidates[] = $candidate;
+    $resolvedCandidates[] = $candidate;
 }
 
 $candidates = $resolvedCandidates;
 
 $totalDue = round((float) collect($candidates)->sum('remaining_due'), 2);
-$unresolvedDue = round((float) collect($unresolvedCandidates)->sum('remaining_due'), 2);
+$legacyPreservedDue = round((float) collect($legacyPreservedCandidates)->sum('remaining_due'), 2);
 
 echo 'ELIGIBLE_UNPAID_INVOICES=' . count($candidates) . "\n";
-echo 'UNRESOLVED_INVOICES=' . count($unresolvedCandidates) . "\n";
-echo 'UNRESOLVED_TOTAL=' . number_format($unresolvedDue, 2, '.', '') . "\n";
+echo 'LEGACY_IDENTITY_PRESERVED=' . count($legacyPreservedCandidates) . "\n";
+echo 'LEGACY_IDENTITY_TOTAL=' . number_format($legacyPreservedDue, 2, '.', '') . "\n";
 echo 'TOTAL_TO_SETTLE=' . number_format($totalDue, 2, '.', '') . "\n";
 
 $backupDirectory = storage_path('app/backups');
@@ -377,9 +383,9 @@ $manifest = [
     'candidate_count' => count($candidates),
     'candidate_total_due' => $totalDue,
     'candidates' => $candidates,
-    'unresolved_candidate_count' => count($unresolvedCandidates),
-    'unresolved_candidate_total' => $unresolvedDue,
-    'unresolved_candidates' => $unresolvedCandidates,
+    'legacy_preserved_candidate_count' => count($legacyPreservedCandidates),
+    'legacy_preserved_candidate_total' => $legacyPreservedDue,
+    'legacy_preserved_candidates' => $legacyPreservedCandidates,
     'inserted_payment_ids' => [],
     'inserted_payment_invoice_ids' => [],
     'linked_group_item_ids' => [],
@@ -394,22 +400,12 @@ echo "BACKUP_MANIFEST={$backupFile}\n";
 
 if (!$apply) {
     echo "PREVIEW_COMPLETE=YES\n";
-    if ($unresolvedCandidates) {
-        echo "APPLY_BLOCKED=YES\n";
-        echo "Resolve the unresolved customer mappings before applying.\n";
-    } else {
-        echo "APPLY_READY=YES\n";
-        echo "Run again with --apply to create the settlement records.\n";
+    echo "APPLY_READY=YES\n";
+    if ($legacyPreservedCandidates) {
+        echo "LEGACY_NOTE=Unmatched/ambiguous historical customer identities will be preserved; invoice ownership will not be rewritten.\n";
     }
+    echo "Run again with --apply to create the settlement records.\n";
     exit(0);
-}
-
-if ($unresolvedCandidates) {
-    throw new RuntimeException(
-        'Apply blocked: ' . count($unresolvedCandidates)
-        . ' invoice(s) have ambiguous or missing customer mappings. '
-        . 'See the backup manifest before retrying.'
-    );
 }
 
 if (
