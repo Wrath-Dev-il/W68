@@ -87,11 +87,22 @@ function formatMoney(value) {
 }
 
 function paymentStatusBadge(status) {
-    const value = safeString(status || 'Unpaid').trim() || 'Unpaid';
+    let value = safeString(status || 'Not Paid').trim() || 'Not Paid';
+    const legacyKey = value.toLowerCase();
+
+    // Customer Master uses exactly Paid / Not Paid / Returned.
+    // Keep older cached API values visually compatible during deployment.
+    if (legacyKey === 'unpaid' || legacyKey === 'partial') {
+        value = 'Not Paid';
+    }
+
     const key = value.toLowerCase();
     const classes = key === 'paid'
         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        : (key === 'partial' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200');
+        : (key === 'returned'
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-red-50 text-red-700 border-red-200');
+
     return `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest ${classes}">${escapeHtml(value)}</span>`;
 }
 
