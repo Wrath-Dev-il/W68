@@ -1161,3 +1161,176 @@ $w68PaymentsHistoryDataWithBankColumns = function (Request $request) {
 
 Route::get('/admin/payments/history/data', $w68PaymentsHistoryDataWithBankColumns)
     ->name('admin.payments.history.data');
+
+
+/*
+|--------------------------------------------------------------------------
+| Product Transaction History: historical Online Price
+|--------------------------------------------------------------------------
+|
+| W68_PRODUCT_LEDGER_HISTORICAL_ONLINE_PRICE_20261020
+|
+| Never copy the CURRENT masterlist.products.price_online into old Product
+| Ledger rows. Online Price must come from the invoice/report transaction that
+| created that movement. Local/non-online movements intentionally return null.
+|
+| Regular and Special Product Master ledger routes proxy to this named Admin
+| endpoint, so this behavior is shared by all three roles.
+|
+*/
+Route::get('/admin/masterlist/product/ledger/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    try {
+        // Confirm the product still exists, but do NOT use its current
+        // price_online to decorate historical transactions.
+        $product = \App\Models\Product::query()->findOrFail($id);
+
+        $ledger = \App\Models\ProductLedger::query()
+            ->where('product_id', $id)
+            ->orderBy('date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        if ($ledger->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'ledger' => [],
+                'total_in' => 0,
+                'total_out' => 0,
+            ]);
+        }
+
+        $ledgerIds = $ledger->pluck('id')->map(fn ($value) => (int) $value)->filter()->values();
+
+        // Durable Online Report links are the strongest ownership evidence.
+        $onlineLedgerIds = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::connection('sales')->hasTable('online_report_product_ledger_links')) {
+                $onlineLedgerIds = DB::connection('sales')
+                    ->table('online_report_product_ledger_links')
+                    ->whereIn('product_ledger_id', $ledgerIds)
+                    ->pluck('product_ledger_id')
+                    ->map(fn ($value) => (int) $value)
+                    ->unique()
+                    ->values();
+            }
+        } catch (\Throwable $ignored) {
+            $onlineLedgerIds = collect();
+        }
+        $onlineLedgerLookup = array_fill_keys($onlineLedgerIds->all(), true);
+
+        // Source item IDs point at the historical sales_order_items snapshot.
+        // Its unit_price is frozen per invoice and does not change when Product
+        // Master price_online is edited later.
+        $sourceItemIds = $ledger
+            ->pluck('source_item_id')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values();
+
+        $salesOrderItems = $sourceItemIds->isEmpty()
+            ? collect()
+            : DB::connection('sales')
+                ->table('sales_order_items')
+                ->whereIn('id', $sourceItemIds)
+                ->get(['id', 'sales_order_id', 'unit_price'])
+                ->keyBy(fn ($row) => (int) $row->id);
+
+        // Some older online movements were initially tagged as sales_order.
+        // Treat ONL-* Sales Orders as online invoice sources, but never classify
+        // an ordinary local Sales Order as having an Online Price.
+        $sourceSalesOrderIds = $ledger
+            ->filter(fn ($entry) => strtolower(trim((string) ($entry->source_type ?? ''))) === 'sales_order')
+            ->pluck('source_id')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values();
+
+        $onlineSalesOrderIds = $sourceSalesOrderIds->isEmpty()
+            ? collect()
+            : DB::connection('sales')
+                ->table('sales_orders')
+                ->whereIn('id', $sourceSalesOrderIds)
+                ->where('order_number', 'LIKE', 'ONL-%')
+                ->pluck('id')
+                ->map(fn ($value) => (int) $value)
+                ->values();
+
+        $onlineSalesOrderLookup = array_fill_keys($onlineSalesOrderIds->all(), true);
+
+        $ledger = $ledger->map(function ($entry) use (
+            $onlineLedgerLookup,
+            $salesOrderItems,
+            $onlineSalesOrderLookup
+        ) {
+            $sourceType = strtolower(trim((string) ($entry->source_type ?? '')));
+            $remarks = strtolower(trim((string) ($entry->remarks ?? '')));
+            $ledgerId = (int) ($entry->id ?? 0);
+            $sourceId = (int) ($entry->source_id ?? 0);
+            $sourceItemId = (int) ($entry->source_item_id ?? 0);
+
+            $isOnlineInvoiceMovement =
+                $sourceType === 'online_report'
+                || isset($onlineLedgerLookup[$ledgerId])
+                || ($sourceType === 'sales_order' && isset($onlineSalesOrderLookup[$sourceId]))
+                || str_contains($remarks, 'online report generation');
+
+            // IMPORTANT: non-online/local invoices, purchases, returns and other
+            // movements have no historical Online Price in this table.
+            if (!$isOnlineInvoiceMovement) {
+                $entry->price_online = null;
+                return $entry;
+            }
+
+            $historicalPrice = null;
+
+            if ($sourceItemId > 0) {
+                $sourceItem = $salesOrderItems->get($sourceItemId);
+                if ($sourceItem) {
+                    $sourceItemPrice = (float) ($sourceItem->unit_price ?? 0);
+                    if ($sourceItemPrice > 0) {
+                        $historicalPrice = $sourceItemPrice;
+                    }
+                }
+            }
+
+            // Legacy Online Report rows can predate source_item_id links. Their
+            // own ledger.price is still the frozen transaction price.
+            if ($historicalPrice === null) {
+                $ledgerPrice = (float) ($entry->price ?? 0);
+                if ($ledgerPrice > 0) {
+                    $historicalPrice = $ledgerPrice;
+                }
+            }
+
+            // Null means this specific invoice/movement has no stored Online
+            // Price. The UI intentionally renders nothing for it.
+            $entry->price_online = $historicalPrice;
+
+            return $entry;
+        });
+
+        return response()->json([
+            'success' => true,
+            'ledger' => $ledger,
+            'total_in' => $ledger->sum('quantity_in'),
+            'total_out' => $ledger->sum('quantity_out'),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Product ledger historical Online Price error: ' . $e->getMessage(), [
+            'product_id' => $id,
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 422);
+    }
+})->name('admin.prod-master.ledger');
