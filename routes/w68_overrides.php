@@ -1334,3 +1334,309 @@ Route::get('/admin/masterlist/product/ledger/{id}', function ($id) {
         ], 422);
     }
 })->name('admin.prod-master.ledger');
+
+
+/*
+|--------------------------------------------------------------------------
+| Customer Master: show linked Pricelist registration
+|--------------------------------------------------------------------------
+|
+| W68_CUSTOMER_MASTER_PRICELIST_ACCOUNT_VISIBILITY_20261020
+|
+| Pricelist registration does not create a duplicate customer. It creates a
+| customer portal login and links it to an existing masterlist customer through
+| mysql.customer_portal_accounts. Expose that linked account in Customer Master
+| and allow username/email searching from the main table.
+|
+*/
+Route::get('/admin/masterlist/customer/data', function (Request $request) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    $search = (array) $request->query('search', []);
+    $page = max(1, (int) $request->query('page', 1));
+    $perPageInput = $request->query('perPage', 50);
+
+    $portalAccountSearchIds = static function (string $term) {
+        $term = trim($term);
+        if ($term === '') {
+            return collect();
+        }
+
+        try {
+            if (
+                !\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
+                || !\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
+            ) {
+                return collect();
+            }
+
+            return DB::connection('mysql')
+                ->table('customer_portal_accounts as cpa')
+                ->join('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+                ->where(function ($q) use ($term) {
+                    $q->where('l.User_ID', 'LIKE', '%' . $term . '%')
+                        ->orWhere('l.Email', 'LIKE', '%' . $term . '%');
+                })
+                ->pluck('cpa.customer_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter()
+                ->unique()
+                ->values();
+        } catch (\Throwable $exception) {
+            report($exception);
+            return collect();
+        }
+    };
+
+    $query = \App\Models\Customer::with(['type', 'bankAccount']);
+
+    foreach (['name', 'contact_number', 'contact_person', 'address'] as $column) {
+        $term = trim((string) ($search[$column] ?? ''));
+        if ($term !== '') {
+            $query->where($column, 'LIKE', '%' . $term . '%');
+        }
+    }
+
+    $typeSearch = trim((string) ($search['type'] ?? ''));
+    if ($typeSearch !== '') {
+        $query->whereHas('type', function ($q) use ($typeSearch) {
+            $q->where('name', 'LIKE', '%' . $typeSearch . '%');
+        });
+    }
+
+    $portalSearch = trim((string) ($search['portal_account'] ?? ''));
+    if ($portalSearch !== '') {
+        $portalIds = $portalAccountSearchIds($portalSearch);
+        if ($portalIds->isEmpty()) {
+            $query->whereRaw('1 = 0');
+        } else {
+            $query->whereIn('id', $portalIds->all());
+        }
+    }
+
+    $generalSearch = trim((string) ($search['general'] ?? ''));
+    if ($generalSearch !== '') {
+        $portalIds = $portalAccountSearchIds($generalSearch);
+
+        $query->where(function ($q) use ($generalSearch, $portalIds) {
+            $q->where('name', 'LIKE', '%' . $generalSearch . '%')
+                ->orWhere('contact_person', 'LIKE', '%' . $generalSearch . '%')
+                ->orWhere('address', 'LIKE', '%' . $generalSearch . '%');
+
+            if ($portalIds->isNotEmpty()) {
+                $q->orWhereIn('id', $portalIds->all());
+            }
+        });
+    }
+
+    $totalMatching = $query->count();
+
+    $stats = [
+        'total' => \App\Models\Customer::count(),
+        'regular' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Regular'))->count(),
+        'b2b' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'B2B Customer'))->count(),
+        'casual' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Casual'))->count(),
+    ];
+
+    if ($perPageInput === 'all') {
+        $customers = $query->orderByDesc('created_at')->orderByDesc('id')->get();
+        $pagination = [
+            'current_page' => 1,
+            'last_page' => 1,
+            'per_page' => $totalMatching,
+            'total' => $totalMatching,
+            'from' => $totalMatching > 0 ? 1 : 0,
+            'to' => $totalMatching,
+        ];
+    } else {
+        $perPage = max(1, (int) $perPageInput);
+        $lastPage = max(1, (int) ceil($totalMatching / $perPage));
+        $page = max(1, min($page, $lastPage));
+        $skip = ($page - 1) * $perPage;
+
+        $customers = $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->skip($skip)
+            ->take($perPage)
+            ->get();
+
+        $pagination = [
+            'current_page' => $page,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $totalMatching,
+            'from' => $totalMatching > 0 ? $skip + 1 : 0,
+            'to' => min($skip + $perPage, $totalMatching),
+        ];
+    }
+
+    $customerIds = $customers
+        ->pluck('id')
+        ->map(fn ($value) => (int) $value)
+        ->filter()
+        ->values();
+
+    $portalAuthorizations = collect();
+    if (
+        $customerIds->isNotEmpty()
+        && \Illuminate\Support\Facades\Schema::connection('masterlist')->hasTable('customer_portal_authorizations')
+    ) {
+        $portalAuthorizations = DB::connection('masterlist')
+            ->table('customer_portal_authorizations')
+            ->whereIn('customer_id', $customerIds->all())
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->customer_id);
+    }
+
+    $portalAccounts = collect();
+    try {
+        if (
+            $customerIds->isNotEmpty()
+            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
+            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
+        ) {
+            $portalAccounts = DB::connection('mysql')
+                ->table('customer_portal_accounts as cpa')
+                ->leftJoin('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+                ->whereIn('cpa.customer_id', $customerIds->all())
+                ->select(
+                    'cpa.customer_id',
+                    'cpa.login_id',
+                    'cpa.linked_at',
+                    'l.User_ID as username',
+                    'l.Email as email',
+                    'l.account_type'
+                )
+                ->get()
+                ->filter(fn ($row) => !$row->account_type || (int) $row->account_type === 5)
+                ->keyBy(fn ($row) => (int) $row->customer_id);
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $portalAccounts = collect();
+    }
+
+    $portalBaseUrl = \App\Support\W68PricelistUrl::baseUrl($request);
+    $now = now();
+
+    $formatQrRemaining = static function (int $seconds): string {
+        if ($seconds <= 0) return 'Expired';
+        if ($seconds < 60) return '< 1 min';
+
+        $days = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+
+        if ($days > 0) {
+            return $days . ' day' . ($days === 1 ? '' : 's')
+                . ($hours > 0 ? ' ' . $hours . ' hr' : '');
+        }
+
+        if ($hours > 0) {
+            return $hours . ' hr' . ($minutes > 0 ? ' ' . $minutes . ' min' : '');
+        }
+
+        return $minutes . ' min';
+    };
+
+    $portalSummaryFor = static function ($customerId) use (
+        $portalAuthorizations,
+        $portalBaseUrl,
+        $now,
+        $formatQrRemaining
+    ): array {
+        $authorization = $portalAuthorizations->get((int) $customerId);
+
+        if (!$authorization) {
+            return [
+                'active' => false,
+                'expired' => false,
+                'url' => null,
+                'validation_label' => 'No QR',
+                'remaining_label' => 'N/A',
+                'expires_at' => null,
+            ];
+        }
+
+        $expiresAt = \Carbon\Carbon::parse($authorization->expires_at);
+        $active = $expiresAt->isFuture();
+        $url = null;
+        $validationLabel = $active ? 'Active' : 'Expired';
+
+        if ($active) {
+            try {
+                $token = \Illuminate\Support\Facades\Crypt::decryptString(
+                    (string) $authorization->token_encrypted
+                );
+                $url = $portalBaseUrl . '/authorized-access/' . rawurlencode($token);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $validationLabel = 'Invalid QR';
+                $active = false;
+            }
+        }
+
+        $remainingSeconds = $active
+            ? max(0, $now->diffInSeconds($expiresAt, false))
+            : 0;
+
+        return [
+            'active' => $active,
+            'expired' => !$active && $expiresAt->isPast(),
+            'url' => $url,
+            'validation_label' => $validationLabel,
+            'remaining_label' => $active
+                ? $formatQrRemaining((int) $remainingSeconds)
+                : ($expiresAt->isPast() ? 'Expired' : 'N/A'),
+            'expires_at' => $expiresAt->toIso8601String(),
+        ];
+    };
+
+    return response()->json([
+        'customers' => $customers->map(function ($customer) use ($portalSummaryFor, $portalAccounts) {
+            $account = $portalAccounts->get((int) $customer->id);
+
+            return [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'contactNo' => $customer->contact_number,
+                'contactPerson' => $customer->contact_person,
+                'address' => $customer->address,
+                'tin' => $customer->tin,
+                'pricingRemarks' => $customer->pricing_remarks,
+                'terms' => $customer->terms,
+                'type' => $customer->type ? $customer->type->name : 'Regular',
+                'portal' => $portalSummaryFor($customer->id),
+                'portalAccount' => $account ? [
+                    'registered' => true,
+                    'login_id' => (int) $account->login_id,
+                    'username' => (string) ($account->username ?? ''),
+                    'email' => (string) ($account->email ?? ''),
+                    'linked_at' => $account->linked_at
+                        ? \Carbon\Carbon::parse($account->linked_at)->toIso8601String()
+                        : null,
+                ] : [
+                    'registered' => false,
+                    'login_id' => null,
+                    'username' => '',
+                    'email' => '',
+                    'linked_at' => null,
+                ],
+                'bank' => [
+                    'code' => $customer->bankAccount ? $customer->bankAccount->bank_code : '',
+                    'accNo' => $customer->bankAccount ? $customer->bankAccount->account_number : '',
+                    'name' => $customer->bankAccount ? $customer->bankAccount->bank_name : '',
+                    'contactNo' => $customer->bankAccount ? $customer->bankAccount->bank_contact_number : '',
+                    'contactPerson' => $customer->bankAccount ? $customer->bankAccount->bank_contact_person : '',
+                    'address' => $customer->bankAccount ? $customer->bankAccount->bank_address : '',
+                ],
+            ];
+        })->values(),
+        'stats' => $stats,
+        'pagination' => $pagination,
+    ]);
+})->name('admin.customer-master.data');
