@@ -837,6 +837,19 @@ function formatLedgerCurrency(value) {
         : '---';
 }
 
+function formatLedgerOnlinePrice(value) {
+    if (value === null || value === undefined || value === '') {
+        return '';
+    }
+
+    const amount = parseFloat(value);
+    return Number.isFinite(amount) && amount !== 0
+        ? '\u20b1' + amount.toLocaleString(undefined, { minimumFractionDigits: 2 })
+        : '';
+}
+
+// W68_PRODUCT_LEDGER_HISTORICAL_ONLINE_PRICE_20261020
+
 function resetLedgerSearchFilters() {
     ledgerSearchFilters = {};
     document.querySelectorAll('.ledger-search-input').forEach(input => {
@@ -871,7 +884,7 @@ function ledgerSearchText(entry, column) {
         case 'sell':
             return `${entry.price ?? ''} ${formatLedgerCurrency(entry.price)}`;
         case 'online':
-            return `${entry.price_online ?? ''} ${formatLedgerCurrency(entry.price_online)}`;
+            return `${entry.price_online ?? ''} ${formatLedgerOnlinePrice(entry.price_online)}`;
         case 'cost':
             return `${entry.cost ?? ''} ${formatLedgerCurrency(entry.cost)}`;
         case 'remarks':
@@ -906,7 +919,7 @@ function renderLedgerEntries(entries) {
                 '<td class="py-2.5 px-3 text-center font-bold text-slate-800 border-x border-slate-100 whitespace-nowrap">' + (parseFloat(entry.balance_stock) || 0) + '</td>' +
                 '<td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">' + escapeHtml(entry.oum || '---') + '</td>' +
                 '<td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">' + formatLedgerCurrency(entry.price) + '</td>' +
-                '<td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">' + formatLedgerCurrency(entry.price_online) + '</td>' +
+                '<td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">' + formatLedgerOnlinePrice(entry.price_online) + '</td>' +
                 '<td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">' + formatLedgerCurrency(entry.cost) + '</td>' +
                 '<td class="py-2.5 px-3 text-slate-500" style="min-width: 220px; white-space: normal; overflow-wrap: anywhere;" title="' + escapeHtml(remarks) + '">' + escapeHtml(remarks) + '</td>' +
             '</tr>';
