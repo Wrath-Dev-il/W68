@@ -1345,7 +1345,7 @@ Route::get('/admin/masterlist/product/ledger/{id}', function ($id) {
 |
 | Pricelist registration does not create a duplicate customer. It creates a
 | customer portal login and links it to an existing masterlist customer through
-| mysql.customer_portal_accounts. Expose that linked account in Customer Master
+| system.customer_portal_accounts. Expose that linked account in Customer Master
 | and allow username/email searching from the main table.
 |
 */
@@ -1367,13 +1367,13 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
 
         try {
             if (
-                !\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
-                || !\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
+                !\Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+                || !\Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
             ) {
                 return collect();
             }
 
-            return DB::connection('mysql')
+            return DB::connection('system')
                 ->table('customer_portal_accounts as cpa')
                 ->join('logins as l', 'l.login_ID', '=', 'cpa.login_id')
                 ->where(function ($q) use ($term) {
@@ -1496,10 +1496,10 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
     try {
         if (
             $customerIds->isNotEmpty()
-            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
-            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
         ) {
-            $portalAccounts = DB::connection('mysql')
+            $portalAccounts = DB::connection('system')
                 ->table('customer_portal_accounts as cpa')
                 ->leftJoin('logins as l', 'l.login_ID', '=', 'cpa.login_id')
                 ->whereIn('cpa.customer_id', $customerIds->all())
@@ -1693,7 +1693,7 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
         DB::connection('ledger')->beginTransaction();
         $ledgerStarted = true;
 
-        DB::connection('mysql')->beginTransaction();
+        DB::connection('system')->beginTransaction();
         $systemStarted = true;
 
         $customer = \App\Models\Customer::query()
@@ -1710,15 +1710,15 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
         $portalLink = null;
         $portalLogin = null;
 
-        if (\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
-            $portalLink = DB::connection('mysql')
+        if (\Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')) {
+            $portalLink = DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->where('customer_id', $customerId)
                 ->lockForUpdate()
                 ->first();
 
             if ($portalLink) {
-                $portalLogin = DB::connection('mysql')
+                $portalLogin = DB::connection('system')
                     ->table('logins')
                     ->where('login_ID', (int) $portalLink->login_id)
                     ->lockForUpdate()
@@ -1803,10 +1803,10 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
 
             if (
                 $loginId > 0
-                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('sessions')
-                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasColumn('sessions', 'user_id')
+                && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('sessions')
+                && \Illuminate\Support\Facades\Schema::connection('system')->hasColumn('sessions', 'user_id')
             ) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('sessions')
                     ->where('user_id', $loginId)
                     ->delete();
@@ -1815,22 +1815,22 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
             if (
                 $portalLogin
                 && !empty($portalLogin->Email)
-                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('password_reset_tokens')
-                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasColumn('password_reset_tokens', 'email')
+                && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('password_reset_tokens')
+                && \Illuminate\Support\Facades\Schema::connection('system')->hasColumn('password_reset_tokens', 'email')
             ) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('password_reset_tokens')
                     ->where('email', (string) $portalLogin->Email)
                     ->delete();
             }
 
-            DB::connection('mysql')
+            DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->where('id', (int) $portalLink->id)
                 ->delete();
 
             if ($portalLogin && $loginId > 0) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('logins')
                     ->where('login_ID', $loginId)
                     ->where('account_type', 5)
@@ -1852,7 +1852,7 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
 
         if (
             $portalLink
-            && DB::connection('mysql')
+            && DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->where('customer_id', $customerId)
                 ->exists()
@@ -1862,7 +1862,7 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
 
         if (
             $deletedLoginId
-            && DB::connection('mysql')
+            && DB::connection('system')
                 ->table('logins')
                 ->where('login_ID', $deletedLoginId)
                 ->where('account_type', 5)
@@ -1874,7 +1874,7 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
         DB::connection('ledger')->commit();
         $ledgerStarted = false;
 
-        DB::connection('mysql')->commit();
+        DB::connection('system')->commit();
         $systemStarted = false;
 
         DB::connection('masterlist')->commit();
@@ -1889,8 +1889,8 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
             'pricelist_login_deleted' => (bool) $deletedLoginId,
         ]);
     } catch (\Throwable $e) {
-        if ($systemStarted && DB::connection('mysql')->transactionLevel() > 0) {
-            DB::connection('mysql')->rollBack();
+        if ($systemStarted && DB::connection('system')->transactionLevel() > 0) {
+            DB::connection('system')->rollBack();
         }
         if ($ledgerStarted && DB::connection('ledger')->transactionLevel() > 0) {
             DB::connection('ledger')->rollBack();
@@ -1963,10 +1963,10 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
 
         try {
             if (
-                \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
-                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
+                \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
+                && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
             ) {
-                $loginIds = DB::connection('mysql')
+                $loginIds = DB::connection('system')
                     ->table('logins')
                     ->where('account_type', 5)
                     ->where(function ($loginQuery) use ($portalAccountSearch) {
@@ -1980,7 +1980,7 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
                     ->values();
 
                 if ($loginIds->isNotEmpty()) {
-                    $matchingCustomerIds = DB::connection('mysql')
+                    $matchingCustomerIds = DB::connection('system')
                         ->table('customer_portal_accounts')
                         ->whereIn('login_id', $loginIds)
                         ->pluck('customer_id')
@@ -2076,10 +2076,10 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
     try {
         if (
             $customerIds->isNotEmpty()
-            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')
-            && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('logins')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
         ) {
-            $links = DB::connection('mysql')
+            $links = DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->whereIn('customer_id', $customerIds)
                 ->get();
@@ -2093,7 +2093,7 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
 
             $logins = $loginIds->isEmpty()
                 ? collect()
-                : DB::connection('mysql')
+                : DB::connection('system')
                     ->table('logins')
                     ->whereIn('login_ID', $loginIds)
                     ->where('account_type', 5)
