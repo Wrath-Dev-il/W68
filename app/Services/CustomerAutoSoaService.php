@@ -14,7 +14,7 @@ use Throwable;
 
 class CustomerAutoSoaService
 {
-    private const SYSTEM_CONNECTION = 'mysql';
+    private const SYSTEM_CONNECTION = 'system';
     private const CONFIG_TABLE = 'customer_soa_auto_configs';
     private const LOG_TABLE = 'customer_soa_auto_send_logs';
     private const NOTIFICATION_TABLE = 'customer_portal_notifications';
