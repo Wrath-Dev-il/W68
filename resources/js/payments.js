@@ -2241,7 +2241,7 @@ window.openProceedModal = async function(customerId) {
     setText('p-contact', '---');
     setText('p-address', '---');
     setText('p-payment-no', '---');
-    setText('p-date', new Date().toISOString().split('T')[0]);
+    setProcessPaymentDate(new Date().toISOString().split('T')[0]);
     setText('p-total-payment', money.format(0));
     renderCheckRows([]);
 
@@ -2275,7 +2275,7 @@ window.openProceedModal = async function(customerId) {
         setText('p-contact', data.customer.contact_number || data.customer.contact_person || '---');
         setText('p-address', data.customer.address || '---');
         setText('p-payment-no', data.payment_no);
-        setText('p-date', new Date().toISOString().split('T')[0]);
+        setProcessPaymentDate(new Date().toISOString().split('T')[0]);
 
         renderInvoiceRows(currentPayment.invoices);
         renderCheckRows([]);
@@ -2305,7 +2305,7 @@ window.openEditPaymentModal = async function(paymentId) {
     setText('p-contact', '---');
     setText('p-address', '---');
     setText('p-payment-no', '---');
-    setText('p-date', '---');
+    setProcessPaymentDate('');
     setText('p-total-payment', money.format(0));
     renderCheckRows([]);
 
@@ -2353,7 +2353,7 @@ window.openEditPaymentModal = async function(paymentId) {
         setText('p-contact', detail.customer?.contact_number || detail.customer?.contact_person || '---');
         setText('p-address', detail.customer?.address || '---');
         setText('p-payment-no', detail.payment?.payment_no || '---');
-        setText('p-date', detail.payment?.payment_date || '---');
+        setProcessPaymentDate(detail.payment?.payment_date || '');
 
         renderInvoiceRows(currentPayment.invoices);
         renderCheckRows(currentPayment.checks);
@@ -2837,7 +2837,7 @@ function populateReview() {
                     <div class="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-right">
                         <p class="text-[9px] font-black uppercase tracking-widest text-white/50">Collection No.</p>
                         <p class="mt-1 text-lg font-black text-gold">${escapeHtml(currentPayment.paymentNo || '---')}</p>
-                        <p class="mt-2 text-[10px] font-bold text-white/60">${escapeHtml(document.getElementById('p-date')?.textContent || '')}</p>
+                        <p class="mt-2 text-[10px] font-bold text-white/60">${escapeHtml(getProcessPaymentDate() || '')}</p>
                     </div>
                 </div>
             </div>
@@ -2954,7 +2954,7 @@ window.printPaymentInvoice = function() {
     openPrintablePaymentLayout({
         customer: currentPayment.customer || {},
         collectionNo: currentPayment.paymentNo || '---',
-        paymentDate: document.getElementById('p-date')?.textContent || new Date().toISOString().split('T')[0],
+        paymentDate: getProcessPaymentDate() || new Date().toISOString().split('T')[0],
         invoices,
         checks,
         returns: manualReturns
@@ -3198,6 +3198,17 @@ function setProcessPaymentMode(mode) {
     const currentMode = mode === 'edit' ? 'edit' : 'create';
     currentPayment.mode = currentMode;
 
+    const paymentDateInput = document.getElementById('p-date');
+    if (paymentDateInput) {
+        const editable = currentMode === 'edit';
+        paymentDateInput.disabled = !editable;
+        paymentDateInput.classList.toggle('border-maroon/30', editable);
+        paymentDateInput.classList.toggle('bg-white', editable);
+        paymentDateInput.classList.toggle('px-2', editable);
+        paymentDateInput.classList.toggle('py-1', editable);
+        paymentDateInput.classList.toggle('shadow-sm', editable);
+    }
+
     setText('process-payment-title', currentMode === 'edit' ? 'Edit Payment' : 'Process Payment');
     setText('process-payment-subtitle', currentMode === 'edit'
         ? 'Update an existing posted payment record.'
@@ -3210,6 +3221,19 @@ function setProcessPaymentMode(mode) {
     setText('payment-confirm-submit-btn', currentMode === 'edit' ? 'Update' : 'Confirm');
 }
 
+function setProcessPaymentDate(value) {
+    const input = document.getElementById('p-date');
+    if (!input) return;
+
+    const raw = String(value || '').trim();
+    input.value = raw && raw !== '---' ? raw.slice(0, 10) : '';
+}
+
+function getProcessPaymentDate() {
+    return String(document.getElementById('p-date')?.value || '').trim();
+}
+
+// W68_EDIT_PAYMENT_DATE_20261020
 function invoiceRowClass(inv) {
     return inv.has_exceeded_terms
         ? 'invoice-row-overdue animate-overdue-blink transition-colors'
@@ -3279,7 +3303,7 @@ window.submitFinalizePayment = async function() {
                 customer_id: currentPayment.customer?.id,
                 customer_name: currentPayment.customer?.name,
                 payment_no: currentPayment.paymentNo,
-                payment_date: document.getElementById('p-date')?.textContent || new Date().toISOString().split('T')[0],
+                payment_date: getProcessPaymentDate() || new Date().toISOString().split('T')[0],
                 invoices,
                 checks: checkPayload(),
                 returns: paymentFetchedReturnPayload(invoices)
