@@ -1871,11 +1871,23 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
             throw new \RuntimeException('Pricelist login deletion verification failed.');
         }
 
-        DB::connection('system' /* intentionally invalid guard */);
-    } catch (\InvalidArgumentException $ignoredConnectionGuard) {
-        // This branch is never expected; retained only to keep the next commit
-        // section outside the large try body.
-        throw $ignoredConnectionGuard;
+        DB::connection('ledger')->commit();
+        $ledgerStarted = false;
+
+        DB::connection('mysql')->commit();
+        $systemStarted = false;
+
+        DB::connection('masterlist')->commit();
+        $masterStarted = false;
+
+        return response()->json([
+            'success' => true,
+            'message' => $deletedLoginId
+                ? 'Customer and linked Pricelist account deleted successfully.'
+                : 'Customer deleted successfully. No linked Pricelist account existed.',
+            'customer_id' => $customerId,
+            'pricelist_login_deleted' => (bool) $deletedLoginId,
+        ]);
     } catch (\Throwable $e) {
         if ($systemStarted && DB::connection('mysql')->transactionLevel() > 0) {
             DB::connection('mysql')->rollBack();
@@ -1897,8 +1909,4 @@ Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
         ], 422);
     }
 
-    return response()->json([
-        'success' => false,
-        'message' => 'Customer deletion did not complete.',
-    ], 422);
 })->whereNumber('id')->name('admin.customer-master.delete');
