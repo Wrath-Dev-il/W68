@@ -112,6 +112,7 @@
                     <tr class="bg-slate-50/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                         <th class="py-5 px-6">QR Code Picture</th>
                         <th class="py-5 px-6">Name</th>
+                        <th class="py-5 px-6">Pricelist Account</th>
                         <th class="py-5 px-6">QR Validation</th>
                         <th class="py-5 px-6">QR Remaining Time</th>
                         <th class="py-5 px-6">Contact No#</th>
@@ -122,6 +123,7 @@
                     <tr class="bg-white border-b border-slate-100">
                         <th class="p-2 px-6"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-name" name="name" onkeyup="filterColumnSearch()" placeholder="Search Name..." class="column-search-input text-[10px]"></th>
+                        <th class="p-2 px-6"><input type="text" id="col-search-portal-account" name="portal_account" onkeyup="filterColumnSearch()" placeholder="Username / Email..." class="column-search-input text-[10px]"></th>
                         <th class="p-2 px-6"></th>
                         <th class="p-2 px-6"></th>
                         <th class="p-2 px-6"><input type="text" id="col-search-contact" name="contact_number" onkeyup="filterColumnSearch()" placeholder="Search Contact..." class="column-search-input text-[10px]"></th>
