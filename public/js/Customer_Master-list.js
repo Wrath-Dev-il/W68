@@ -498,7 +498,10 @@ window.showSuccessModal = function(title, message) {
 }
 
 window.openDeleteModal = function(id) {
-    showConfirmModal('Delete Customer', 'This action cannot be undone. Are you sure?', async () => {
+    showConfirmModal(
+        'Delete Customer',
+        'Delete this customer and its linked Pricelist login account? Historical sales and payment records will be kept.',
+        async () => {
         try {
             const response = await fetch(CUSTOMER_ENDPOINTS.delete(id), {
                 method: 'POST',
@@ -513,7 +516,7 @@ window.openDeleteModal = function(id) {
             }
 
             await fetchCustomers();
-            showSuccessModal('Deleted', 'Customer record has been removed.');
+            showSuccessModal('Deleted', result.message || 'Customer and linked Pricelist account were removed.');
         } catch (error) {
             console.error('Error deleting customer:', error);
             alert(error.message || 'Failed to delete customer');
