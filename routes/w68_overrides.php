@@ -1640,3 +1640,265 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         'pagination' => $pagination,
     ]);
 })->name('admin.customer-master.data');
+
+
+/*
+|--------------------------------------------------------------------------
+| Customer Master delete + linked Pricelist account cleanup
+|--------------------------------------------------------------------------
+|
+| W68_CUSTOMER_MASTER_DELETE_LINKED_PRICELIST_ACCOUNT_20261020
+|
+| Deleting a Customer Master record must also remove the customer-facing
+| Pricelist login stored in the system database. Cross-database FKs cannot
+| cascade masterlist.customers -> system.customer_portal_accounts/logins, so
+| the cleanup is explicit here.
+|
+| Regular and Special Customer Master delete routes already proxy to this
+| named Admin route, therefore all three roles use this same backend.
+|
+| Historical Sales/Accounting records are intentionally preserved.
+|
+*/
+Route::post('/admin/masterlist/customer/delete/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    $customerId = (int) $id;
+    if ($customerId <= 0) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid customer ID.',
+        ], 422);
+    }
+
+    $masterStarted = false;
+    $ledgerStarted = false;
+    $systemStarted = false;
+
+    try {
+        if (!\Illuminate\Support\Facades\Schema::connection('ledger')->hasTable('archived_records')) {
+            throw new \RuntimeException('Archive table is missing. Please run the archive migration first.');
+        }
+
+        DB::connection('masterlist')->beginTransaction();
+        $masterStarted = true;
+
+        DB::connection('ledger')->beginTransaction();
+        $ledgerStarted = true;
+
+        DB::connection('mysql')->beginTransaction();
+        $systemStarted = true;
+
+        $customer = \App\Models\Customer::query()
+            ->lockForUpdate()
+            ->findOrFail($customerId);
+
+        $bank = \App\Models\CustomerBankAccount::query()
+            ->where('customer_id', $customerId)
+            ->first();
+
+        $customerData = $customer->toArray();
+        $bankData = $bank ? $bank->toArray() : null;
+
+        $portalLink = null;
+        $portalLogin = null;
+
+        if (\Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
+            $portalLink = DB::connection('mysql')
+                ->table('customer_portal_accounts')
+                ->where('customer_id', $customerId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($portalLink) {
+                $portalLogin = DB::connection('mysql')
+                    ->table('logins')
+                    ->where('login_ID', (int) $portalLink->login_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                // Never let Customer Master deletion remove an Admin/Regular/
+                // Special internal W68 login because of corrupted link data.
+                if ($portalLogin && (int) ($portalLogin->account_type ?? 0) !== 5) {
+                    throw new \RuntimeException(
+                        'Delete stopped because the linked login is not a Pricelist customer account.'
+                    );
+                }
+            }
+        }
+
+        $archivedData = [
+            'customer' => $customerData,
+            'bank_account' => $bankData,
+            // Keep identity metadata for audit only. Password/OTP/profile BLOBs
+            // are deliberately never copied into archived_records.
+            'pricelist_account' => $portalLogin ? [
+                'login_id' => (int) ($portalLogin->login_ID ?? 0),
+                'username' => (string) ($portalLogin->User_ID ?? ''),
+                'email' => (string) ($portalLogin->Email ?? ''),
+                'account_type' => (int) ($portalLogin->account_type ?? 0),
+            ] : null,
+        ];
+
+        $deletedBy = $user->name ?? $user->username ?? $user->User_ID ?? 'W68 User';
+        $displayId = (string) $customerId;
+        $dataName = trim((string) (($customer->name ?? '') !== '' ? $customer->name : 'Customer'));
+        $actor = hatdogAuditActor($user);
+
+        $existingArchive = DB::connection('ledger')
+            ->table('archived_records')
+            ->where('module', 'customer')
+            ->whereNull('restored_at')
+            ->where('source_connection', 'masterlist')
+            ->where('source_table', 'customers')
+            ->where('source_id', $customerId)
+            ->first();
+
+        if ($existingArchive) {
+            throw new \RuntimeException('This customer is already archived.');
+        }
+
+        DB::connection('ledger')->table('archived_records')->insert([
+            'module' => 'customer',
+            'source_connection' => 'masterlist',
+            'source_table' => 'customers',
+            'source_id' => $customerId,
+            'display_id' => $displayId,
+            'data_name' => $dataName,
+            'archived_data' => json_encode($archivedData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'deleted_by' => (string) $deletedBy,
+            'deleted_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        hatdogWriteAuditTrail([
+            'module' => 'customer',
+            'action' => 'Deleted',
+            'source_connection' => 'masterlist',
+            'source_table' => 'customers',
+            'source_id' => $customerId,
+            'display_id' => $displayId,
+            'record_name' => $dataName,
+            'user_name' => $actor['name'],
+            'user_identifier' => $actor['identifier'],
+            'audit_data' => [
+                'before' => $archivedData,
+                'linked_pricelist_account_deleted' => (bool) $portalLogin,
+            ],
+        ]);
+
+        $deletedLoginId = null;
+
+        if ($portalLink) {
+            $loginId = (int) ($portalLink->login_id ?? 0);
+
+            if (
+                $loginId > 0
+                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('sessions')
+                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasColumn('sessions', 'user_id')
+            ) {
+                DB::connection('mysql')
+                    ->table('sessions')
+                    ->where('user_id', $loginId)
+                    ->delete();
+            }
+
+            if (
+                $portalLogin
+                && !empty($portalLogin->Email)
+                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasTable('password_reset_tokens')
+                && \Illuminate\Support\Facades\Schema::connection('mysql')->hasColumn('password_reset_tokens', 'email')
+            ) {
+                DB::connection('mysql')
+                    ->table('password_reset_tokens')
+                    ->where('email', (string) $portalLogin->Email)
+                    ->delete();
+            }
+
+            DB::connection('mysql')
+                ->table('customer_portal_accounts')
+                ->where('id', (int) $portalLink->id)
+                ->delete();
+
+            if ($portalLogin && $loginId > 0) {
+                DB::connection('mysql')
+                    ->table('logins')
+                    ->where('login_ID', $loginId)
+                    ->where('account_type', 5)
+                    ->delete();
+
+                $deletedLoginId = $loginId;
+            }
+        }
+
+        // masterlist child rows such as bank account, brand discounts and portal
+        // authorization are configured with ON DELETE CASCADE.
+        $customer->delete();
+
+        // Verify the two identities are actually gone before any transaction
+        // is committed.
+        if (DB::connection('masterlist')->table('customers')->where('id', $customerId)->exists()) {
+            throw new \RuntimeException('Customer deletion verification failed.');
+        }
+
+        if (
+            $portalLink
+            && DB::connection('mysql')
+                ->table('customer_portal_accounts')
+                ->where('customer_id', $customerId)
+                ->exists()
+        ) {
+            throw new \RuntimeException('Pricelist account-link deletion verification failed.');
+        }
+
+        if (
+            $deletedLoginId
+            && DB::connection('mysql')
+                ->table('logins')
+                ->where('login_ID', $deletedLoginId)
+                ->where('account_type', 5)
+                ->exists()
+        ) {
+            throw new \RuntimeException('Pricelist login deletion verification failed.');
+        }
+
+        DB::connection('system' /* intentionally invalid guard */);
+    } catch (\InvalidArgumentException $ignoredConnectionGuard) {
+        // This branch is never expected; retained only to keep the next commit
+        // section outside the large try body.
+        throw $ignoredConnectionGuard;
+    } catch (\Throwable $e) {
+        if ($systemStarted && DB::connection('mysql')->transactionLevel() > 0) {
+            DB::connection('mysql')->rollBack();
+        }
+        if ($ledgerStarted && DB::connection('ledger')->transactionLevel() > 0) {
+            DB::connection('ledger')->rollBack();
+        }
+        if ($masterStarted && DB::connection('masterlist')->transactionLevel() > 0) {
+            DB::connection('masterlist')->rollBack();
+        }
+
+        Log::error('Customer delete with Pricelist account cleanup failed: ' . $e->getMessage(), [
+            'customer_id' => $customerId,
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 422);
+    }
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Customer deletion did not complete.',
+    ], 422);
+})->whereNumber('id')->name('admin.customer-master.delete');
