@@ -70,6 +70,29 @@ return [
     ]) : [],
 ],
 
+        'system' => [
+    'driver' => 'mysql',
+    // W68_EXPLICIT_CORE_SYSTEM_CONNECTION_20261020
+    // Shared by the main W68 app and the Pricelist customer portal.
+    'url' => env('W68_CORE_SYSTEM_DB_URL', env('CORE_SYSTEM_DB_URL', env('DATABASE_URL'))),
+    'host' => env('W68_CORE_SYSTEM_DB_HOST', env('CORE_SYSTEM_DB_HOST', env('DB_HOST', '127.0.0.1'))),
+    'port' => env('W68_CORE_SYSTEM_DB_PORT', env('CORE_SYSTEM_DB_PORT', env('DB_PORT', '3306'))),
+    'database' => env('W68_CORE_SYSTEM_DB_DATABASE', env('CORE_SYSTEM_DB_DATABASE', env('DB_DATABASE', 'core4_system_proposal'))),
+    'username' => env('W68_CORE_SYSTEM_DB_USERNAME', env('CORE_SYSTEM_DB_USERNAME', env('DB_USERNAME', 'root'))),
+    'password' => env('W68_CORE_SYSTEM_DB_PASSWORD', env('CORE_SYSTEM_DB_PASSWORD', env('DB_PASSWORD', ''))),
+    'unix_socket' => env('DB_SOCKET', ''),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
+    'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+    'timezone' => '+08:00',
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'strict' => true,
+    'engine' => null,
+    'options' => extension_loaded('pdo_mysql') ? array_filter([
+        Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+    ]) : [],
+],
+
 'masterlist' => [
     'driver' => 'mysql',
     'host' => env('DB_MASTERLIST_HOST', '127.0.0.1'),
