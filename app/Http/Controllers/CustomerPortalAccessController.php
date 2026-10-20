@@ -200,14 +200,14 @@ class CustomerPortalAccessController extends Controller
         $this->assertPortalAccountManager();
         Customer::query()->findOrFail($customerId);
 
-        if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
+        if (!Schema::connection('system')->hasTable('customer_portal_accounts')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Customer portal account linking is not configured.',
             ], 503);
         }
 
-        $link = DB::connection('mysql')
+        $link = DB::connection('system')
             ->table('customer_portal_accounts')
             ->where('customer_id', $customerId)
             ->first();
@@ -220,7 +220,7 @@ class CustomerPortalAccessController extends Controller
             ]);
         }
 
-        $login = DB::connection('mysql')
+        $login = DB::connection('system')
             ->table('logins')
             ->where('login_ID', (int) $link->login_id)
             ->first();
@@ -232,14 +232,14 @@ class CustomerPortalAccessController extends Controller
             ], 409);
         }
 
-        DB::connection('mysql')->transaction(function () use ($link, $login): void {
+        DB::connection('system')->transaction(function () use ($link, $login): void {
             $loginId = (int) $link->login_id;
 
             if (
-                Schema::connection('mysql')->hasTable('sessions')
-                && Schema::connection('mysql')->hasColumn('sessions', 'user_id')
+                Schema::connection('system')->hasTable('sessions')
+                && Schema::connection('system')->hasColumn('sessions', 'user_id')
             ) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('sessions')
                     ->where('user_id', $loginId)
                     ->delete();
@@ -248,22 +248,22 @@ class CustomerPortalAccessController extends Controller
             if (
                 $login
                 && !empty($login->Email)
-                && Schema::connection('mysql')->hasTable('password_reset_tokens')
-                && Schema::connection('mysql')->hasColumn('password_reset_tokens', 'email')
+                && Schema::connection('system')->hasTable('password_reset_tokens')
+                && Schema::connection('system')->hasColumn('password_reset_tokens', 'email')
             ) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('password_reset_tokens')
                     ->where('email', (string) $login->Email)
                     ->delete();
             }
 
-            DB::connection('mysql')
+            DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->where('id', (int) $link->id)
                 ->delete();
 
             if ($login) {
-                DB::connection('mysql')
+                DB::connection('system')
                     ->table('logins')
                     ->where('login_ID', $loginId)
                     ->where('account_type', 5)
@@ -327,11 +327,11 @@ class CustomerPortalAccessController extends Controller
     private function linkedAccountPayload(int $customerId): ?array
     {
         try {
-            if (!Schema::connection('mysql')->hasTable('customer_portal_accounts')) {
+            if (!Schema::connection('system')->hasTable('customer_portal_accounts')) {
                 return null;
             }
 
-            $link = DB::connection('mysql')
+            $link = DB::connection('system')
                 ->table('customer_portal_accounts')
                 ->where('customer_id', $customerId)
                 ->first();
@@ -340,7 +340,7 @@ class CustomerPortalAccessController extends Controller
                 return null;
             }
 
-            $login = DB::connection('mysql')
+            $login = DB::connection('system')
                 ->table('logins')
                 ->where('login_ID', $link->login_id)
                 ->first(['login_ID', 'User_ID', 'Email', 'Password', 'account_type']);
