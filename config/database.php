@@ -51,7 +51,7 @@ return [
     // database reprovision. Prefer W68_CORE_SYSTEM_DB_* values from /app/.env
     // so the live W68 app can be repointed without waiting for platform env
     // propagation.
-    'url' => env('W68_CORE_SYSTEM_DB_URL'),
+    'url' => null,
     'host' => env('W68_CORE_SYSTEM_DB_HOST', env('CORE_SYSTEM_DB_HOST')),
     'port' => env('W68_CORE_SYSTEM_DB_PORT', env('CORE_SYSTEM_DB_PORT', '3306')),
     'database' => env('W68_CORE_SYSTEM_DB_DATABASE', env('CORE_SYSTEM_DB_DATABASE')),
@@ -74,7 +74,7 @@ return [
     'driver' => 'mysql',
     // W68_EXPLICIT_CORE_SYSTEM_CONNECTION_20261020
     // Shared by the main W68 app and the Pricelist customer portal.
-    'url' => env('W68_CORE_SYSTEM_DB_URL'),
+    'url' => null,
     'host' => env('W68_CORE_SYSTEM_DB_HOST', env('CORE_SYSTEM_DB_HOST', env('DB_HOST', '127.0.0.1'))),
     'port' => env('W68_CORE_SYSTEM_DB_PORT', env('CORE_SYSTEM_DB_PORT', env('DB_PORT', '3306'))),
     'database' => env('W68_CORE_SYSTEM_DB_DATABASE', env('CORE_SYSTEM_DB_DATABASE', env('DB_DATABASE', 'core4_system_proposal'))),
