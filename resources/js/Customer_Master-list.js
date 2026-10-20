@@ -685,6 +685,25 @@ function renderCustomerQrPicture(portal = {}) {
     `;
 }
 
+function renderPortalAccountTableCell(c) {
+    const account = c?.portalAccount || {};
+    if (!account.registered) {
+        return "<div class='min-w-[150px]'><span class='inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-slate-400'>Not Registered</span></div>";
+    }
+
+    const username = safeString(account.username).trim() || ('Login #' + safeString(account.login_id));
+    const email = safeString(account.email).trim() || 'No email';
+
+    return "<div class='min-w-[180px]'>" +
+        "<div class='flex items-center gap-2'>" +
+            "<span class='inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-700'>Registered</span>" +
+            "<span class='font-bold text-slate-700'>" + escapeHtml(username) + "</span>" +
+        "</div>" +
+        "<div class='mt-1 text-[10px] font-semibold text-slate-400'>" + escapeHtml(email) + "</div>" +
+    "</div>";
+}
+
+// W68_CUSTOMER_MASTER_PRICELIST_ACCOUNT_VISIBILITY_20261020
 function renderCustomerTableQrCodes() {
     document.querySelectorAll('[data-customer-qr]').forEach((target) => {
         const url = target.getAttribute('data-qr-url') || '';
@@ -722,7 +741,7 @@ function renderTable() {
     if (!data.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="py-16 text-center text-slate-400 italic">
+                <td colspan="9" class="py-16 text-center text-slate-400 italic">
                     <div class="flex flex-col items-center">
                         <i data-lucide="search-x" class="w-10 h-10 mb-2 opacity-20"></i>
                         No customers found
@@ -740,6 +759,7 @@ function renderTable() {
         <tr onclick="openViewModal(${id})" class="hover:bg-slate-50 transition-colors border-b border-slate-100 cursor-pointer">
             <td class="py-3 px-6 align-middle">${renderCustomerQrPicture(portal)}</td>
             <td class="py-4 px-4 font-semibold text-slate-700">${displayValue(c.name)}</td>
+            <td class="py-4 px-4">${renderPortalAccountTableCell(c)}</td>
             <td class="py-4 px-4">${renderQrValidationBadge(portal)}</td>
             <td class="py-4 px-4 whitespace-nowrap">${renderQrRemainingLabel(portal)}</td>
             <td class="py-4 px-4 text-slate-600">${displayValue(c.contactNo)}</td>
@@ -2143,10 +2163,12 @@ function debounce(func, wait) {
 const debouncedFilterColumnSearch = debounce(function() {
     searchValues = {};
     const name = document.getElementById('col-search-name')?.value || '';
+    const portalAccount = document.getElementById('col-search-portal-account')?.value || '';
     const contact = document.getElementById('col-search-contact')?.value || '';
     const person = document.getElementById('col-search-person')?.value || '';
     const address = document.getElementById('col-search-address')?.value || '';
     if (name) searchValues['name'] = name;
+    if (portalAccount) searchValues['portal_account'] = portalAccount;
     if (contact) searchValues['contact_number'] = contact;
     if (person) searchValues['contact_person'] = person;
     if (address) searchValues['address'] = address;
