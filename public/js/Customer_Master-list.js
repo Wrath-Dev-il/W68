@@ -706,6 +706,18 @@ function renderPortalAccountTableCell(c) {
 }
 
 // W68_CUSTOMER_MASTER_PRICELIST_ACCOUNT_VISIBILITY_20261020
+function renderPortalAccountCard(c) {
+    const account = c?.portalAccount || {};
+    if (!account.registered) return '';
+
+    const username = safeString(account.username).trim() || ('Login #' + safeString(account.login_id));
+    const email = safeString(account.email).trim() || 'No email';
+
+    return "<div class='rounded-lg border border-emerald-100 bg-emerald-50/50 p-2'>" +
+        "<div class='flex items-center gap-2 text-emerald-700'><i data-lucide='user-check' class='w-3 h-3'></i><span class='font-black'>" + escapeHtml(username) + "</span></div>" +
+        "<div class='mt-1 truncate pl-5 text-[10px] text-slate-500'>" + escapeHtml(email) + "</div>" +
+    "</div>";
+}
 function renderCustomerTableQrCodes() {
     document.querySelectorAll('[data-customer-qr]').forEach((target) => {
         const url = target.getAttribute('data-qr-url') || '';
@@ -811,6 +823,7 @@ function renderCards() {
                 <h4 class="font-extrabold text-slate-800 truncate">${displayValue(c.name)}</h4>
                 <p class="text-xs text-slate-400 font-bold">${displayValue(c.contactPerson)}</p>
             </div>
+            ${renderPortalAccountCard(c)}
             <div class="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-50">
                 <div class="flex items-center gap-2"><i data-lucide="phone" class="w-3 h-3"></i> ${displayValue(c.contactNo)}</div>
                 <div class="flex items-center gap-2 truncate"><i data-lucide="map-pin" class="w-3 h-3"></i> ${displayValue(c.address)}</div>
