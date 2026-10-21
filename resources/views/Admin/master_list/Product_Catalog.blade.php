@@ -103,15 +103,19 @@
 
         .catalog-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px; /* Slightly tighter gap */
-            margin-bottom: auto;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            flex: 1 1 auto;
+            min-height: 0;
+            margin-bottom: 4mm;
         }
 
         .item-card {
             border: 3px solid black;
             display: flex;
-            height: 36mm; /* Reduced height to fit 6 rows with gaps */
+            height: auto;
+            min-height: 0;
             overflow: hidden;
             background: white;
             box-sizing: border-box;
@@ -131,18 +135,23 @@
 
         .item-details {
             width: 62%;
-            padding: 6px 8px; /* Slightly more compact vertical padding */
+            padding: 7px 8px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             background: rgba(255, 255, 255, 0.3);
+            min-width: 0;
         }
 
         .detail-row {
-            margin-bottom: 2px;
+            margin-bottom: 3px;
             font-size: 11px;
-            line-height: 1.1;
+            line-height: 1.15;
             color: black;
+            display: grid;
+            grid-template-columns: 68px minmax(0, 1fr);
+            column-gap: 4px;
+            align-items: start;
         }
 
         .detail-label {
@@ -151,7 +160,29 @@
             text-transform: uppercase;
             font-size: 9px;
             display: inline-block;
-            width: 75px;
+            width: auto;
+        }
+
+        .product-code-text {
+            color: #1d4ed8 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .description-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.15;
+        }
+
+        .application-text {
+            display: block;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            line-height: 1.15;
         }
 
         .price-text {
@@ -229,7 +260,7 @@
 
     <div id="catalog-container">
     @php
-        $catalogChunks = $products->chunk(12);
+        $catalogChunks = $products->chunk(10);
         $totalPages = $catalogChunks->count();
 
         $_getProductPicture = function ($productId) {
@@ -320,7 +351,7 @@
                     </div>
                 </div>
 
-                <!-- Catalog Grid (12 items) -->
+                <!-- Catalog Grid (10 items / 5 rows x 2 columns) -->
                 <div class="catalog-grid">
                     @foreach($productChunk as $product)
                         <div class="item-card">
@@ -343,15 +374,19 @@
                             <div class="item-details">
                                 <div class="detail-row">
                                     <span class="detail-label">Item Name:</span>
-                                    <span class="font-black text-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
+                                    <span class="product-code-text font-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="detail-label">Part No#:</span>
                                     <span class="font-mono text-black font-bold text-[9px]">{{ $product->part_number }}</span>
                                 </div>
                                 <div class="detail-row">
+                                    <span class="detail-label">Description:</span>
+                                    <span class="description-text text-black font-semibold text-[9px]">{{ $product->description ?: '---' }}</span>
+                                </div>
+                                <div class="detail-row">
                                     <span class="detail-label">Application:</span>
-                                    <span class="text-black font-bold text-[9px] truncate-text leading-tight">
+                                    <span class="application-text text-black font-bold text-[9px]">
                                         {{ $product->application ?: $product->Application ?: '---' }}
                                         @if($product->position ?: $product->Position)
                                             <span class="text-[8px] text-slate-500 ml-1">({{ $product->position ?: $product->Position }})</span>
