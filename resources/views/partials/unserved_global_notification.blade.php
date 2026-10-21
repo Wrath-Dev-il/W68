@@ -20,7 +20,7 @@
     );
 @endphp
 
-@if($w68UnservedRoutePrefix)
+@if($w68UnservedRoutePrefix && $w68UnservedAccountType === 3)
 <div
     id="w68-unserved-scheduled-notification"
     data-summary-url="{{ route($w68UnservedRoutePrefix . '.unserved-report.notification-summary') }}"
@@ -313,6 +313,7 @@
 </style>
 
 <script>
+// W68_UNSERVED_REMINDER_SPECIAL_ONLY_20261021
 (() => {
     const root = document.getElementById('w68-unserved-scheduled-notification');
     if (!root || root.dataset.initialized === '1') return;
