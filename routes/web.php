@@ -7992,7 +7992,7 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
 
     if ($request->ajax() && $request->has('page_num')) {
         $pageNum = (int) $request->input('page_num');
-        $perPage = 12;
+        $perPage = 10;
         $products = $baseQuery()->select($ajaxSelectColumns)->offset(($pageNum - 1) * $perPage)->limit($perPage)->get();
 
         return view('Admin.master_list.partials.catalog_chunk', [
