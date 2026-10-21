@@ -93,6 +93,17 @@
                 page-break-inside: avoid;
                 break-inside: avoid;
             }
+
+            /*
+             * W68_ONLINE_REPORT_TWO_CARDS_PER_PRINT_PAGE_20261021
+             * Each item-block contains two product cards side-by-side.
+             * Keep the first pair under the half-page order report, then force
+             * every following pair onto a fresh printed page.
+             */
+            .w68-item-pair-new-print-page {
+                break-before: page !important;
+                page-break-before: always !important;
+            }
         }
     </style>
 </head>
@@ -225,7 +236,7 @@ foreach ($note['items'] as $item) {
         return number_format((float)$val) . ($unit ? ' ' . $unit : '');
     };
 @endphp
-@foreach($note['paired'] as $pair)
+@foreach($note['paired'] as $pairIndex => $pair)
 @php
     $leftItem = $note['items'][$pair['left_idx']];
     $hasCp = $pair['has_cp'];
@@ -244,7 +255,7 @@ foreach ($note['items'] as $item) {
     $_lComp = $localBalanceStocks[$_lPid] ?? 0;
     $_lOnline = $onlineBalanceStocks[$_lPid] ?? null;
 @endphp
-<div class="item-block">
+<div class="item-block {{ $pairIndex > 0 ? 'w68-item-pair-new-print-page' : '' }}">
 <div class="item-inner">
 <div class="side">
     <div class="detail-row"><span class="lbl">PART NUMBER:</span> <span style="color:red">{{ $_lPn }}</span></div>
