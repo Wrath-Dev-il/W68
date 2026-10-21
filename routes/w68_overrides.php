@@ -2242,3 +2242,454 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         'pagination' => $pagination,
     ]);
 })->name('admin.customer-master.data');
+
+
+/*
+|--------------------------------------------------------------------------
+| Inventory Adjustment safety + chronological recalculation
+|--------------------------------------------------------------------------
+|
+| W68_INVENTORY_ADJUSTMENT_NEGATIVE_GUARD_RECALC_20261021
+|
+| Shared Admin endpoint. Regular and Special Inventory Adjustment routes proxy
+| to these named Admin routes, so all three roles receive the same protection.
+|
+*/
+if (!function_exists('hatdogInventoryAdjustmentNegativeResponse')) {
+    function hatdogInventoryAdjustmentNegativeResponse(
+        int $currentOnHand,
+        int $requestedQty,
+        int $minimumSafeQty,
+        int $projectedMinimumBalance,
+        string $context = 'create',
+        ?int $recordedAdjustedQty = null
+    ) {
+        $baseQty = $recordedAdjustedQty ?? $currentOnHand;
+        $maximumSafeDeduction = max(0, $baseQty - $minimumSafeQty);
+
+        $instruction = $context === 'edit'
+            ? 'Re-enter an Adjusted Quantity of at least ' . $minimumSafeQty
+                . '. If you want the largest safe reduction for this adjustment, use '
+                . $minimumSafeQty . '.'
+            : 'Re-enter the Actual Physical Quantity as 0 or higher. '
+                . 'The maximum safe deduction from the current stock is '
+                . max(0, $currentOnHand) . '.';
+
+        return response()->json([
+            'success' => false,
+            'code' => 'NEGATIVE_INVENTORY',
+            'message' => 'This adjustment was not saved because it would make inventory negative.',
+            'warning_context' => $context,
+            'current_on_hand' => $currentOnHand,
+            'recorded_adjusted_qty' => $recordedAdjustedQty,
+            'requested_adjusted_qty' => $requestedQty,
+            'minimum_safe_adjusted_qty' => $minimumSafeQty,
+            'recommended_adjusted_qty' => $minimumSafeQty,
+            'maximum_safe_deduction' => $maximumSafeDeduction,
+            'projected_minimum_balance' => $projectedMinimumBalance,
+            'instruction' => $instruction,
+        ], 422);
+    }
+}
+
+Route::post('/admin/inventory/adjustment/adjust', function (\Illuminate\Http\Request $request) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $validated = $request->validate([
+        'product_id' => 'required|exists:masterlist.products,id',
+        'actual_qty' => 'required|integer',
+        'unit' => 'required|string|max:255',
+    ]);
+
+    $ledgerDb = DB::connection('ledger');
+    $masterDb = DB::connection('masterlist');
+    $ledgerDb->beginTransaction();
+    $masterDb->beginTransaction();
+
+    try {
+        $product = $masterDb->table('products')
+            ->where('id', (int) $validated['product_id'])
+            ->lockForUpdate()
+            ->first();
+
+        if (!$product) {
+            throw new \RuntimeException('Product not found.');
+        }
+
+        $latestLedger = $ledgerDb->table('product_ledgers')
+            ->where('product_id', (int) $product->id)
+            ->orderByDesc('date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+
+        $currentBalance = $latestLedger
+            ? (int) ($latestLedger->balance_stock ?? 0)
+            : (int) ($product->on_hand ?? 0);
+
+        $targetBalance = (int) $validated['actual_qty'];
+
+        if ($targetBalance < 0) {
+            $ledgerDb->rollBack();
+            $masterDb->rollBack();
+
+            return hatdogInventoryAdjustmentNegativeResponse(
+                (int) ($product->on_hand ?? $currentBalance),
+                $targetBalance,
+                0,
+                $targetBalance,
+                'create'
+            );
+        }
+
+        $unit = trim((string) $validated['unit']);
+        $movement = $targetBalance - $currentBalance;
+        $transactionType = $movement >= 0 ? 'IN' : 'OUT';
+        $quantityIn = $movement > 0 ? $movement : 0;
+        $quantityOut = $movement < 0 ? abs($movement) : 0;
+        $actor = hatdogAuditActor($user);
+        $now = now();
+
+        $ledgerId = $ledgerDb->table('product_ledgers')->insertGetId([
+            'product_id' => (int) $product->id,
+            'transaction_type' => $transactionType,
+            'date' => $now->toDateString(),
+            'transaction_number' => 'ADJ-' . (string) ($product->product_code ?? $product->id) . '-' . $now->format('YmdHis'),
+            'reference_number' => 'INVENTORY-ADJUSTMENT',
+            'entity_name' => $actor['name'],
+            'quantity_in' => $quantityIn,
+            'quantity_out' => $quantityOut,
+            'balance_stock' => $targetBalance,
+            'oum' => $unit,
+            'price' => (float) ($product->selling_price ?? 0),
+            'cost' => (float) ($product->cost ?? 0),
+            'remarks' => 'Inventory adjustment via admin panel',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $beforeOnHand = (int) ($product->on_hand ?? 0);
+        $beforeActualQty = (int) ($product->actual_qty ?? 0);
+        $beforeUnit = trim((string) ($product->unit ?? ''));
+
+        $masterDb->table('products')->where('id', (int) $product->id)->update([
+            'on_hand' => $targetBalance,
+            'actual_qty' => $targetBalance,
+            'unit' => $unit,
+            'updated_at' => $now,
+        ]);
+
+        $recordName = trim((string) (
+            ($product->description ?? '') !== ''
+                ? $product->description
+                : ($product->part_number ?? $product->product_code ?? 'Inventory Item')
+        ));
+
+        hatdogWriteAuditTrail([
+            'module' => 'inventory',
+            'action' => 'Adjusted',
+            'source_connection' => 'ledger',
+            'source_table' => 'product_ledgers',
+            'source_id' => (int) $ledgerId,
+            'display_id' => (string) ($product->product_code ?? $product->id),
+            'record_name' => $recordName,
+            'user_name' => $actor['name'],
+            'user_identifier' => $actor['identifier'],
+            'audit_data' => [
+                'before' => [
+                    'on_hand' => $beforeOnHand,
+                    'actual_qty' => $beforeActualQty,
+                    'unit' => $beforeUnit,
+                ],
+                'after' => [
+                    'on_hand' => $targetBalance,
+                    'actual_qty' => $targetBalance,
+                    'unit' => $unit,
+                    'quantity_in' => $quantityIn,
+                    'quantity_out' => $quantityOut,
+                ],
+            ],
+        ]);
+
+        $ledgerDb->commit();
+        $masterDb->commit();
+
+        \App\Services\ProductStockSyncService::clearProductMasterStatsCache();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Inventory adjusted successfully. On-hand stock is now ' . $targetBalance . '.',
+            'on_hand' => $targetBalance,
+            'adjustment_id' => (int) $ledgerId,
+        ]);
+    } catch (\Throwable $e) {
+        if ($ledgerDb->transactionLevel() > 0) $ledgerDb->rollBack();
+        if ($masterDb->transactionLevel() > 0) $masterDb->rollBack();
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 422);
+    }
+})->name('admin.inv-adjust.save');
+
+Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\Http\Request $request, $id) {
+    $user = session('user');
+    if (!$user) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $validated = $request->validate([
+        'adjusted_qty' => 'required|integer',
+        'unit' => 'required|string|max:255',
+    ]);
+
+    $ledgerDb = DB::connection('ledger');
+    $masterDb = DB::connection('masterlist');
+    $ledgerDb->beginTransaction();
+    $masterDb->beginTransaction();
+
+    try {
+        $row = $ledgerDb->table('product_ledgers')
+            ->where('id', (int) $id)
+            ->where('reference_number', 'INVENTORY-ADJUSTMENT')
+            ->lockForUpdate()
+            ->first();
+
+        if (!$row) {
+            $ledgerDb->rollBack();
+            $masterDb->rollBack();
+            return response()->json(['success' => false, 'message' => 'Adjustment record not found.'], 404);
+        }
+
+        $product = $masterDb->table('products')
+            ->where('id', (int) $row->product_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$product) {
+            $ledgerDb->rollBack();
+            $masterDb->rollBack();
+            return response()->json(['success' => false, 'message' => 'Product not found.'], 404);
+        }
+
+        $rows = $ledgerDb->table('product_ledgers')
+            ->where('product_id', (int) $row->product_id)
+            ->orderBy('date')
+            ->orderByRaw('COALESCE(created_at, "1970-01-01 00:00:00") ASC')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $targetIndex = null;
+        foreach ($rows as $index => $ledgerRow) {
+            if ((int) $ledgerRow->id === (int) $row->id) {
+                $targetIndex = $index;
+                break;
+            }
+        }
+
+        if ($targetIndex === null) {
+            throw new \RuntimeException('Unable to locate the adjustment in the Product Ledger sequence.');
+        }
+
+        $oldTargetBalance = (int) ($row->balance_stock ?? 0);
+        $newTargetBalance = (int) $validated['adjusted_qty'];
+        $unit = trim((string) $validated['unit']);
+
+        // Preserve the exact stock immediately before this adjustment.
+        $balanceBeforeTarget = $oldTargetBalance
+            - (int) ($row->quantity_in ?? 0)
+            + (int) ($row->quantity_out ?? 0);
+
+        // A later Inventory Adjustment is an absolute physical-stock anchor.
+        // Only movements before the next adjustment depend on this edited target.
+        $cumulativeAfterTarget = 0;
+        $minimumCumulative = 0;
+        $nextAdjustmentIndex = null;
+
+        for ($i = $targetIndex + 1, $count = $rows->count(); $i < $count; $i++) {
+            $laterRow = $rows[$i];
+
+            if (strtoupper(trim((string) ($laterRow->reference_number ?? ''))) === 'INVENTORY-ADJUSTMENT') {
+                $nextAdjustmentIndex = $i;
+                break;
+            }
+
+            $cumulativeAfterTarget += (int) ($laterRow->quantity_in ?? 0)
+                - (int) ($laterRow->quantity_out ?? 0);
+            $minimumCumulative = min($minimumCumulative, $cumulativeAfterTarget);
+        }
+
+        $minimumSafeTarget = max(0, -$minimumCumulative);
+        $projectedMinimumBalance = $newTargetBalance + $minimumCumulative;
+
+        if ($newTargetBalance < $minimumSafeTarget) {
+            $ledgerDb->rollBack();
+            $masterDb->rollBack();
+
+            return hatdogInventoryAdjustmentNegativeResponse(
+                (int) ($product->on_hand ?? 0),
+                $newTargetBalance,
+                $minimumSafeTarget,
+                $projectedMinimumBalance,
+                'edit',
+                $oldTargetBalance
+            );
+        }
+
+        $targetMovement = $newTargetBalance - $balanceBeforeTarget;
+        $targetType = $targetMovement >= 0 ? 'IN' : 'OUT';
+        $targetIn = $targetMovement > 0 ? $targetMovement : 0;
+        $targetOut = $targetMovement < 0 ? abs($targetMovement) : 0;
+
+        $ledgerDb->table('product_ledgers')->where('id', (int) $row->id)->update([
+            'transaction_type' => $targetType,
+            'quantity_in' => $targetIn,
+            'quantity_out' => $targetOut,
+            'balance_stock' => $newTargetBalance,
+            'oum' => $unit,
+            'updated_at' => now(),
+        ]);
+
+        $runningBalance = $newTargetBalance;
+
+        // Recalculate every dependent row until the next physical adjustment.
+        $endIndex = $nextAdjustmentIndex ?? $rows->count();
+
+        for ($i = $targetIndex + 1; $i < $endIndex; $i++) {
+            $laterRow = $rows[$i];
+            $runningBalance += (int) ($laterRow->quantity_in ?? 0)
+                - (int) ($laterRow->quantity_out ?? 0);
+
+            if ($runningBalance < 0) {
+                throw new \RuntimeException(
+                    'Adjustment recalculation stopped because ledger row #'
+                    . (int) $laterRow->id . ' would become negative.'
+                );
+            }
+
+            if ((int) ($laterRow->balance_stock ?? 0) !== $runningBalance) {
+                $ledgerDb->table('product_ledgers')->where('id', (int) $laterRow->id)->update([
+                    'balance_stock' => $runningBalance,
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        // The next Inventory Adjustment remains the same absolute stock count,
+        // but its IN/OUT movement must be rebuilt from the newly calculated
+        // stock immediately before it.
+        if ($nextAdjustmentIndex !== null) {
+            $anchorRow = $rows[$nextAdjustmentIndex];
+            $anchorBalance = (int) ($anchorRow->balance_stock ?? 0);
+
+            if ($anchorBalance < 0) {
+                throw new \RuntimeException('A later inventory adjustment already contains a negative stock balance.');
+            }
+
+            $anchorMovement = $anchorBalance - $runningBalance;
+            $anchorType = $anchorMovement >= 0 ? 'IN' : 'OUT';
+            $anchorIn = $anchorMovement > 0 ? $anchorMovement : 0;
+            $anchorOut = $anchorMovement < 0 ? abs($anchorMovement) : 0;
+
+            $ledgerDb->table('product_ledgers')->where('id', (int) $anchorRow->id)->update([
+                'transaction_type' => $anchorType,
+                'quantity_in' => $anchorIn,
+                'quantity_out' => $anchorOut,
+                'updated_at' => now(),
+            ]);
+        }
+
+        // Read the true current stock after recalculation. If there is a later
+        // adjustment anchor, the later chain is intentionally unchanged.
+        $latestLedger = $ledgerDb->table('product_ledgers')
+            ->where('product_id', (int) $row->product_id)
+            ->orderByDesc('date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first(['balance_stock']);
+
+        $latestAdjustment = $ledgerDb->table('product_ledgers')
+            ->where('product_id', (int) $row->product_id)
+            ->where('reference_number', 'INVENTORY-ADJUSTMENT')
+            ->orderByDesc('date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first(['balance_stock', 'oum']);
+
+        $currentOnHand = (int) ($latestLedger->balance_stock ?? 0);
+        $latestActualQty = $latestAdjustment
+            ? (int) ($latestAdjustment->balance_stock ?? $currentOnHand)
+            : $currentOnHand;
+        $latestUnit = $latestAdjustment && trim((string) ($latestAdjustment->oum ?? '')) !== ''
+            ? trim((string) $latestAdjustment->oum)
+            : trim((string) ($product->unit ?? ''));
+
+        if ($currentOnHand < 0) {
+            throw new \RuntimeException('Adjustment update was cancelled because the resulting current on-hand would be negative.');
+        }
+
+        $masterDb->table('products')->where('id', (int) $row->product_id)->update([
+            'on_hand' => $currentOnHand,
+            'actual_qty' => $latestActualQty,
+            'unit' => $latestUnit,
+            'updated_at' => now(),
+        ]);
+
+        $actor = hatdogAuditActor($user);
+        hatdogWriteAuditTrail([
+            'module' => 'inventory',
+            'action' => 'Updated',
+            'source_connection' => 'ledger',
+            'source_table' => 'product_ledgers',
+            'source_id' => (int) $row->id,
+            'display_id' => (string) ($product->product_code ?? $row->id),
+            'record_name' => (string) ($product->part_number ?? $product->product_code ?? 'Inventory Adjustment'),
+            'user_name' => $actor['name'],
+            'user_identifier' => $actor['identifier'],
+            'audit_data' => [
+                'before' => [
+                    'transaction_type' => (string) ($row->transaction_type ?? ''),
+                    'quantity_in' => (int) ($row->quantity_in ?? 0),
+                    'quantity_out' => (int) ($row->quantity_out ?? 0),
+                    'adjusted_qty' => $oldTargetBalance,
+                    'unit' => (string) ($row->oum ?? ''),
+                    'product_on_hand' => (int) ($product->on_hand ?? 0),
+                ],
+                'after' => [
+                    'transaction_type' => $targetType,
+                    'quantity_in' => $targetIn,
+                    'quantity_out' => $targetOut,
+                    'adjusted_qty' => $newTargetBalance,
+                    'unit' => $unit,
+                    'product_on_hand' => $currentOnHand,
+                ],
+            ],
+        ]);
+
+        $ledgerDb->commit();
+        $masterDb->commit();
+
+        \App\Services\ProductStockSyncService::clearProductMasterStatsCache();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Adjustment updated and on-hand stock recalculated successfully.',
+            'on_hand' => $currentOnHand,
+            'adjusted_qty' => $newTargetBalance,
+        ]);
+    } catch (\Throwable $e) {
+        if ($ledgerDb->transactionLevel() > 0) $ledgerDb->rollBack();
+        if ($masterDb->transactionLevel() > 0) $masterDb->rollBack();
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 422);
+    }
+})->name('admin.inv-adjust.adjusted.update');
