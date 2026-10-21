@@ -32,12 +32,9 @@
         .costing-inline { margin: 3px 0; font-size: 11px; font-weight: 600; white-space: normal; line-height: 1.2; }
         .row-label { text-align: center; font-weight: bold; background: #f0f0f0; }
         .note-section { page-break-inside: auto; }
-        @page { 
-            size: 8.5in 11in portrait; 
-            margin-top: 0.5cm;
-            margin-bottom: 5.3in;
-            margin-left: 1cm;
-            margin-right: 1cm;
+        @page {
+            size: Letter portrait;
+            margin: 0.5cm 1cm 0.5cm 1cm;
         }
         .stock-summary {
             display: flex;
@@ -52,11 +49,50 @@
             white-space: nowrap;
         }
         @media print {
-            body { margin: 0; padding: 0; background: #fff; display: block !important; }
-            #printable-content { display: block !important; }
+            html, body {
+                width: auto !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                display: block !important;
+                overflow: visible !important;
+            }
+            #printable-content {
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
             .no-print { display: none !important; }
-            .note-section { page-break-inside: auto; }
-            .item-block { page-break-inside: avoid; break-inside: avoid; }
+
+            .note-section {
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+
+            .items-table,
+            .sales-table {
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+
+            .items-table thead,
+            .sales-table thead {
+                display: table-header-group;
+            }
+
+            .items-table tr,
+            .sales-table tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .item-block,
+            .item-inner {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
         }
     </style>
 </head>
@@ -370,11 +406,12 @@ function saveAsPDF() {
     btn.disabled = true;
     const element = document.getElementById('printable-content');
     const opt = {
-        margin: [3, 3, 3, 3],
+        margin: [0.2, 0.35, 0.2, 0.35],
         filename: 'Online-Report-{{ $note["sales_number"] ?? "report" }}.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true, backgroundColor: '#ffffff', foreignObjectRendering: false, windowHeight: element.scrollHeight },
-        jsPDF: { unit: 'in', format: [5.5, 8.5], orientation: 'portrait' }
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['.item-block', '.item-inner', 'tr'] },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(element).save();
     setTimeout(() => { btn.innerHTML = 'Save as PDF'; btn.disabled = false; }, 1500);
