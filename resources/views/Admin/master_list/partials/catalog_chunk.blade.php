@@ -15,7 +15,7 @@
             </div>
         </div>
 
-        <!-- Catalog Grid (12 items) -->
+        <!-- Catalog Grid (10 items / 5 rows x 2 columns) -->
         <div class="catalog-grid">
             @foreach($products as $product)
                 <div class="item-card">
@@ -70,15 +70,19 @@
                     <div class="item-details">
                         <div class="detail-row">
                             <span class="detail-label">Item Name:</span>
-                            <span class="font-black text-slate-800 uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
+                            <span class="product-code-text font-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Part No#:</span>
                             <span class="font-mono text-slate-700 font-bold text-[9px]">{{ $product->part_number }}</span>
                         </div>
                         <div class="detail-row">
+                            <span class="detail-label">Description:</span>
+                            <span class="description-text text-slate-700 font-semibold text-[9px]">{{ $product->description ?: '---' }}</span>
+                        </div>
+                        <div class="detail-row">
                             <span class="detail-label">Application:</span>
-                            <span class="text-slate-600 font-bold text-[9px] truncate-text">
+                            <span class="application-text text-slate-700 font-bold text-[9px]">
                                 {{ $product->application ?: $product->Application ?: '---' }}
                                 @if($product->position ?: $product->Position)
                                     <span class="text-[7px] text-slate-400 ml-1">({{ $product->position ?: $product->Position }})</span>
