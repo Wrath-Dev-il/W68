@@ -54,6 +54,131 @@ function showSuccess(title, message) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function ensureInventoryWarningModal() {
+    if (document.getElementById('inventory-negative-warning-modal')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+        <div id="inventory-negative-warning-modal" class="fixed inset-0 z-[140] overflow-y-auto hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="fixed inset-0 bg-red-950/60 backdrop-blur-sm"></div>
+                <div class="modal-animate-in relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 space-y-6 border-b-8 border-red-500">
+                    <div class="flex items-start gap-4">
+                        <div class="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="triangle-alert" class="w-8 h-8 text-red-500"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800">Adjustment Would Cause Negative Inventory</h3>
+                            <p class="mt-2 text-xs font-medium leading-relaxed text-slate-500">
+                                This adjustment was not saved. Re-enter a safe quantity before trying again.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Current On-Hand</p>
+                            <p id="inventory-warning-current" class="mt-1 text-xl font-black text-slate-800">0</p>
+                        </div>
+                        <div class="rounded-2xl bg-red-50 border border-red-100 p-4">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-red-400">Requested Quantity</p>
+                            <p id="inventory-warning-requested" class="mt-1 text-xl font-black text-red-600">0</p>
+                        </div>
+                        <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-500">Minimum Safe Quantity</p>
+                            <p id="inventory-warning-safe" class="mt-1 text-xl font-black text-emerald-700">0</p>
+                        </div>
+                        <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-500">Maximum Safe Deduction</p>
+                            <p id="inventory-warning-deduction" class="mt-1 text-xl font-black text-amber-700">0</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <div class="flex gap-3">
+                            <i data-lucide="lightbulb" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
+                            <div>
+                                <p class="text-[9px] font-black uppercase tracking-widest text-amber-700">What to enter</p>
+                                <p id="inventory-warning-instruction" class="mt-1 text-xs font-bold leading-relaxed text-slate-700"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="closeInventoryWarningModal()" class="w-full py-3.5 bg-maroon text-white text-[10px] font-black rounded-xl uppercase tracking-widest hover:opacity-90 transition-all">
+                        Return & Re-enter Quantity
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(wrapper.firstElementChild);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function showInventoryWarning(details = {}, focusTargetId = '') {
+    ensureInventoryWarningModal();
+
+    const current = Number(details.current_on_hand ?? 0);
+    const requested = Number(details.requested_adjusted_qty ?? 0);
+    const safe = Number(details.minimum_safe_adjusted_qty ?? details.recommended_adjusted_qty ?? 0);
+    const deduction = Number(details.maximum_safe_deduction ?? Math.max(0, current - safe));
+
+    document.getElementById('inventory-warning-current').textContent = Number.isFinite(current) ? current : 0;
+    document.getElementById('inventory-warning-requested').textContent = Number.isFinite(requested) ? requested : 0;
+    document.getElementById('inventory-warning-safe').textContent = Number.isFinite(safe) ? safe : 0;
+    document.getElementById('inventory-warning-deduction').textContent = Number.isFinite(deduction) ? deduction : 0;
+
+    const instruction = details.instruction
+        || `Enter a quantity of at least ${safe}. Using ${safe} is the lowest value that will keep the inventory from becoming negative.`;
+
+    const instructionEl = document.getElementById('inventory-warning-instruction');
+    if (instructionEl) instructionEl.textContent = instruction;
+
+    const modal = document.getElementById('inventory-negative-warning-modal');
+    if (modal) {
+        modal.dataset.focusTarget = focusTargetId || '';
+        modal.classList.remove('hidden');
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+window.closeInventoryWarningModal = function() {
+    const modal = document.getElementById('inventory-negative-warning-modal');
+    if (!modal) return;
+
+    const focusTarget = modal.dataset.focusTarget || '';
+    modal.classList.add('hidden');
+
+    if (focusTarget) {
+        window.setTimeout(() => {
+            const input = document.getElementById(focusTarget);
+            input?.focus();
+            input?.select?.();
+        }, 50);
+    }
+};
+
+async function readAdjustmentResponse(res, focusTargetId = '') {
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+        if (data.code === 'NEGATIVE_INVENTORY') {
+            showInventoryWarning(data, focusTargetId);
+            const error = new Error(data.message || 'Adjustment would cause negative inventory.');
+            error.inventoryWarningShown = true;
+            throw error;
+        }
+
+        throw new Error(data.message || 'Inventory adjustment request failed.');
+    }
+
+    return data;
+}
+
+// W68_INVENTORY_ADJUSTMENT_NEGATIVE_WARNING_MODAL_20261021
+
 function setupAdjustedSearchListeners() {
     ['code', 'part', 'qty', 'unit'].forEach(key => {
         const input = document.getElementById(`adjusted-search-${key}`);
@@ -217,10 +342,23 @@ window.saveEditedAdjustment = function() {
     const unit = document.getElementById('edit-adjustment-unit')?.value.trim() || '';
     const qty = Number.parseInt(qtyValue, 10);
 
-    if (!id || qtyValue === '' || Number.isNaN(qty) || qty < 0) {
+    if (!id || qtyValue === '' || Number.isNaN(qty)) {
         alert('Please enter a valid quantity.');
         return;
     }
+
+    if (qty < 0) {
+        const row = adjustedRows.find(x => Number(x.id) === id);
+        showInventoryWarning({
+            current_on_hand: Number(row?.adjusted_qty || 0),
+            requested_adjusted_qty: qty,
+            minimum_safe_adjusted_qty: 0,
+            maximum_safe_deduction: Math.max(0, Number(row?.adjusted_qty || 0)),
+            instruction: 'Enter 0 or a higher Adjusted Quantity. The system will also check all later stock movements before saving.'
+        }, 'edit-adjustment-qty');
+        return;
+    }
+
     if (!unit) {
         alert('Please enter a unit.');
         return;
@@ -235,20 +373,18 @@ window.saveEditedAdjustment = function() {
         },
         body: JSON.stringify({ adjusted_qty: qty, unit })
     })
-        .then(async res => {
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update adjustment.');
-            return data;
-        })
+        .then(res => readAdjustmentResponse(res, 'edit-adjustment-qty'))
         .then(r => {
             toggleModal('edit-adjustment-modal', false);
-            showSuccess('Adjustment Updated!', r.message || 'The adjustment was updated successfully.');
+            showSuccess('Adjustment Updated!', r.message || 'The adjustment was updated and stock was recalculated successfully.');
             fetchAdjusted(adjustedPage);
             fetchProducts(currentPage);
         })
         .catch(err => {
             console.error(err);
-            alert(err.message || 'Error updating adjustment.');
+            if (!err.inventoryWarningShown) {
+                alert(err.message || 'Error updating adjustment.');
+            }
         });
 };
 
@@ -493,11 +629,24 @@ window.confirmAdjustment = function() {
         alert('Please enter a valid actual quantity.');
         return;
     }
-    const newActual = parseInt(inputVal);
-    if (isNaN(newActual) || newActual < 0) {
+
+    const newActual = parseInt(inputVal, 10);
+    if (Number.isNaN(newActual)) {
         alert('Please enter a valid actual quantity.');
         return;
     }
+
+    if (newActual < 0) {
+        showInventoryWarning({
+            current_on_hand: Number(selectedItem?.computerStock || 0),
+            requested_adjusted_qty: newActual,
+            minimum_safe_adjusted_qty: 0,
+            maximum_safe_deduction: Math.max(0, Number(selectedItem?.computerStock || 0)),
+            instruction: 'Enter 0 or a higher Actual Physical Quantity. A negative stock value cannot be saved.'
+        }, 'adj-input-qty');
+        return;
+    }
+
     const unit = document.getElementById('adj-input-unit')?.value.trim() || '';
     if (!unit) {
         alert('Please enter a unit.');
@@ -519,21 +668,20 @@ window.confirmAdjustment = function() {
                 unit: unit
             })
         })
-        .then(res => res.json())
+        .then(res => readAdjustmentResponse(res, 'adj-input-qty'))
         .then(r => {
-            if (r.success) {
-                toggleModal('confirm-modal', false);
-                toggleModal('adjust-modal', false);
-                showSuccess('Adjustment Complete!', r.message || 'The inventory levels have been synchronized successfully.');
-                fetchProducts(currentPage);
-                if (adjustedLoaded) fetchAdjusted(1);
-            } else {
-                alert(r.message || 'Failed to save adjustment.');
-            }
+            toggleModal('confirm-modal', false);
+            toggleModal('adjust-modal', false);
+            showSuccess('Adjustment Complete!', r.message || 'The inventory levels have been synchronized successfully.');
+            fetchProducts(currentPage);
+            if (adjustedLoaded) fetchAdjusted(1);
         })
         .catch(err => {
             console.error(err);
-            alert('Error saving adjustment.');
+            toggleModal('confirm-modal', false);
+            if (!err.inventoryWarningShown) {
+                alert(err.message || 'Error saving adjustment.');
+            }
         });
     };
     toggleModal('confirm-modal', true);
