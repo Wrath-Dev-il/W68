@@ -290,7 +290,9 @@ function triggerDownload(url, btn) {
 
     const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const isAll = btn.classList.contains('developer-download-all-btn');
-    const name = isAll ? 'hatdog_full_backup_' + ts + '.zip' : 'hatdog_backup_' + ts + '.zip';
+    const name = isAll
+        ? 'w68_all_databases_' + ts + '.zip'
+        : 'w68_database_' + ts + '.sql.gz';
     const fullUrl = url.replace(/\/+$/, '') + '/' + name;
     window.location.href = fullUrl;
 
