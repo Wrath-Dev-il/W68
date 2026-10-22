@@ -23,6 +23,7 @@
         print: '{{ route("admin.purchase.note.print", ["id" => ":id"]) }}',
         verifyPasswordUrl: '{{ route("admin.purchase.note.verify-password") }}',
         checkPasswordUrl: '{{ url("/check-password") }}',
+        invoiceDetailUrl: '{{ url("/admin/purchase/purchase-order/detail") }}/:poId',
         invoicesByNoteUrl: '{{ route("admin.purchase-order.by-note", ["purchaseNoteNumber" => ":noteNumber"]) }}'
     };
     

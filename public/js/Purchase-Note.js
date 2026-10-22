@@ -62,6 +62,36 @@ function normalizePurchaseNoteProductCode(value) {
         .toUpperCase();
 }
 
+async function fetchPurchaseNoteJson(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    if (!headers.has('X-Requested-With')) headers.set('X-Requested-With', 'XMLHttpRequest');
+
+    const response = await fetch(url, {
+        ...options,
+        headers,
+    });
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+    if (!contentType.includes('application/json')) {
+        const body = await response.text();
+        const preview = body.replace(/\s+/g, ' ').trim().slice(0, 160);
+        throw new Error(
+            `Purchase Note request returned HTTP ${response.status} ${response.statusText || ''} instead of JSON`
+            + (preview ? `: ${preview}` : '')
+        );
+    }
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+        throw new Error(payload?.message || `Purchase Note request failed with HTTP ${response.status}.`);
+    }
+
+    return payload;
+}
+
 /**
  * Keep Edit Purchase Note items in the exact arrangement of the original
  * Purchase Note even when Step 2 reloads items from a Purchase Order.
@@ -822,8 +852,7 @@ async function loadPNInvoices() {
     try {
         const baseUrl = window.purchaseRoutes?.invoicesByNoteUrl || '/hatdog/public/admin/purchase/purchase-order/by-note/:noteNumber';
         const url = baseUrl.replace(':noteNumber', encodeURIComponent(noteNumber));
-        const res = await fetch(url);
-        const result = await res.json();
+        const result = await fetchPurchaseNoteJson(url);
 
         if (!result.success) throw new Error(result.message || 'Failed to load invoices');
 
@@ -980,10 +1009,13 @@ window.selectInvoiceForFiltering = async function(poId, poNumber, poStatus) {
     } else {
         // Fetch PO detail items
         try {
-            const baseUrl = window.purchaseRoutes?.invoiceDetailUrl || '/hatdog/public/admin/purchase/purchase-order/detail/:poId';
+            const baseUrl = window.purchaseRoutes?.invoiceDetailUrl;
+            if (!baseUrl || !baseUrl.includes(':poId')) {
+                throw new Error('Purchase Order detail route is not configured for this account.');
+            }
+
             const url = baseUrl.replace(':poId', encodeURIComponent(poId));
-            const res = await fetch(url);
-            const result = await res.json();
+            const result = await fetchPurchaseNoteJson(url);
 
             if (!result.success) throw new Error(result.message || 'Failed to load invoice items');
 
@@ -1026,7 +1058,7 @@ window.selectInvoiceForFiltering = async function(poId, poNumber, poStatus) {
                 selectedItems = originalPNItems.map(item => ({ ...item }));
             }
             clearInvoiceFilter();
-            alert('Failed to load invoice items. Please try again.');
+            alert(e?.message || 'Failed to load invoice items. Please try again.');
             return;
         }
     }
