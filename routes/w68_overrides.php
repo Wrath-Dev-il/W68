@@ -2693,3 +2693,140 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
         ], 422);
     }
 })->name('admin.inv-adjust.adjusted.update');
+
+
+/*
+|--------------------------------------------------------------------------
+| Developer Control Panel - real SQL database downloads
+|--------------------------------------------------------------------------
+| W68_DEVELOPER_REAL_SQL_GZ_BACKUP_20261022
+|
+| Replaces the older CSV-in-ZIP download endpoints. Individual database
+| downloads are real .sql.gz dumps. Download All is a ZIP of .sql.gz dumps.
+|
+*/
+
+Route::get('/developer/data-ups/download/{type}/{filename?}', function (string $type, $filename = null) {
+    $user = session('user');
+    $accountType = is_array($user)
+        ? ($user['account_type'] ?? null)
+        : ($user->account_type ?? null);
+
+    if (!$user || (int) $accountType !== 4) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $connectionMap = \App\Services\DeveloperDatabaseBackupService::connectionMap();
+
+    if (!isset($connectionMap[$type])) {
+        return response()->json(['success' => false, 'message' => 'Invalid database type'], 400);
+    }
+
+    try {
+        $dumpPath = app(\App\Services\DeveloperDatabaseBackupService::class)
+            ->exportSqlGz($connectionMap[$type], $type);
+
+        $timestamp = now('Asia/Manila')->format('Y-m-d_H-i-s');
+        $downloadName = "w68_{$type}_database_{$timestamp}.sql.gz";
+
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        return response()->download($dumpPath, $downloadName, [
+            'Content-Type' => 'application/gzip',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private',
+        ])->deleteFileAfterSend(true);
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('Developer SQL database download failed.', [
+            'type' => $type,
+            'message' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to create SQL database backup: ' . $e->getMessage(),
+        ], 500);
+    }
+})->where('filename', '[^/]+')->name('developer.data-ups.download');
+
+Route::get('/developer/data-ups/download-all/{filename?}', function ($filename = null) {
+    $user = session('user');
+    $accountType = is_array($user)
+        ? ($user['account_type'] ?? null)
+        : ($user->account_type ?? null);
+
+    if (!$user || (int) $accountType !== 4) {
+        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    }
+
+    $timestamp = now('Asia/Manila')->format('Y-m-d_H-i-s');
+    $tmp = rtrim(sys_get_temp_dir(), '\\/');
+    $zipPath = $tmp . DIRECTORY_SEPARATOR . 'w68_databases_' . bin2hex(random_bytes(8)) . '.zip';
+    $zip = new \ZipArchive();
+
+    if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to create the database backup ZIP.',
+        ], 500);
+    }
+
+    $dumpPaths = [];
+
+    try {
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+
+        $backupService = app(\App\Services\DeveloperDatabaseBackupService::class);
+
+        foreach (\App\Services\DeveloperDatabaseBackupService::connectionMap() as $group => $connection) {
+            $dumpPath = $backupService->exportSqlGz($connection, $group);
+            $dumpPaths[] = $dumpPath;
+
+            $zip->addFile(
+                $dumpPath,
+                "w68_{$group}_database_{$timestamp}.sql.gz"
+            );
+        }
+
+        $zip->close();
+
+        foreach ($dumpPaths as $dumpPath) {
+            @unlink($dumpPath);
+        }
+
+        $downloadName = "w68_all_databases_{$timestamp}.zip";
+
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        return response()->download($zipPath, $downloadName, [
+            'Content-Type' => 'application/zip',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private',
+        ])->deleteFileAfterSend(true);
+    } catch (\Throwable $e) {
+        try {
+            $zip->close();
+        } catch (\Throwable $ignored) {
+        }
+
+        foreach ($dumpPaths as $dumpPath) {
+            @unlink($dumpPath);
+        }
+
+        @unlink($zipPath);
+
+        \Illuminate\Support\Facades\Log::error('Developer full SQL database download failed.', [
+            'message' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to create full SQL database backup: ' . $e->getMessage(),
+        ], 500);
+    }
+})->where('filename', '[^/]+')->name('developer.data-ups.download-all');
