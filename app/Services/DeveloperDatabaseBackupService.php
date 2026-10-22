@@ -11,6 +11,7 @@ class DeveloperDatabaseBackupService
     public static function connectionMap(): array
     {
         return [
+            'system' => 'system',
             'masterlist' => 'masterlist',
             'purchase' => 'purchase',
             'sales' => 'sales',

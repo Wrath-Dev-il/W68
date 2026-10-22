@@ -229,7 +229,21 @@
 
                     <div class="developer-backup-divider"></div>
 
+                    <p class="mb-3 text-xs font-semibold text-slate-500">
+                        Real SQL database backups only. Each download is a ZIP containing an importable .sql.gz dump; CSV is not used.
+                    </p>
+
                     <div class="developer-download-grid">
+                        <button type="button" class="developer-download-btn" data-download-url="{{ route('developer.data-ups.download', ['type' => 'system']) }}">
+                            <span class="developer-download-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </span>
+                            Download System
+                        </button>
                         <button type="button" class="developer-download-btn" data-download-url="{{ route('developer.data-ups.download', ['type' => 'masterlist']) }}">
                             <span class="developer-download-icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

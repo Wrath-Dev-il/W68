@@ -286,17 +286,13 @@ runDataUpBtn?.addEventListener('click', async () => {
 function triggerDownload(url, btn) {
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = 'Downloading...';
+    btn.innerHTML = 'Preparing SQL ZIP...';
 
-    const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-    const isAll = btn.classList.contains('developer-download-all-btn');
-    const name = isAll
-        ? 'w68_all_databases_' + ts + '.zip'
-        : 'w68_database_' + ts + '.sql.gz';
-    const fullUrl = url.replace(/\/+$/, '') + '/' + name;
-    window.location.href = fullUrl;
+    // The server generates the archive and sets the authoritative ZIP filename
+    // via Content-Disposition. Do not append a fake CSV or SQL.GZ filename here.
+    window.location.href = url;
 
-    showToast('Download started.');
+    showToast('Preparing real SQL database ZIP...');
 
     btn.disabled = false;
     btn.innerHTML = originalHtml;

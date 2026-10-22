@@ -2699,10 +2699,10 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
 |--------------------------------------------------------------------------
 | Developer Control Panel - real SQL database downloads
 |--------------------------------------------------------------------------
-| W68_DEVELOPER_REAL_SQL_GZ_BACKUP_20261022
+| W68_DEVELOPER_REAL_SQL_ZIP_BACKUP_20261022
 |
-| Replaces the older CSV-in-ZIP download endpoints. Individual database
-| downloads are real .sql.gz dumps. Download All is a ZIP of .sql.gz dumps.
+| Replaces the older CSV-in-ZIP download endpoints. Every download is a ZIP
+| archive containing genuine MariaDB/MySQL .sql.gz dump(s). CSV is never used.
 |
 */
 
@@ -2722,31 +2722,79 @@ Route::get('/developer/data-ups/download/{type}/{filename?}', function (string $
         return response()->json(['success' => false, 'message' => 'Invalid database type'], 400);
     }
 
+    $dumpPath = null;
+    $zipPath = null;
+    $zip = null;
+
     try {
-        $dumpPath = app(\App\Services\DeveloperDatabaseBackupService::class)
-            ->exportSqlGz($connectionMap[$type], $type);
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
 
         $timestamp = now('Asia/Manila')->format('Y-m-d_H-i-s');
-        $downloadName = "w68_{$type}_database_{$timestamp}.sql.gz";
+        $connection = $connectionMap[$type];
+
+        $dumpPath = app(\App\Services\DeveloperDatabaseBackupService::class)
+            ->exportSqlGz($connection, $type);
+
+        $tmp = rtrim(sys_get_temp_dir(), '\\/');
+        $zipPath = $tmp . DIRECTORY_SEPARATOR
+            . 'w68_' . preg_replace('/[^a-z0-9_-]+/i', '_', $type)
+            . '_' . bin2hex(random_bytes(8)) . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new \RuntimeException('Unable to create the database backup ZIP.');
+        }
+
+        $databaseName = (string) config("database.connections.{$connection}.database", $type);
+        $safeDatabaseName = preg_replace('/[^a-z0-9_.-]+/i', '_', $databaseName) ?: $type;
+        $entryName = "{$safeDatabaseName}_{$timestamp}.sql.gz";
+
+        if (!$zip->addFile($dumpPath, $entryName)) {
+            throw new \RuntimeException('Unable to add the SQL dump to the backup ZIP.');
+        }
+
+        $zip->close();
+        $zip = null;
+
+        @unlink($dumpPath);
+        $dumpPath = null;
+
+        $downloadName = "w68_{$type}_database_{$timestamp}.zip";
 
         while (ob_get_level() > 0) {
             @ob_end_clean();
         }
 
-        return response()->download($dumpPath, $downloadName, [
-            'Content-Type' => 'application/gzip',
+        return response()->download($zipPath, $downloadName, [
+            'Content-Type' => 'application/zip',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'no-store, private',
         ])->deleteFileAfterSend(true);
     } catch (\Throwable $e) {
-        \Illuminate\Support\Facades\Log::error('Developer SQL database download failed.', [
+        if ($zip instanceof \ZipArchive) {
+            try {
+                $zip->close();
+            } catch (\Throwable $ignored) {
+            }
+        }
+
+        if ($dumpPath) {
+            @unlink($dumpPath);
+        }
+
+        if ($zipPath) {
+            @unlink($zipPath);
+        }
+
+        \Illuminate\Support\Facades\Log::error('Developer SQL database ZIP download failed.', [
             'type' => $type,
             'message' => $e->getMessage(),
         ]);
 
         return response()->json([
             'success' => false,
-            'message' => 'Unable to create SQL database backup: ' . $e->getMessage(),
+            'message' => 'Unable to create SQL database backup ZIP: ' . $e->getMessage(),
         ], 500);
     }
 })->where('filename', '[^/]+')->name('developer.data-ups.download');
@@ -2785,10 +2833,15 @@ Route::get('/developer/data-ups/download-all/{filename?}', function ($filename =
             $dumpPath = $backupService->exportSqlGz($connection, $group);
             $dumpPaths[] = $dumpPath;
 
-            $zip->addFile(
+            $databaseName = (string) config("database.connections.{$connection}.database", $group);
+            $safeDatabaseName = preg_replace('/[^a-z0-9_.-]+/i', '_', $databaseName) ?: $group;
+
+            if (!$zip->addFile(
                 $dumpPath,
-                "w68_{$group}_database_{$timestamp}.sql.gz"
-            );
+                "{$safeDatabaseName}_{$timestamp}.sql.gz"
+            )) {
+                throw new \RuntimeException("Unable to add {$group} SQL dump to the backup ZIP.");
+            }
         }
 
         $zip->close();
