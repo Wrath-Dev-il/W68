@@ -278,27 +278,59 @@ class DeveloperDatabaseBackupService
                  * Never collect rows or build a giant multi-row INSERT in memory.
                  * Product images/BLOBs can be tens of MB, and hex encoding doubles
                  * their size. Write one row and one value at a time instead.
+                 *
+                 * mysqlnd may otherwise buffer the entire SELECT result in PHP
+                 * memory, so temporarily disable PDO MySQL buffered queries while
+                 * the cursor is being consumed.
                  */
-                foreach ($db->table($table)->cursor() as $row) {
-                    $write(
-                        'INSERT INTO ' . $identifier
-                        . ' (' . $quotedColumns . ') VALUES ('
-                    );
+                $pdo = $db->getPdo();
+                $bufferedOption = defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')
+                    ? \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY
+                    : null;
+                $bufferingDisabled = false;
+                $rows = null;
 
-                    foreach ($columnNames as $index => $column) {
-                        if ($index > 0) {
-                            $write(',');
+                try {
+                    if ($bufferedOption !== null) {
+                        try {
+                            $pdo->setAttribute($bufferedOption, false);
+                            $bufferingDisabled = true;
+                        } catch (Throwable $ignored) {
                         }
-
-                        $this->writeSqlValue(
-                            $write,
-                            $row->{$column} ?? null,
-                            (bool) ($binaryColumns[$column] ?? false)
-                        );
                     }
 
-                    $write(");\n");
-                    unset($row);
+                    $rows = $db->table($table)->cursor();
+
+                    foreach ($rows as $row) {
+                        $write(
+                            'INSERT INTO ' . $identifier
+                            . ' (' . $quotedColumns . ') VALUES ('
+                        );
+
+                        foreach ($columnNames as $index => $column) {
+                            if ($index > 0) {
+                                $write(',');
+                            }
+
+                            $this->writeSqlValue(
+                                $write,
+                                $row->{$column} ?? null,
+                                (bool) ($binaryColumns[$column] ?? false)
+                            );
+                        }
+
+                        $write(");\n");
+                        unset($row);
+                    }
+                } finally {
+                    unset($rows);
+
+                    if ($bufferingDisabled && $bufferedOption !== null) {
+                        try {
+                            $pdo->setAttribute($bufferedOption, true);
+                        } catch (Throwable $ignored) {
+                        }
+                    }
                 }
 
                 $write("\n");
@@ -402,23 +434,31 @@ class DeveloperDatabaseBackupService
 
         if (is_resource($value)) {
             if ($binaryColumn) {
-                $write('0x');
-                $hasData = false;
+                $chunk = fread($value, 1024 * 1024);
+                if ($chunk === false) {
+                    throw new RuntimeException('Unable to read binary database value.');
+                }
 
-                while (!feof($value)) {
+                if ($chunk === '' && feof($value)) {
+                    $write("''");
+                    return;
+                }
+
+                $write('0x');
+
+                while (true) {
+                    if ($chunk !== '') {
+                        $write(bin2hex($chunk));
+                    }
+
+                    if (feof($value)) {
+                        break;
+                    }
+
                     $chunk = fread($value, 1024 * 1024);
                     if ($chunk === false) {
                         throw new RuntimeException('Unable to read binary database value.');
                     }
-
-                    if ($chunk !== '') {
-                        $hasData = true;
-                        $write(bin2hex($chunk));
-                    }
-                }
-
-                if (!$hasData) {
-                    $write("''");
                 }
 
                 return;
