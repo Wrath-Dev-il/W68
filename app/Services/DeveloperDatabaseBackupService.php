@@ -30,7 +30,23 @@ class DeveloperDatabaseBackupService
             . '_' . bin2hex(random_bytes(8)) . '.sql.gz';
 
         try {
-            if (!$this->exportWithNativeDump($connection, $path)) {
+            $nativeCompleted = false;
+
+            try {
+                $nativeCompleted = $this->exportWithNativeDump($connection, $path);
+            } catch (Throwable $nativeError) {
+                @unlink($path);
+
+                \Illuminate\Support\Facades\Log::warning(
+                    'Native database dump failed; using PHP SQL fallback.',
+                    [
+                        'connection' => $connection,
+                        'message' => $nativeError->getMessage(),
+                    ]
+                );
+            }
+
+            if (!$nativeCompleted) {
                 $this->exportWithPhp($connection, $path);
             }
 
@@ -254,15 +270,6 @@ class DeveloperDatabaseBackupService
                     $columnNames
                 ));
 
-                $primaryKey = null;
-                try {
-                    $keys = $db->select(
-                        'SHOW KEYS FROM ' . $identifier . " WHERE Key_name = 'PRIMARY'"
-                    );
-                    $primaryKey = $keys[0]->Column_name ?? null;
-                } catch (Throwable $ignored) {
-                }
-
                 $flush = function ($chunk) use (
                     $write,
                     $identifier,
@@ -299,31 +306,19 @@ class DeveloperDatabaseBackupService
 
                 $write("--\n-- Data for table " . $table . "\n--\n");
 
-                $query = $db->table($table);
+                $buffer = collect();
 
-                if ($primaryKey) {
-                    $query->orderBy($primaryKey)->chunkById(
-                        250,
-                        function ($chunk) use ($flush): void {
-                            $flush($chunk);
-                        },
-                        $primaryKey
-                    );
-                } else {
-                    $buffer = collect();
+                foreach ($db->table($table)->cursor() as $row) {
+                    $buffer->push($row);
 
-                    foreach ($query->cursor() as $row) {
-                        $buffer->push($row);
-
-                        if ($buffer->count() >= 250) {
-                            $flush($buffer);
-                            $buffer = collect();
-                        }
-                    }
-
-                    if ($buffer->isNotEmpty()) {
+                    if ($buffer->count() >= 250) {
                         $flush($buffer);
+                        $buffer = collect();
                     }
+                }
+
+                if ($buffer->isNotEmpty()) {
+                    $flush($buffer);
                 }
 
                 $write("\n");
@@ -347,6 +342,37 @@ class DeveloperDatabaseBackupService
                 $write("--\n-- View structure for view " . $view . "\n--\n\n");
                 $write('DROP VIEW IF EXISTS ' . $identifier . ";\n");
                 $write($createSql . ";\n\n");
+            }
+
+            try {
+                $triggers = $db->select('SHOW TRIGGERS');
+
+                foreach ($triggers as $trigger) {
+                    $triggerName = (string) ($trigger->Trigger ?? '');
+                    if ($triggerName === '') {
+                        continue;
+                    }
+
+                    $identifier = $this->quoteIdentifier($triggerName);
+                    $createRows = $db->select('SHOW CREATE TRIGGER ' . $identifier);
+                    if (!$createRows) {
+                        continue;
+                    }
+
+                    $createValues = array_values((array) $createRows[0]);
+                    $createSql = (string) ($createValues[2] ?? $createValues[1] ?? '');
+                    if ($createSql === '') {
+                        continue;
+                    }
+
+                    $write("--\n-- Trigger structure for " . $triggerName . "\n--\n\n");
+                    $write('DROP TRIGGER IF EXISTS ' . $identifier . ";\n");
+                    $write("DELIMITER ;;\n");
+                    $write($createSql . " ;;\n");
+                    $write("DELIMITER ;\n\n");
+                }
+            } catch (Throwable $ignored) {
+                // Managed databases may not grant SHOW TRIGGER privileges.
             }
 
             $write("/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;\n");
