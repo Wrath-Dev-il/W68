@@ -271,55 +271,34 @@ class DeveloperDatabaseBackupService
                     $columnNames
                 ));
 
-                $flush = function ($chunk) use (
-                    $write,
-                    $identifier,
-                    $quotedColumns,
-                    $columnNames,
-                    $binaryColumns
-                ): void {
-                    if ($chunk->isEmpty()) {
-                        return;
-                    }
-
-                    $rowsSql = [];
-
-                    foreach ($chunk as $row) {
-                        $values = [];
-
-                        foreach ($columnNames as $column) {
-                            $values[] = $this->sqlValue(
-                                $row->{$column} ?? null,
-                                (bool) ($binaryColumns[$column] ?? false)
-                            );
-                        }
-
-                        $rowsSql[] = '(' . implode(',', $values) . ')';
-                    }
-
-                    $write(
-                        'INSERT INTO ' . $identifier
-                        . ' (' . $quotedColumns . ") VALUES\n"
-                        . implode(",\n", $rowsSql)
-                        . ";\n"
-                    );
-                };
-
                 $write("--\n-- Data for table " . $table . "\n--\n");
 
-                $buffer = collect();
-
+                /*
+                 * HostForge-safe streaming fallback:
+                 * Never collect rows or build a giant multi-row INSERT in memory.
+                 * Product images/BLOBs can be tens of MB, and hex encoding doubles
+                 * their size. Write one row and one value at a time instead.
+                 */
                 foreach ($db->table($table)->cursor() as $row) {
-                    $buffer->push($row);
+                    $write(
+                        'INSERT INTO ' . $identifier
+                        . ' (' . $quotedColumns . ') VALUES ('
+                    );
 
-                    if ($buffer->count() >= 250) {
-                        $flush($buffer);
-                        $buffer = collect();
+                    foreach ($columnNames as $index => $column) {
+                        if ($index > 0) {
+                            $write(',');
+                        }
+
+                        $this->writeSqlValue(
+                            $write,
+                            $row->{$column} ?? null,
+                            (bool) ($binaryColumns[$column] ?? false)
+                        );
                     }
-                }
 
-                if ($buffer->isNotEmpty()) {
-                    $flush($buffer);
+                    $write(");\n");
+                    unset($row);
                 }
 
                 $write("\n");
@@ -414,26 +393,70 @@ class DeveloperDatabaseBackupService
         return $tick . str_replace($tick, $tick . $tick, $value) . $tick;
     }
 
-    private function sqlValue($value, bool $binaryColumn): string
+    private function writeSqlValue(callable $write, $value, bool $binaryColumn): void
     {
         if ($value === null) {
-            return 'NULL';
+            $write('NULL');
+            return;
         }
 
         if (is_resource($value)) {
+            if ($binaryColumn) {
+                $write('0x');
+                $hasData = false;
+
+                while (!feof($value)) {
+                    $chunk = fread($value, 1024 * 1024);
+                    if ($chunk === false) {
+                        throw new RuntimeException('Unable to read binary database value.');
+                    }
+
+                    if ($chunk !== '') {
+                        $hasData = true;
+                        $write(bin2hex($chunk));
+                    }
+                }
+
+                if (!$hasData) {
+                    $write("''");
+                }
+
+                return;
+            }
+
             $value = stream_get_contents($value);
         }
 
         $value = (string) $value;
 
         if ($binaryColumn) {
-            return $value === '' ? "''" : '0x' . bin2hex($value);
+            if ($value === '') {
+                $write("''");
+                return;
+            }
+
+            $write('0x');
+            $length = strlen($value);
+
+            for ($offset = 0; $offset < $length; $offset += 1024 * 1024) {
+                $write(bin2hex(substr($value, $offset, 1024 * 1024)));
+            }
+
+            return;
         }
 
-        return "'" . str_replace(
-            ["\\", "\0", "\n", "\r", "\x1a", "'"],
-            ["\\\\", "\\0", "\\n", "\\r", "\\Z", "\\'"],
-            $value
-        ) . "'";
+        $write("'");
+        $length = strlen($value);
+
+        for ($offset = 0; $offset < $length; $offset += 1024 * 1024) {
+            $chunk = substr($value, $offset, 1024 * 1024);
+            $write(str_replace(
+                ["\\", "\0", "\n", "\r", "\x1a", "'"],
+                ["\\\\", "\\0", "\\n", "\\r", "\\Z", "\\'"],
+                $chunk
+            ));
+        }
+
+        $write("'");
     }
 }
