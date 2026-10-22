@@ -850,7 +850,11 @@ async function loadPNInvoices() {
     if (window.lucide) window.lucide.createIcons();
 
     try {
-        const baseUrl = window.purchaseRoutes?.invoicesByNoteUrl || '/hatdog/public/admin/purchase/purchase-order/by-note/:noteNumber';
+        const baseUrl = window.purchaseRoutes?.invoicesByNoteUrl;
+        if (!baseUrl || !baseUrl.includes(':noteNumber')) {
+            throw new Error('Purchase Order invoice-list route is not configured for this account.');
+        }
+
         const url = baseUrl.replace(':noteNumber', encodeURIComponent(noteNumber));
         const result = await fetchPurchaseNoteJson(url);
 
