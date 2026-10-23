@@ -68,15 +68,15 @@
                         @php unset($firstImg); @endphp
                     </div>
                     <div class="item-details">
-                        <div class="detail-row">
+                        <div class="detail-row item-name-row">
                             <span class="detail-label">Item Name:</span>
-                            <span class="product-code-text font-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
+                            <span class="item-name-text product-code-text font-black uppercase text-[11px]">{{ $product->product_code }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row part-number-row">
                             <span class="detail-label">Part No#:</span>
-                            <span class="font-mono text-slate-700 font-bold text-[9px]">{{ $product->part_number }}</span>
+                            <span class="part-number-text font-mono text-slate-700 font-bold text-[9px]">{{ $product->part_number }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row description-row">
                             <span class="detail-label">Description:</span>
                             <span class="description-text text-slate-700 font-semibold text-[9px]">{{ $product->description ?: '---' }}</span>
                         </div>
@@ -89,9 +89,9 @@
                                 @endif
                             </span>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row brand-row">
                             <span class="detail-label">Brand:</span>
-                            <span class="text-slate-500 uppercase font-bold text-[9px]">{{ $product->category }}</span>
+                            <span class="brand-text text-slate-500 uppercase font-bold text-[9px]">{{ $product->category }}</span>
                         </div>
                         <div class="price-row mt-1 pt-1 border-t border-dashed border-slate-200 flex justify-between items-center">
                             <span class="detail-label">Price:</span>
