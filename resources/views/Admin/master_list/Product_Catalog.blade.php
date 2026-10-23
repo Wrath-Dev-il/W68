@@ -202,8 +202,17 @@
             max-height: 2.3em;
         }
 
+        .item-name-row,
+        .part-number-row,
+        .description-row,
         .application-row {
-            max-height: 42px;
+            margin-bottom: 1px;
+        }
+
+        .application-row {
+            height: 44px;
+            min-height: 44px;
+            max-height: 44px;
             overflow: hidden;
         }
 
@@ -214,8 +223,9 @@
             white-space: normal;
             overflow-wrap: anywhere;
             word-break: normal;
-            line-height: 1.15;
-            max-height: 4.6em;
+            line-height: 1.1;
+            height: 4.4em;
+            max-height: 4.4em;
             overflow: hidden;
         }
 
