@@ -135,12 +135,15 @@
 
         .item-details {
             width: 62%;
-            padding: 7px 8px;
+            padding: 7px 8px 44px 8px;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
             background: rgba(255, 255, 255, 0.3);
             min-width: 0;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
         }
 
         .detail-row {
@@ -169,35 +172,83 @@
             print-color-adjust: exact;
         }
 
+        .item-name-text {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.1;
+            max-height: 1.1em;
+        }
+
+        .part-number-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.1;
+            max-height: 3.3em;
+        }
+
         .description-text {
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            overflow-wrap: anywhere;
             line-height: 1.15;
+            max-height: 2.3em;
         }
 
         .application-row {
-            flex: 0 0 32px;
-            min-height: 32px;
-            max-height: 32px;
+            max-height: 42px;
             overflow: hidden;
         }
 
         .application-text {
-            display: block;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
             white-space: normal;
             overflow-wrap: anywhere;
             word-break: normal;
             line-height: 1.15;
-            max-height: 3.45em;
+            max-height: 4.6em;
             overflow: hidden;
         }
 
+        .brand-row {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 28px;
+            height: 14px;
+            margin: 0 !important;
+            overflow: hidden;
+            background: white;
+            z-index: 2;
+        }
+
+        .brand-text {
+            display: block;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .price-row {
-            margin-top: auto !important;
-            margin-bottom: 0 !important;
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 5px;
+            min-height: 21px;
+            margin: 0 !important;
             flex-shrink: 0;
+            background: white;
+            z-index: 3;
         }
 
         .price-text {
@@ -387,15 +438,15 @@
                                 @php unset($firstImg); @endphp
                             </div>
                             <div class="item-details">
-                                <div class="detail-row">
+                                <div class="detail-row item-name-row">
                                     <span class="detail-label">Item Name:</span>
-                                    <span class="product-code-text font-black uppercase text-[11px] truncate-text">{{ $product->product_code }}</span>
+                                    <span class="item-name-text product-code-text font-black uppercase text-[11px]">{{ $product->product_code }}</span>
                                 </div>
-                                <div class="detail-row">
+                                <div class="detail-row part-number-row">
                                     <span class="detail-label">Part No#:</span>
-                                    <span class="font-mono text-black font-bold text-[9px]">{{ $product->part_number }}</span>
+                                    <span class="part-number-text font-mono text-black font-bold text-[9px]">{{ $product->part_number }}</span>
                                 </div>
-                                <div class="detail-row">
+                                <div class="detail-row description-row">
                                     <span class="detail-label">Description:</span>
                                     <span class="description-text text-black font-semibold text-[9px]">{{ $product->description ?: '---' }}</span>
                                 </div>
@@ -408,9 +459,9 @@
                                         @endif
                                     </span>
                                 </div>
-                                <div class="detail-row">
+                                <div class="detail-row brand-row">
                                     <span class="detail-label">Brand:</span>
-                                    <span class="text-black uppercase font-bold text-[9px]">{{ $product->category }}</span>
+                                    <span class="brand-text text-black uppercase font-bold text-[9px]">{{ $product->category }}</span>
                                 </div>
                                 <div class="price-row mt-1 pt-1 border-t border-dashed border-slate-300 flex justify-between items-center">
                                     <span class="detail-label">Price:</span>
