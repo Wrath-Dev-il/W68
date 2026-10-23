@@ -134,8 +134,10 @@
             padding: 6px 8px; /* Slightly more compact vertical padding */
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             background: rgba(255, 255, 255, 0.3);
+            min-width: 0;
+            min-height: 0;
         }
 
         .detail-row {
@@ -143,6 +145,10 @@
             font-size: 11px;
             line-height: 1.1;
             color: black;
+            display: grid;
+            grid-template-columns: 68px minmax(0, 1fr);
+            column-gap: 4px;
+            align-items: start;
         }
 
         .detail-label {
@@ -152,6 +158,29 @@
             font-size: 9px;
             display: inline-block;
             width: 75px;
+        }
+
+        .application-row {
+            flex: 0 0 32px;
+            min-height: 32px;
+            max-height: 32px;
+            overflow: hidden;
+        }
+
+        .application-text {
+            display: block;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            line-height: 1.15;
+            max-height: 3.45em;
+            overflow: hidden;
+        }
+
+        .price-row {
+            margin-top: auto !important;
+            margin-bottom: 0 !important;
+            flex-shrink: 0;
         }
 
         .price-text {
@@ -349,9 +378,9 @@
                                     <span class="detail-label">Part No#:</span>
                                     <span class="font-mono text-black font-bold text-[9px]">{{ $product->part_number }}</span>
                                 </div>
-                                <div class="detail-row">
+                                <div class="detail-row application-row">
                                     <span class="detail-label">Application:</span>
-                                    <span class="text-black font-bold text-[9px] truncate-text leading-tight">
+                                    <span class="application-text text-black font-bold text-[9px]">
                                         {{ $product->application ?: $product->Application ?: '---' }}
                                         @if($product->position ?: $product->Position)
                                             <span class="text-[8px] text-slate-500 ml-1">({{ $product->position ?: $product->Position }})</span>
@@ -362,7 +391,7 @@
                                     <span class="detail-label">Brand:</span>
                                     <span class="text-black uppercase font-bold text-[9px]">{{ $product->category }}</span>
                                 </div>
-                                <div class="mt-1 pt-1 border-t border-dashed border-slate-300 flex justify-between items-center">
+                                <div class="price-row mt-1 pt-1 border-t border-dashed border-slate-300 flex justify-between items-center">
                                     <span class="detail-label">Price:</span>
                                     <span class="price-text">₱{{ number_format($product->selling_price, 2) }}</span>
                                 </div>

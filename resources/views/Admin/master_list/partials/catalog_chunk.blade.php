@@ -80,7 +80,7 @@
                             <span class="detail-label">Description:</span>
                             <span class="description-text text-slate-700 font-semibold text-[9px]">{{ $product->description ?: '---' }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row application-row">
                             <span class="detail-label">Application:</span>
                             <span class="application-text text-slate-700 font-bold text-[9px]">
                                 {{ $product->application ?: $product->Application ?: '---' }}
@@ -93,7 +93,7 @@
                             <span class="detail-label">Brand:</span>
                             <span class="text-slate-500 uppercase font-bold text-[9px]">{{ $product->category }}</span>
                         </div>
-                        <div class="mt-1 pt-1 border-t border-dashed border-slate-200 flex justify-between items-center">
+                        <div class="price-row mt-1 pt-1 border-t border-dashed border-slate-200 flex justify-between items-center">
                             <span class="detail-label">Price:</span>
                             <span class="price-text">₱{{ number_format($product->selling_price, 2) }}</span>
                         </div>

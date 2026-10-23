@@ -76,9 +76,9 @@
                             <span class="detail-label">Part No#:</span>
                             <span class="font-mono text-slate-700 font-bold text-[9px]">{{ $product->part_number }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row application-row">
                             <span class="detail-label">Application:</span>
-                            <span class="text-slate-600 font-bold text-[9px] truncate-text">
+                            <span class="application-text text-slate-600 font-bold text-[9px]">
                                 {{ $product->application ?: $product->Application ?: '---' }}
                                 @if($product->position ?: $product->Position)
                                     <span class="text-[7px] text-slate-400 ml-1">({{ $product->position ?: $product->Position }})</span>
@@ -89,7 +89,7 @@
                             <span class="detail-label">Brand:</span>
                             <span class="text-slate-500 uppercase font-bold text-[9px]">{{ $product->category }}</span>
                         </div>
-                        <div class="mt-1 pt-1 border-t border-dashed border-slate-200 flex justify-between items-center">
+                        <div class="price-row mt-1 pt-1 border-t border-dashed border-slate-200 flex justify-between items-center">
                             <span class="detail-label">Price:</span>
                             <span class="price-text">₱{{ number_format($product->selling_price, 2) }}</span>
                         </div>
