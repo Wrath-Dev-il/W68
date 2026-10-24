@@ -251,7 +251,8 @@ function ensureProductMasterValidationModal() {
 
     modal = document.createElement('div');
     modal.id = 'product-master-validation-modal';
-    modal.className = 'fixed inset-0 z-[1400] hidden flex items-center justify-center px-4';
+    modal.className = 'fixed inset-0 hidden flex items-center justify-center px-4';
+    modal.style.zIndex = '1400';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', 'product-master-validation-title');
