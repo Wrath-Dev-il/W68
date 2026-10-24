@@ -139,12 +139,12 @@
         </div>
 
         <div class="overflow-x-auto custom-scrollbar pb-10">
-            <table class="w-full text-left border-collapse table-fixed min-w-[1320px]">
+            <table class="w-full text-left border-collapse table-fixed min-w-[2050px]">
                 <thead>
                     <tr class="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                         <th class="py-2.5 px-4 text-center w-[50px] checkbox-col"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
                         <th class="py-2.5 px-4 w-[80px]">Picture</th>
-                        <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
+                        <th class="py-2.5 px-4 w-[210px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
 <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[150px] sortable-header" data-sort-key="position" onclick="window.handleSortClick('position')" style="cursor:pointer;user-select:none;">Position <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="partNumber" onclick="window.handleSortClick('partNumber')" style="cursor:pointer;user-select:none;">Part No# <span class="sort-indicator">&#8597;</span></th>
