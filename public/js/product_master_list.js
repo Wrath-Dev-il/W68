@@ -242,6 +242,80 @@ function consumeProductMasterEnter(event) {
     event.stopPropagation();
 }
 
+// W68_PRODUCT_MASTER_REQUIRED_FIELDS_MODAL_20261024
+// Use an in-app modal instead of window.alert so Enter/OK closes the message
+// once, returns to Product View Edit Mode, and focuses the missing field.
+function ensureProductMasterValidationModal() {
+    let modal = document.getElementById('product-master-validation-modal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'product-master-validation-modal';
+    modal.className = 'fixed inset-0 z-[1400] hidden flex items-center justify-center px-4';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'product-master-validation-title');
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-maroon-900/60 backdrop-blur-sm"></div>
+        <div class="relative w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-2xl border border-slate-100">
+            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <span class="text-2xl font-black">!</span>
+            </div>
+            <h3 id="product-master-validation-title" class="text-lg font-black text-slate-800 mb-2">Required Fields</h3>
+            <p id="product-master-validation-message" class="text-sm text-slate-500 mb-6">Product Code and Brand are required.</p>
+            <button id="product-master-validation-ok" type="button" class="px-8 py-2.5 bg-maroon hover:bg-maroon-800 text-white text-xs font-black rounded-xl shadow-md uppercase tracking-widest">OK</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('product-master-validation-ok')?.addEventListener('click', function() {
+        window.closeProductMasterValidationModal();
+    });
+
+    return modal;
+}
+
+window.showProductMasterValidationModal = function(message, focusId) {
+    const modal = ensureProductMasterValidationModal();
+    const messageEl = document.getElementById('product-master-validation-message');
+    if (messageEl) messageEl.textContent = message || 'Product Code and Brand are required.';
+
+    window._productMasterValidationFocusId = focusId || null;
+    modal.classList.remove('hidden');
+
+    requestAnimationFrame(() => {
+        document.getElementById('product-master-validation-ok')?.focus();
+    });
+};
+
+window.closeProductMasterValidationModal = function() {
+    const modal = document.getElementById('product-master-validation-modal');
+    if (modal) modal.classList.add('hidden');
+
+    // Validation never exits the editor. Restore Edit Mode and the Save button
+    // state, then place the cursor on the first missing required field.
+    if (isProductMasterModalVisible('view-product-modal') && window.currentViewProduct) {
+        if (typeof window.setProductViewEditMode === 'function') {
+            window.setProductViewEditMode(true);
+        }
+        if (typeof window.updateProductViewDirtyState === 'function') {
+            window.updateProductViewDirtyState();
+        }
+    }
+
+    const focusId = window._productMasterValidationFocusId;
+    window._productMasterValidationFocusId = null;
+    if (focusId) {
+        requestAnimationFrame(() => {
+            const field = document.getElementById(focusId);
+            if (field) {
+                field.focus();
+                if (typeof field.select === 'function') field.select();
+            }
+        });
+    }
+};
+
 // W68_PRODUCT_MASTER_VIEW_CTRL_EDIT_MODE_20260928
 // A standalone Ctrl press while a Product View is open switches that specific
 // product into Edit Mode. Ctrl combinations (Ctrl+C/V/F/etc.) and Ctrl+click
@@ -283,6 +357,7 @@ document.addEventListener('keyup', function(event) {
     // Do not switch modes behind another Product Master modal layered above
     // Product View (discard confirmation, success message, add/edit dialogs).
     const blockingModalIds = [
+        'product-master-validation-modal',
         'confirm-discard-modal',
         'view-edit-success-modal',
         'success-add-modal',
@@ -309,6 +384,14 @@ document.addEventListener('keyup', function(event) {
 document.addEventListener('keydown', function(event) {
     if (event.key !== 'Escape' || event.isComposing || event.repeat) return;
     if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+    if (isProductMasterModalVisible('product-master-validation-modal')) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.closeProductMasterValidationModal();
+        return;
+    }
+
     if (!isProductMasterModalVisible('view-product-modal')) return;
 
     const blockingModalIds = [
@@ -356,6 +439,14 @@ document.addEventListener('keydown', function(event) {
     const target = event.target;
     if (target && target.isContentEditable) return;
     if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
+
+    // Required-field validation owns Enter before the underlying Edit Mode.
+    // This prevents one Enter keypress from closing the message and saving again.
+    if (isProductMasterModalVisible('product-master-validation-modal')) {
+        consumeProductMasterEnter(event);
+        window.closeProductMasterValidationModal();
+        return;
+    }
 
     // Success after Add Product: Enter = Confirm/OK.
     if (isProductMasterModalVisible('success-add-modal')) {
@@ -2997,7 +3088,6 @@ window.closeProductViewModal = function() {
 window.saveProductViewChanges = async function() {
     if (!window.currentViewProduct || !window.viewProductEditMode || !window.updateProductViewDirtyState()) return;
     const saveBtn = document.getElementById('view-save-edit-btn');
-    if (saveBtn) saveBtn.disabled = true;
 
     let sortedImages = [...(window.pendingProductImages || [])];
     if (window.coverImageIndex > 0 && window.coverImageIndex < sortedImages.length) {
@@ -3029,10 +3119,13 @@ window.saveProductViewChanges = async function() {
     };
 
     if (!payload.product_code || !payload.category) {
-        alert('Product Code and Brand are required.');
+        const focusId = !payload.product_code ? 'view-prod-code' : 'view-prod-cat';
+        window.showProductMasterValidationModal('Product Code and Brand are required.', focusId);
         window.updateProductViewDirtyState();
         return;
     }
+
+    if (saveBtn) saveBtn.disabled = true;
 
     try {
         const url = window.prodRoutes.update.replace(':id', original.id);
