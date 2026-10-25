@@ -575,7 +575,7 @@
             }
         }
 
-        async function executeLogout() {
+        function executeLogout() {
             const button = document.getElementById('warehouse-logout-confirm-btn');
             if (button?.dataset.loading === 'true') return;
 
@@ -587,40 +587,11 @@
 
             toggleLogoutModal(false);
 
-            try {
-                const response = await fetch('{{ url("/logout") }}', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': @json(csrf_token())
-                    }
-                });
-
-                let result = {};
-                try {
-                    result = await response.json();
-                } catch (e) {
-                    result = {};
-                }
-
-                if (!response.ok || result.success !== true) {
-                    throw new Error(result.message || 'Logout request failed.');
-                }
-
-                const successModal = document.getElementById('success-logout-modal');
-                if (successModal) successModal.classList.remove('hidden');
-
-                window.location.replace(result.redirect || '{{ route("login") }}');
-            } catch (error) {
-                console.error('Warehouse logout failed:', error);
-
-                // The final GET /logout override is intentionally safe and
-                // idempotent, so use it as a hard fallback instead of leaving
-                // the user on an endless loading state.
-                window.location.replace('{{ url("/logout") }}');
-            }
+            // W68_WAREHOUSE_DIRECT_LOGOUT_20261026
+            // Do not use AJAX or an absolute route() URL here. Navigate directly
+            // to the dedicated logout endpoint so HostForge cannot leave the
+            // success spinner waiting on a proxy/scheme redirect.
+            window.location.replace('/warehouse/logout-now');
         }
     </script>
     @vite(['resources/js/admin_sidebar_navbar.js'])
