@@ -97,6 +97,33 @@ Route::match(['GET', 'POST'], '/warehouse/logout-now', function (Request $reques
 
 /*
 |--------------------------------------------------------------------------
+| Logged-out login landing guard
+|--------------------------------------------------------------------------
+|
+| W68_LOGGED_OUT_LOGIN_GUARD_20261026
+| After Warehouse hard logout, render the login page directly instead of
+| allowing the legacy GET /login handler to redirect an old duplicate session
+| cookie back to /dashboard.
+|
+*/
+Route::get('/login', function (Request $request) {
+    if ($request->boolean('logged_out')) {
+        $request->session()->forget('user');
+        return response()
+            ->view('login')
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
+    }
+
+    if ($request->session()->has('user')) {
+        return redirect()->route('dashboard');
+    }
+
+    return view('login');
+})->name('login');
+
+/*
+|--------------------------------------------------------------------------
 | Unified logout route
 |--------------------------------------------------------------------------
 |
