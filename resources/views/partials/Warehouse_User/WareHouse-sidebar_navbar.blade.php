@@ -241,10 +241,10 @@
                                 <span>Settings</span>
                             </a>
                             <hr class="border-maroon-800">
-                            <a href="#" onclick="toggleLogoutModal(true)" class="flex items-center space-x-2.5 px-4 py-2.5 text-sm text-red-300 hover:bg-red-950/50 hover:text-red-200 transition-colors">
+                            <button id="warehouse-signout-trigger" type="button" onclick="openWarehouseLogoutModal(event)" class="w-full flex items-center space-x-2.5 px-4 py-2.5 text-sm text-red-300 hover:bg-red-950/50 hover:text-red-200 transition-colors text-left">
                                 <i data-lucide="log-out" class="w-4 h-4 text-red-400"></i>
                                 <span>Sign Out</span>
-                            </a>
+                            </button>
                         </div>
                     </div>
 
@@ -538,7 +538,7 @@
                         <h3 class="text-lg font-bold text-slate-800 mb-2">Confirm Logout</h3>
                         <p class="text-sm text-slate-500 mb-6">Are you sure you want to end your current session? Any unsaved changes may be lost.</p>
                         <div class="flex gap-3 justify-center">
-                            <button onclick="toggleLogoutModal(false)" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">Cancel</button>
+                            <button type="button" onclick="toggleLogoutModal(false)" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">Cancel</button>
                             <button id="warehouse-logout-confirm-btn" type="button" onclick="executeLogout()" class="px-6 py-2 bg-maroon text-white text-xs font-bold rounded-xl shadow-md">Yes, Logout</button>
                         </div>
                     </div>
@@ -573,6 +573,22 @@
                 if (show) modal.classList.remove('hidden');
                 else modal.classList.add('hidden');
             }
+        }
+
+        function openWarehouseLogoutModal(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof event.stopImmediatePropagation === 'function') {
+                    event.stopImmediatePropagation();
+                }
+            }
+
+            const profileDropdown = document.getElementById('profile-dropdown');
+            if (profileDropdown) profileDropdown.classList.add('hidden');
+
+            toggleLogoutModal(true);
+            return false;
         }
 
         function executeLogout() {
