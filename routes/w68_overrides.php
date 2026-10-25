@@ -62,10 +62,17 @@ Route::match(['GET', 'POST'], '/warehouse/logout-now', function (Request $reques
 
     /*
      * StartSession runs after the controller response and normally writes a
-     * fresh cookie even after invalidate(). Move that automatic replacement
-     * cookie to a throwaway name for this response, while $cookieName keeps
-     * the real authenticated cookie name that we explicitly expire below.
+     * fresh cookie even after invalidate(). The session Store already copied
+     * the cookie name from config before this route executes, so changing only
+     * config('session.cookie') is not enough. Rename the live Store itself.
+     *
+     * Keep $cookieName above unchanged so the real authenticated cookie is
+     * explicitly expired below, while middleware can only persist the
+     * throwaway __w68_logout_discard cookie.
      */
+    if (method_exists($session, 'setName')) {
+        $session->setName('__w68_logout_discard');
+    }
     config(['session.cookie' => '__w68_logout_discard']);
 
     $response = redirect('/login?logged_out=1', 303)
