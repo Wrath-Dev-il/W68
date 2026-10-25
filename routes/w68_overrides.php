@@ -20,24 +20,76 @@ use Illuminate\Support\Facades\Route;
 |
 */
 Route::match(['GET', 'POST'], '/warehouse/logout-now', function (Request $request) {
-    $cookieName = (string) config('session.cookie');
+    $session = $request->session();
+    $sessionId = (string) $session->getId();
+    $cookieName = (string) config('session.cookie', 'laravel_session');
+    $cookiePath = (string) config('session.path', '/');
+    $configuredDomain = config('session.domain');
+    $host = (string) $request->getHost();
 
-    $request->session()->flush();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
+    /*
+     * W68_WAREHOUSE_HARD_SESSION_LOGOUT_20261026
+     * HostForge can expose multiple Laravel apps on sibling subdomains. If an
+     * old parent-domain session cookie survives, a normal invalidate() can look
+     * like a successful logout and then immediately authenticate again.
+     *
+     * Delete the backing database-session row first, then invalidate Laravel's
+     * session and expire the cookie at every domain scope W68 may have used.
+     */
+    try {
+        if (
+            $sessionId !== ''
+            && (string) config('session.driver') === 'database'
+        ) {
+            $sessionConnection = config('session.connection') ?: config('database.default');
+            $sessionTable = (string) config('session.table', 'sessions');
 
-    $response = redirect('/login', 303)
+            DB::connection($sessionConnection)
+                ->table($sessionTable)
+                ->where('id', $sessionId)
+                ->delete();
+        }
+    } catch (\Throwable $e) {
+        Log::warning('Warehouse hard logout session-row delete failed.', [
+            'session_id' => $sessionId,
+            'message' => $e->getMessage(),
+        ]);
+    }
+
+    $session->forget('user');
+    $session->flush();
+    $session->invalidate();
+
+    $response = redirect('/login?logged_out=1', 303)
         ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ->header('Pragma', 'no-cache');
+        ->header('Pragma', 'no-cache')
+        ->header('Clear-Site-Data', '"cache"');
 
     if ($cookieName !== '') {
-        $response->withCookie(
-            \Illuminate\Support\Facades\Cookie::forget(
-                $cookieName,
-                (string) config('session.path', '/'),
-                config('session.domain')
-            )
-        );
+        $domains = array_values(array_unique(array_filter([
+            null,
+            $configuredDomain,
+            $host,
+            '.' . $host,
+            'hostforgeplatforms.com',
+            '.hostforgeplatforms.com',
+        ], static fn ($value) => $value === null || $value !== '')));
+
+        foreach ($domains as $domain) {
+            $response->withCookie(
+                \Symfony\Component\HttpFoundation\Cookie::create(
+                    $cookieName,
+                    '',
+                    1,
+                    $cookiePath,
+                    $domain,
+                    true,
+                    true,
+                    false,
+                    \Symfony\Component\HttpFoundation\Cookie::SAMESITE_LAX
+                )
+            );
+        }
     }
 
     return $response;
