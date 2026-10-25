@@ -9,6 +9,42 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Account type 5 dashboard redirect fix
+|--------------------------------------------------------------------------
+|
+| W68_ACCOUNT_TYPE_5_DASHBOARD_REDIRECT_20261026
+| The normal GET /login route sends any authenticated session to the generic
+| dashboard route. The legacy generic dashboard omitted account_type 5, which
+| sent that same authenticated session back to /login and created:
+| /login -> /dashboard -> /login -> ...
+|
+| Route overrides are loaded after routes/web.php, so this replaces only the
+| generic dashboard handler while preserving the role-specific dashboards.
+|
+*/
+Route::get('/dashboard', function () {
+    $user = session('user');
+
+    if (!$user) {
+        return redirect()->route('login');
+    }
+
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    return match ((int) ($user->account_type ?? 0)) {
+        1 => redirect()->route('admin.dashboard'),
+        2 => redirect()->route('regular.dashboard'),
+        3 => redirect()->route('special.dashboard'),
+        4 => redirect()->route('developer.control-panel'),
+        5 => redirect()->route('warehouse.dashboard'),
+        default => redirect()->route('login')->with('error', 'Unsupported account type.'),
+    };
+})->name('dashboard');
+
+/*
+|--------------------------------------------------------------------------
 | W68 HostForge route overrides
 |--------------------------------------------------------------------------
 |
