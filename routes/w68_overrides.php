@@ -60,10 +60,18 @@ Route::match(['GET', 'POST'], '/warehouse/logout-now', function (Request $reques
     $session->flush();
     $session->invalidate();
 
+    /*
+     * StartSession runs after the controller response and normally writes a
+     * fresh cookie even after invalidate(). Move that automatic replacement
+     * cookie to a throwaway name for this response, while $cookieName keeps
+     * the real authenticated cookie name that we explicitly expire below.
+     */
+    config(['session.cookie' => '__w68_logout_discard']);
+
     $response = redirect('/login?logged_out=1', 303)
         ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         ->header('Pragma', 'no-cache')
-        ->header('Clear-Site-Data', '"cache"');
+        ->header('Clear-Site-Data', '"cache", "cookies", "storage"');
 
     if ($cookieName !== '') {
         $domains = array_values(array_unique(array_filter([
