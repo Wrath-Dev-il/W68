@@ -9,6 +9,42 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Warehouse direct logout
+|--------------------------------------------------------------------------
+|
+| W68_WAREHOUSE_DIRECT_LOGOUT_20261026
+| Keep Warehouse logout independent from activity logging and absolute URL
+| generation. HostForge sits behind a proxy, so the response always redirects
+| to the relative /login path after destroying the session and expiring the
+| session cookie.
+|
+*/
+Route::match(['GET', 'POST'], '/warehouse/logout-now', function (Request $request) {
+    $cookieName = (string) config('session.cookie');
+
+    $request->session()->flush();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    $response = redirect('/login', 303)
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        ->header('Pragma', 'no-cache');
+
+    if ($cookieName !== '') {
+        $response->withCookie(
+            \Illuminate\Support\Facades\Cookie::forget(
+                $cookieName,
+                (string) config('session.path', '/'),
+                config('session.domain')
+            )
+        );
+    }
+
+    return $response;
+})->name('warehouse.logout-now');
+
+/*
+|--------------------------------------------------------------------------
 | Unified logout route
 |--------------------------------------------------------------------------
 |
