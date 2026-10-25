@@ -9,6 +9,63 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Unified logout route
+|--------------------------------------------------------------------------
+|
+| W68_UNIFIED_LOGOUT_ROUTE_20261026
+| The legacy routes register both GET and POST /logout under the same route
+| name. Warehouse uses a GET navigation while other areas may use POST/AJAX.
+| Handle both methods in one final override, clear the entire session, rotate
+| the session ID/CSRF token, and return an appropriate response.
+|
+*/
+Route::match(['GET', 'POST'], '/logout', function (Request $request) {
+    $user = session('user');
+
+    try {
+        if ($user) {
+            $userId = is_array($user)
+                ? ($user['login_ID'] ?? null)
+                : ($user->login_ID ?? null);
+            $accountType = is_array($user)
+                ? ($user['account_type'] ?? null)
+                : ($user->account_type ?? null);
+
+            if (
+                $userId
+                && \Illuminate\Support\Facades\Schema::hasTable('login_activity_logs')
+                && \Illuminate\Support\Facades\Schema::hasColumn('login_activity_logs', 'logged_out_at')
+            ) {
+                DB::table('login_activity_logs')
+                    ->where('login_id', $userId)
+                    ->where('account_type', $accountType)
+                    ->whereNull('logged_out_at')
+                    ->orderBy('logged_in_at', 'desc')
+                    ->limit(1)
+                    ->update(['logged_out_at' => now()]);
+            }
+        }
+    } catch (\Throwable $e) {
+        Log::warning('Logout activity update failed.', [
+            'message' => $e->getMessage(),
+        ]);
+    }
+
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    if ($request->expectsJson()) {
+        return response()->json([
+            'success' => true,
+            'redirect' => route('login'),
+        ]);
+    }
+
+    return redirect()->route('login');
+})->name('logout');
+
+/*
+|--------------------------------------------------------------------------
 | Account type 5 dashboard redirect fix
 |--------------------------------------------------------------------------
 |
