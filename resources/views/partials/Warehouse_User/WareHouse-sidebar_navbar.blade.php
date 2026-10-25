@@ -539,7 +539,7 @@
                         <p class="text-sm text-slate-500 mb-6">Are you sure you want to end your current session? Any unsaved changes may be lost.</p>
                         <div class="flex gap-3 justify-center">
                             <button onclick="toggleLogoutModal(false)" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">Cancel</button>
-                            <button onclick="executeLogout()" class="px-6 py-2 bg-maroon text-white text-xs font-bold rounded-xl shadow-md">Yes, Logout</button>
+                            <button id="warehouse-logout-confirm-btn" type="button" onclick="executeLogout()" class="px-6 py-2 bg-maroon text-white text-xs font-bold rounded-xl shadow-md">Yes, Logout</button>
                         </div>
                     </div>
                 </div>
@@ -575,9 +575,52 @@
             }
         }
 
-        function executeLogout() {
+        async function executeLogout() {
+            const button = document.getElementById('warehouse-logout-confirm-btn');
+            if (button?.dataset.loading === 'true') return;
+
+            if (button) {
+                button.dataset.loading = 'true';
+                button.disabled = true;
+                button.textContent = 'Logging out...';
+            }
+
             toggleLogoutModal(false);
-            window.location.href = '{{ url("/logout") }}';
+
+            try {
+                const response = await fetch('{{ url("/logout") }}', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': @json(csrf_token())
+                    }
+                });
+
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch (e) {
+                    result = {};
+                }
+
+                if (!response.ok || result.success !== true) {
+                    throw new Error(result.message || 'Logout request failed.');
+                }
+
+                const successModal = document.getElementById('success-logout-modal');
+                if (successModal) successModal.classList.remove('hidden');
+
+                window.location.replace(result.redirect || '{{ route("login") }}');
+            } catch (error) {
+                console.error('Warehouse logout failed:', error);
+
+                // The final GET /logout override is intentionally safe and
+                // idempotent, so use it as a hard fallback instead of leaving
+                // the user on an endless loading state.
+                window.location.replace('{{ url("/logout") }}');
+            }
         }
     </script>
     @vite(['resources/js/admin_sidebar_navbar.js'])
