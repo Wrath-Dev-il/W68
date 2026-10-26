@@ -2935,11 +2935,17 @@ window.slideViewProductImage = function(direction) {
 };
 
 window.handleViewProductPictureClick = function(event) {
-    if (!window.productMasterViewEditor) return;
-    if (window.viewProductEditMode) {
-        if (event) event.stopPropagation();
+    if (event) event.stopPropagation();
+
+    // W68_WAREHOUSE_READ_ONLY_IMAGE_ZOOM_20261026
+    // Read-only users (Warehouse) must still be able to open the same full
+    // gallery/zoom as other roles. Only picture management is edit-only.
+    if (window.viewProductEditMode && window.productMasterViewEditor) {
         window.openViewPictureManager();
-    } else if (window.pendingProductImages.length) {
+        return;
+    }
+
+    if (window.pendingProductImages && window.pendingProductImages.length) {
         window.openGalleryFromView();
     }
 };
