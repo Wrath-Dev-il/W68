@@ -1076,9 +1076,11 @@ function renderProductTable() {
 
         return `
             <tr class="${lowStockRowClass} hover:bg-slate-50/60 table-row-animate transition-colors cursor-pointer group" onclick="if(!event.target.closest('button') && !event.target.closest('input')) viewProduct(${index})">
+                ${window.productMasterWarehouseReadOnly ? '' : `
                 <td class="py-3 px-4 text-center align-middle">
                     <input type="checkbox" class="rounded border-slate-300 product-checkbox" value="${product.id}" ${isSelected ? 'checked' : ''} onchange="window.handleRowSelect(this, ${product.id})">
                 </td>
+                `}
                 <td class="py-3 px-4 text-center align-middle relative">
                     <div class="w-10 h-10 flex-shrink-0 mx-auto relative">
                         ${firstImg ? 
