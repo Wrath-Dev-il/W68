@@ -474,6 +474,87 @@ Route::post('/admin/usm/create', function (Request $request) {
 
 /*
 |--------------------------------------------------------------------------
+| Sales Report SOA direct role bridges
+|--------------------------------------------------------------------------
+|
+| W68_SALES_REPORT_SOA_DIRECT_BRIDGE_20261026
+| Special/Regular Sales Report must not proxy the Admin SOA route through
+| app()->handle(). Nested Laravel requests can fail on HostForge and surface as
+| HTTP 500. Resolve the already-registered Admin SOA action and invoke it
+| directly in-process while preserving the current request/session.
+|
+*/
+$w68InvokeAdminSalesReportSoa = function (Request $request, array $allowedTypes) {
+    $user = session('user');
+
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if (!$user || !in_array((int) ($user->account_type ?? 0), $allowedTypes, true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized.',
+        ], 403);
+    }
+
+    try {
+        $adminRoute = Route::getRoutes()->getByName('admin.sales-report.print-soa');
+
+        if (!$adminRoute) {
+            Log::error('Sales Report SOA bridge target route is missing.', [
+                'requested_path' => $request->path(),
+                'account_type' => (int) ($user->account_type ?? 0),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The SOA print handler is not registered on the server.',
+            ], 503);
+        }
+
+        $uses = $adminRoute->getAction('uses');
+
+        if (!$uses) {
+            Log::error('Sales Report SOA bridge target has no callable action.', [
+                'route_name' => 'admin.sales-report.print-soa',
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The SOA print handler is unavailable.',
+            ], 503);
+        }
+
+        return app()->call($uses, [
+            'request' => $request,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Sales Report SOA direct bridge failed.', [
+            'requested_path' => $request->path(),
+            'account_type' => (int) ($user->account_type ?? 0),
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'SOA print failed: ' . $e->getMessage(),
+        ], 422);
+    }
+};
+
+Route::post('/special/reports/sales-report/print-soa', function (Request $request) use ($w68InvokeAdminSalesReportSoa) {
+    return $w68InvokeAdminSalesReportSoa($request, [3]);
+})->name('special.sales-report.print-soa');
+
+Route::post('/regular/reports/sales-report/print-soa', function (Request $request) use ($w68InvokeAdminSalesReportSoa) {
+    return $w68InvokeAdminSalesReportSoa($request, [2]);
+})->name('regular.sales-report.print-soa');
+
+/*
+|--------------------------------------------------------------------------
 | W68 HostForge route overrides
 |--------------------------------------------------------------------------
 |
