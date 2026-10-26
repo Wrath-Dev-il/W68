@@ -498,6 +498,28 @@ $w68InvokeAdminSalesReportSoa = function (Request $request, array $allowedTypes)
         ], 403);
     }
 
+    /*
+     * W68_SALES_REPORT_SOA_MEMORY_GUARD_20261026
+     *
+     * The legacy Admin SOA generator can legitimately process a large amount
+     * of invoice/payment data. HostForge PHP is capped at 128M by default and
+     * production logs show the request fatalling at that limit. Raise memory
+     * only for this report request, turn off query logs on the data
+     * connections, and collect old cycles before invoking the legacy action.
+     */
+    @ini_set('memory_limit', '512M');
+
+    foreach (['mysql', 'system', 'masterlist', 'sales', 'ledger', 'accounting', 'purchase'] as $connection) {
+        try {
+            DB::connection($connection)->disableQueryLog();
+        } catch (\Throwable $ignored) {
+        }
+    }
+
+    if (function_exists('gc_collect_cycles')) {
+        gc_collect_cycles();
+    }
+
     try {
         $adminRoute = Route::getRoutes()->getByName('admin.sales-report.print-soa');
 
