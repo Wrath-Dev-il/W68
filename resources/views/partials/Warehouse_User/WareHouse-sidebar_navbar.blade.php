@@ -101,31 +101,12 @@
                 
             
 
-                <div class="menu-dropdown">
-                    <button onclick="toggleDropdown('dropdown-inventory', this)" class="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-maroon-800 text-gray-100 hover:text-white transition-all group" title="Inventory Management">
-                        <div class="flex items-center space-x-3">
-                            <i data-lucide="boxes" class="w-5 h-5 text-goldlining-400 group-hover:scale-110 transition-transform flex-shrink-0"></i>
-                            <span class="sidebar-text text-sm whitespace-nowrap">Inventory Management</span>
-                        </div>
-                        <i data-lucide="chevron-down" class="dropdown-chevron w-4 h-4 text-goldlining-500 rotate-transition sidebar-text {{ in_array(Route::currentRouteName(), ['warehouse.inv-adjust', 'warehouse.sales-junk', 'warehouse.item-convert']) ? 'rotate-180' : '' }}"></i>
-                    </button>
-                    <div id="dropdown-inventory" class="submenu-transition overflow-hidden bg-maroon-950 bg-opacity-40 rounded-md mt-1 pl-4 space-y-1" style="{{ in_array(Route::currentRouteName(), ['warehouse.inv-adjust', 'warehouse.sales-junk', 'warehouse.item-convert']) ? 'max-height: 500px;' : 'max-height: 0px;' }}">
-                        <a href="{{ route('warehouse.inv-adjust') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'warehouse.inv-adjust' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="inv-adjust">
-                            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'warehouse.inv-adjust' ? 'text-maroon-950' : '' }}"></i>
-                            <span>Inventory Adjustment</span>
-                        </a>
-                        <a href="{{ route('warehouse.sales-junk') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'warehouse.sales-junk' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="sales-junk">
-                            <i data-lucide="archive" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'warehouse.sales-junk' ? 'text-maroon-950' : '' }}"></i>
-                            <span>Junk Items</span>
-                        </a>
-                         <a href="{{ route('warehouse.item-convert') }}" class="flex items-center space-x-2 py-2 px-3 text-xs rounded transition-all {{ Route::currentRouteName() === 'warehouse.item-convert' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-300 hover:text-goldlining-400 hover:translate-x-1' }}" data-page="item-convert">
-                            <i data-lucide="shuffle" class="w-3.5 h-3.5 {{ Route::currentRouteName() === 'warehouse.item-convert' ? 'text-maroon-950' : '' }}"></i>
-                            <span>Convert Items</span>
-                        </a>    
-                    </div>
-                </div>
-
-                    
+                <a href="{{ route('warehouse.prod-master') }}"
+                   class="w-full flex items-center space-x-3 px-3 py-3 rounded-lg transition-all group {{ Route::currentRouteName() === 'warehouse.prod-master' ? 'bg-goldlining-500 text-maroon-950 font-semibold shadow' : 'text-gray-100 hover:bg-maroon-800 hover:text-white' }}"
+                   title="Product Masterlist">
+                    <i data-lucide="package-search" class="w-5 h-5 flex-shrink-0 {{ Route::currentRouteName() === 'warehouse.prod-master' ? 'text-maroon-950' : 'text-goldlining-400' }}"></i>
+                    <span class="sidebar-text text-sm whitespace-nowrap">Product Masterlist</span>
+                </a>
 
             </div>
         </aside>
@@ -263,8 +244,8 @@
                             <span id="breadcrumb-current" class="text-maroon-700 font-semibold">
                                 @if(Route::currentRouteName() === 'admin.usm')
                                     System Security / USM
-                                @elseif(Route::currentRouteName() === 'admin.prod-master')
-                                    Master List / Product Master
+                                @elseif(Route::currentRouteName() === 'warehouse.prod-master')
+                                    Master List / Product Masterlist
                                 @elseif(Route::currentRouteName() === 'admin.purchase-note')
                                     Purchasing / Purchasing Note
                                 @elseif(Route::currentRouteName() === 'admin.purchase-order')
@@ -301,8 +282,8 @@
                         <h1 id="workspace-title" class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight mt-1">
                             @if(Route::currentRouteName() === 'admin.usm')
                                 User Management System
-                            @elseif(Route::currentRouteName() === 'admin.prod-master')
-                                Product Master List
+                            @elseif(Route::currentRouteName() === 'warehouse.prod-master')
+                                Product Masterlist
                             @elseif(Route::currentRouteName() === 'admin.purchase-note')
                                 Purchasing Note
                             @elseif(Route::currentRouteName() === 'admin.purchase-order')
@@ -376,7 +357,7 @@
                 </div>
 
                 <!-- PAGE: MASTER LIST -> PRODUCT MASTER -->
-                <div id="page-prod-master-container" class="page-view space-y-6 {{ Route::currentRouteName() === 'admin.prod-master' ? '' : 'hidden' }}">
+                <div id="page-prod-master-container" class="page-view space-y-6 {{ Route::currentRouteName() === 'warehouse.prod-master' ? '' : 'hidden' }}">
                     @yield('prod_master_content')
                 </div>
 
