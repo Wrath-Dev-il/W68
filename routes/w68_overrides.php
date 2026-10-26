@@ -391,6 +391,86 @@ Route::get('/warehouse/inventory/item-convert/targets', $warehouseReadOnlyDenied
 
 /*
 |--------------------------------------------------------------------------
+| Admin USM Warehouse account type
+|--------------------------------------------------------------------------
+|
+| W68_USM_WAREHOUSE_ACCOUNT_TYPE_6_20261026
+| Warehouse is account_type = 6. Account type 5 remains reserved for
+| Pricelist/customer portal accounts.
+|
+*/
+Route::post('/admin/usm/create', function (Request $request) {
+    $user = session('user');
+
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if (!$user || (int) ($user->account_type ?? 0) !== 1) {
+        return response()->json(['error' => 'Unauthorized Access'], 403);
+    }
+
+    try {
+        $validated = $request->validate([
+            'User_ID' => 'required|unique:logins,User_ID',
+            'User_First_Name' => 'required|string|max:100',
+            'User_Middle_Name' => 'nullable|string|max:100',
+            'User_Last_Name' => 'required|string|max:100',
+            'Password' => 'required|string|min:4',
+            'account_type' => 'required|in:admin,employee,employee_with_pricelist,worker,warehouse',
+            'Gender' => 'required|string|in:Male,Female,Other',
+        ]);
+
+        $accountTypeMap = [
+            'admin' => 1,
+            'employee_with_pricelist' => 2,
+            'employee' => 2,
+            'worker' => 3,
+            'warehouse' => 6,
+        ];
+
+        $newUser = \App\Models\Login::create([
+            'User_ID' => $validated['User_ID'],
+            'User_First_Name' => $validated['User_First_Name'],
+            'User_Middle_Name' => $validated['User_Middle_Name'] ?? '',
+            'User_Last_Name' => $validated['User_Last_Name'],
+            'Password' => $validated['Password'],
+            'account_type' => $accountTypeMap[$validated['account_type']],
+            'Gender' => $validated['Gender'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'login_ID' => $newUser->login_ID,
+                'User_ID' => $newUser->User_ID,
+                'User_First_Name' => $newUser->User_First_Name,
+                'User_Middle_Name' => $newUser->User_Middle_Name,
+                'User_Last_Name' => $newUser->User_Last_Name,
+                'Password' => $validated['Password'],
+                'account_type' => (int) $newUser->account_type,
+                'Gender' => $newUser->Gender,
+                'created_at' => optional($newUser->created_at)->toIso8601String(),
+                'updated_at' => optional($newUser->updated_at)->toIso8601String(),
+            ],
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'error' => $e->validator->errors()->first(),
+        ], 422);
+    } catch (\Throwable $e) {
+        Log::error('USM warehouse-capable account creation failed.', [
+            'message' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'error' => 'Database error: ' . $e->getMessage(),
+        ], 500);
+    }
+})->name('admin.usm.create');
+
+/*
+|--------------------------------------------------------------------------
 | W68 HostForge route overrides
 |--------------------------------------------------------------------------
 |
