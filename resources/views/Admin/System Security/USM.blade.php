@@ -203,7 +203,7 @@
                             <th class="py-3 px-5">User ID</th>
                             <th class="py-3 px-5">Name</th>
                             <th class="py-3 px-5">Password</th>
-                            <th class="py-3 px-5">Last Change Date</th>
+                            <th class="py-3 px-5">Last Update</th>
                             <th class="py-3 px-5">Status</th>
                             <th class="py-3 px-5 text-center">Action</th>
                         </tr>
@@ -223,7 +223,7 @@
                 </table>
                 <div id="no-results-warehouse" class="hidden py-12 px-6 text-center">
                     <i data-lucide="inbox" class="mx-auto h-12 w-12 text-slate-300"></i>
-                    <h3 class="mt-4 text-sm font-semibold text-slate-900">No matching warehouses found</h3>
+                    <h3 class="mt-4 text-sm font-semibold text-slate-900">No matching warehouse users found</h3>
                     <p class="mt-1 text-xs text-slate-500 text-center">Adjust column queries or reset page filters.</p>
                 </div>
             </div>
@@ -304,7 +304,7 @@
                             <label for="new-user-id" class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">User ID <span class="text-red-500">*</span></label>
                             <div class="relative">
                                 <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-mono text-xs font-semibold">@</span>
-                                <input type="text" id="new-user-id" required placeholder="ADM-0099 or EMP-0101" class="block w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-colors font-mono">
+                                <input type="text" id="new-user-id" required placeholder="ADM-0099, EMP-0101 or WH-0101" class="block w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-colors font-mono">
                             </div>
                         </div>
 
