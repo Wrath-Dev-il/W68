@@ -14,11 +14,11 @@
        'ledger': '{{ route("warehouse.prod-master.ledger", ["id" => ":id"]) }}',
         'select': '#warehouse-read-only',
         'reorderLevel': '#warehouse-read-only',
-        'catalog': '{{ route("regular.prod-master.catalog") }}',
-        'priceList': '{{ route("regular.prod-master.price-list") }}',
-        'selectedFilters': '{{ route("regular.prod-master.selected-filters") }}',
-        'pricelistGroups': '{{ route("regular.prod-master.pricelist-groups") }}',
-        'activeNotes': '{{ route("regular.prod-master.active-notes", ["id" => ":id"]) }}',
+        'catalog': '#warehouse-read-only',
+        'priceList': '#warehouse-read-only',
+        'selectedFilters': '#warehouse-read-only',
+        'pricelistGroups': '#warehouse-read-only',
+        'activeNotes': '{{ route("warehouse.prod-master.active-notes", ["id" => ":id"]) }}',
         'priceCodesUpdate': '#warehouse-read-only'
     };
     window.productMasterViewEditor = false;
@@ -33,7 +33,8 @@
     #view-edit-actions-separator,
     button[onclick*="add-product-modal"],
     button[onclick*="generate-report-modal"],
-    button[onclick*="reorder-level-modal"] {
+    button[onclick*="reorder-level-modal"],
+    button[onclick*="openProductSearchModal"] {
         display: none !important;
     }
 
