@@ -22,6 +22,7 @@
         'priceCodesUpdate': '#warehouse-read-only'
     };
     window.productMasterViewEditor = false;
+    window.productMasterWarehouseReadOnly = true;
 </script>
 <style>
     /* W68_WAREHOUSE_PRODUCT_MASTER_READ_ONLY_20261026 */
@@ -38,8 +39,6 @@
         display: none !important;
     }
 
-    #warehouse-product-master-table > thead > tr > th:first-child,
-    #warehouse-product-master-table > tbody > tr > td:first-child,
     #warehouse-product-master-table > thead > tr > th:last-child,
     #warehouse-product-master-table > tbody > tr > td:last-child {
         display: none !important;
@@ -169,7 +168,6 @@
             <table class="w-full text-left border-collapse table-fixed min-w-[2050px]">
                 <thead>
                     <tr class="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                        <th class="py-2.5 px-4 text-center w-[50px]"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
                         <th class="py-2.5 px-4 w-[80px]">Picture</th>
                         <th class="py-2.5 px-4 w-[210px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
 <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
@@ -187,7 +185,6 @@
                     </tr>
                     <!-- Column Specific Search Input Row -->
                     <tr class="border-b border-slate-100 bg-slate-50/10">
-                        <th class="px-4"></th>
                         <th class="px-4"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="productCode" name="product_code" placeholder="Code..." class="column-search-input py-1 text-[10px] w-full"></th>
 <th class="p-1.5 px-4"><input data-col="productCode2" id="search-product-code2" name="search[productCode2]" type="text" placeholder="Code 2..." class="column-search-input py-1 text-[10px] w-full"></th>
