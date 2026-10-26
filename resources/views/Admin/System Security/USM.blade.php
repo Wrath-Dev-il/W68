@@ -108,6 +108,12 @@
                     <span id="badge-count-employee" class="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full transition-all duration-150">0</span>
                 </button>
                 
+                <button data-tab="warehouse" class="usm-tab-btn tab-inactive px-5 py-3 text-sm font-semibold flex items-center space-x-2 transition-all duration-200 border-r border-slate-100">
+                    <i data-lucide="warehouse" class="w-4 h-4"></i>
+                    <span>Warehouse</span>
+                    <span id="badge-count-warehouse" class="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full transition-all duration-150">0</span>
+                </button>
+
                 <button data-tab="customer" class="usm-tab-btn tab-inactive px-5 py-3 text-sm font-semibold flex items-center space-x-2 transition-all duration-200">
                     <i data-lucide="shopping-bag" class="w-4 h-4"></i>
                     <span>Customers</span>
@@ -189,7 +195,40 @@
                 </div>
             </div>
 
-            <!-- 3. CUSTOMER TABLE CONTAINER -->
+            <!-- 3. WAREHOUSE TABLE CONTAINER -->
+            <div id="table-container-warehouse" class="min-w-full hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                            <th class="py-3 px-5">User ID</th>
+                            <th class="py-3 px-5">Name</th>
+                            <th class="py-3 px-5">Password</th>
+                            <th class="py-3 px-5">Last Change Date</th>
+                            <th class="py-3 px-5">Status</th>
+                            <th class="py-3 px-5 text-center">Action</th>
+                        </tr>
+                        <!-- Column Specific Search Input Row -->
+                        <tr class="border-b border-slate-100 bg-slate-50/10">
+                            <th class="p-2 px-5"><input type="text" data-col="userId" placeholder="Search ID..." class="column-search-input"></th>
+                            <th class="p-2 px-5"><input type="text" data-col="name" placeholder="Search Name..." class="column-search-input"></th>
+                            <th class="p-2 px-5"><input type="text" data-col="password" placeholder="Search Password..." class="column-search-input"></th>
+                            <th class="p-2 px-5"><input type="text" data-col="lastChange" placeholder="Search Date..." class="column-search-input"></th>
+                            <th class="p-2 px-5"><input type="text" data-col="status" placeholder="Search Status..." class="column-search-input"></th>
+                            <th class="p-2 px-5"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="usm-tbody-warehouse" class="divide-y divide-slate-100 text-sm">
+                        <!-- Rendered Reactively in JS -->
+                    </tbody>
+                </table>
+                <div id="no-results-warehouse" class="hidden py-12 px-6 text-center">
+                    <i data-lucide="inbox" class="mx-auto h-12 w-12 text-slate-300"></i>
+                    <h3 class="mt-4 text-sm font-semibold text-slate-900">No matching warehouses found</h3>
+                    <p class="mt-1 text-xs text-slate-500 text-center">Adjust column queries or reset page filters.</p>
+                </div>
+            </div>
+
+            <!-- 4. CUSTOMER TABLE CONTAINER -->
             <div id="table-container-customer" class="min-w-full hidden">
                 <table class="w-full text-left border-collapse">
                     <thead>
@@ -299,6 +338,7 @@
                                     <option value="admin">Administrator</option>
                                     <option value="employee_with_pricelist">Employee With Pricelist</option>
                                     <option value="worker">Worker</option>
+                                    <option value="warehouse">Warehouse</option>
                                 </select>
                             </div>
                             <div>
@@ -360,6 +400,7 @@
                             <option value="all">All Account Types</option>
                             <option value="admin">Administrator Only</option>
                             <option value="employee">Employee Only</option>
+                            <option value="warehouse">Warehouse Only</option>
                             <option value="customer">Customer Only</option>
                         </select>
                     </div>
