@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 class RestrictWarehouseToReadOnlyProduct
 {
     /**
-     * Account type 5 (Warehouse) is intentionally limited to read-only
+     * Account type 6 (Warehouse) is intentionally limited to read-only
      * Product Master access plus its own profile/logout endpoints.
      */
     public function handle(Request $request, Closure $next): Response
@@ -20,7 +20,7 @@ class RestrictWarehouseToReadOnlyProduct
             $user = (object) $user;
         }
 
-        if (!$user || (int) ($user->account_type ?? 0) !== 5) {
+        if (!$user || (int) ($user->account_type ?? 0) !== 6) {
             return $next($request);
         }
 
