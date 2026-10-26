@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RestrictWarehouseToReadOnlyProduct;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -50,6 +51,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(20);
     })
     ->withMiddleware(function (Middleware $middleware): void {
+        // W68_WAREHOUSE_READ_ONLY_PRODUCT_GUARD_20261026
+        // Runs inside the web group after session startup, so account type 5
+        // cannot reach Admin/Regular/Special write routes by typing URLs.
+        $middleware->web(append: [
+            RestrictWarehouseToReadOnlyProduct::class,
+        ]);
+
         $middleware->validateCsrfTokens(except: [
             'api/shopee/webhook',
             'public/api/shopee/webhook',
