@@ -7,7 +7,7 @@
 let users = [];
 
 // Navigation state
-let currentTab = "admin"; // 'admin', 'employee', 'customer'
+let currentTab = "admin"; // 'admin', 'employee', 'warehouse', 'customer'
 
 // Active filters
 let filters = {
@@ -60,7 +60,8 @@ function initializeDatabaseUsers() {
         2: 'employee',
         3: 'customer',
         4: 'developer',
-        5: 'warehouse'
+        5: 'customer',
+        6: 'warehouse'
     };
 
     users = rawDbUsers.map(u => {
@@ -181,14 +182,17 @@ function switchTab(tabId) {
     // Show current tab container and hide others
     const tabAdmin = document.getElementById("table-container-admin");
     const tabEmployee = document.getElementById("table-container-employee");
+    const tabWarehouse = document.getElementById("table-container-warehouse");
     const tabCustomer = document.getElementById("table-container-customer");
 
     if (tabAdmin) tabAdmin.classList.add("hidden");
     if (tabEmployee) tabEmployee.classList.add("hidden");
+    if (tabWarehouse) tabWarehouse.classList.add("hidden");
     if (tabCustomer) tabCustomer.classList.add("hidden");
 
     if (tabId === "admin" && tabAdmin) tabAdmin.classList.remove("hidden");
     if (tabId === "employee" && tabEmployee) tabEmployee.classList.remove("hidden");
+    if (tabId === "warehouse" && tabWarehouse) tabWarehouse.classList.remove("hidden");
     if (tabId === "customer" && tabCustomer) tabCustomer.classList.remove("hidden");
 
     // Reset column search fields when switching tabs to avoid confusion
@@ -210,6 +214,7 @@ function clearSearchInputs() {
 function recalculateStats() {
     const totalAdmins = users.filter(u => u.accountType === "admin").length;
     const totalEmployees = users.filter(u => u.accountType === "employee").length;
+    const totalWarehouse = users.filter(u => u.accountType === "warehouse").length;
     const totalCustomers = users.filter(u => u.accountType === "customer").length;
 
     // Sub-stat values: Online / Offline
@@ -218,6 +223,9 @@ function recalculateStats() {
 
     const onlineEmployees = users.filter(u => u.accountType === "employee" && u.status === "Online").length;
     const offlineEmployees = totalEmployees - onlineEmployees;
+
+    const onlineWarehouse = users.filter(u => u.accountType === "warehouse" && u.status === "Online").length;
+    const offlineWarehouse = totalWarehouse - onlineWarehouse;
 
     const onlineCustomers = users.filter(u => u.accountType === "customer" && u.status === "Online").length;
     const offlineCustomers = totalCustomers - onlineCustomers;
@@ -230,6 +238,8 @@ function recalculateStats() {
     updateElementText("card-count-employee", totalEmployees);
     updateElementText("card-sub-employee", `Online: ${onlineEmployees} | Offline: ${offlineEmployees}`);
     updateElementText("badge-count-employee", totalEmployees);
+
+    updateElementText("badge-count-warehouse", totalWarehouse);
 
     updateElementText("card-count-customer", totalCustomers);
     updateElementText("card-sub-customer", `Online: ${onlineCustomers} | Offline: ${offlineCustomers}`);
@@ -246,10 +256,12 @@ function updateElementText(id, text) {
 function renderTables() {
     const adminTbody = document.getElementById("usm-tbody-admin");
     const employeeTbody = document.getElementById("usm-tbody-employee");
+    const warehouseTbody = document.getElementById("usm-tbody-warehouse");
     const customerTbody = document.getElementById("usm-tbody-customer");
 
     const noResultsAdmin = document.getElementById("no-results-admin");
     const noResultsEmployee = document.getElementById("no-results-employee");
+    const noResultsWarehouse = document.getElementById("no-results-warehouse");
     const noResultsCustomer = document.getElementById("no-results-customer");
 
     // Filter logic
@@ -280,6 +292,7 @@ function renderTables() {
     // Split filtered into specific tabs
     const adminData = filteredUsers.filter(u => u.accountType === "admin");
     const employeeData = filteredUsers.filter(u => u.accountType === "employee");
+    const warehouseData = filteredUsers.filter(u => u.accountType === "warehouse");
     const customerData = filteredUsers.filter(u => u.accountType === "customer");
 
     // 1. Admin Table render
@@ -384,7 +397,58 @@ function renderTables() {
         }
     }
 
-    // 3. Customer Table render
+    // 3. Warehouse Table render
+    if (warehouseTbody) {
+        warehouseTbody.innerHTML = "";
+        if (warehouseData.length === 0) {
+            if (noResultsWarehouse) noResultsWarehouse.classList.remove("hidden");
+        } else {
+            if (noResultsWarehouse) noResultsWarehouse.classList.add("hidden");
+            warehouseData.forEach(user => {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-slate-50/60 table-row-animate transition-colors divide-x divide-slate-100";
+                
+                const isPasswordVisible = passwordVisibility[user.userId] === true;
+                const passwordDisplay = isPasswordVisible ? (user.password || "No password set") : "••••••••";
+                const eyeIcon = isPasswordVisible ? "eye-off" : "eye";
+
+                tr.innerHTML = `
+                    <td class="py-4 px-5 font-mono font-bold text-slate-800 text-xs">${user.userId}</td>
+                    <td class="py-4 px-5 text-slate-700 font-medium">${user.firstName} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName}</td>
+                    <td class="py-4 px-5">
+                        <div class="password-toggle-container">
+                            <span class="font-mono text-xs text-slate-500 block min-w-[80px]">${passwordDisplay}</span>
+                            <span onclick="togglePasswordReveal('${user.userId}')" class="password-toggle-btn">
+                                <i data-lucide="${eyeIcon}" class="w-4 h-4"></i>
+                            </span>
+                        </div>
+                    </td>
+                    <td class="py-4 px-5 text-slate-500 text-xs">${user.lastChange}</td>
+                    <td class="py-4 px-5">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${user.status === 'Online' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}">
+                            <span class="w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'Online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}"></span>
+                            ${user.status}
+                        </span>
+                    </td>
+                    <td class="py-4 px-5 text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            <button onclick="handleResetPassword('${user.userId}')" class="inline-flex items-center px-2.5 py-1 bg-white hover:bg-maroon-50 text-maroon hover:text-maroon-800 text-xs font-bold rounded-lg border border-slate-200 hover:border-maroon-200 transition-all shadow-sm gap-1" title="Reset Password">
+                                <i data-lucide="key-round" class="w-3 h-3"></i>
+                                Reset
+                            </button>
+                            <button onclick="handleDeleteUser('${user.userId}')" class="inline-flex items-center px-2.5 py-1 bg-white hover:bg-red-50 text-red-600 hover:text-red-800 text-xs font-bold rounded-lg border border-slate-200 hover:border-red-200 transition-all shadow-sm gap-1" title="Delete User">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                Delete
+                            </button>
+                        </div>
+                    </td>
+                `;
+                warehouseTbody.appendChild(tr);
+            });
+        }
+    }
+
+    // 4. Customer Table render
     if (customerTbody) {
         customerTbody.innerHTML = "";
         if (customerData.length === 0) {
