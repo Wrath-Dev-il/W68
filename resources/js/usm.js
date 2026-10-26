@@ -58,7 +58,10 @@ function initializeDatabaseUsers() {
     const acctTypeMap = {
         1: 'admin',
         2: 'employee',
-        3: 'customer'
+        3: 'customer',
+        4: 'developer',
+        5: 'customer',
+        6: 'warehouse'
     };
 
     users = rawDbUsers.map(u => {
