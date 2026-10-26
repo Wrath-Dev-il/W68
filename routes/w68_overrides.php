@@ -225,10 +225,169 @@ Route::get('/dashboard', function () {
         2 => redirect()->route('regular.dashboard'),
         3 => redirect()->route('special.dashboard'),
         4 => redirect()->route('developer.control-panel'),
-        5 => redirect()->route('warehouse.dashboard'),
+        5 => redirect()->route('warehouse.prod-master'),
         default => redirect()->route('login')->with('error', 'Unsupported account type.'),
     };
 })->name('dashboard');
+
+/*
+|--------------------------------------------------------------------------
+| Warehouse Product Master - view only
+|--------------------------------------------------------------------------
+|
+| W68_WAREHOUSE_PRODUCT_MASTER_READ_ONLY_20261026
+| Account type 5 may view/search Product Master records only. Warehouse
+| Inventory Adjustment, Junk and Item Convert access is disabled below.
+|
+*/
+Route::get('/warehouse/masterlist/product', function () {
+    $user = session('user');
+
+    if (!$user) {
+        return redirect()->route('login');
+    }
+
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if ((int) ($user->account_type ?? 0) !== 5) {
+        abort(403);
+    }
+
+    $profileUser = null;
+    try {
+        $profileUser = \App\Models\Login::query()
+            ->where('login_ID', $user->login_ID ?? 0)
+            ->first();
+    } catch (\Throwable $ignored) {
+    }
+
+    $sidebarFullName = trim(collect([
+        trim((string) ($profileUser->User_First_Name ?? $user->User_First_Name ?? '')),
+        trim((string) ($profileUser->User_Middle_Name ?? $user->User_Middle_Name ?? '')),
+        trim((string) ($profileUser->User_Last_Name ?? $user->User_Last_Name ?? '')),
+    ])->filter()->implode(' '));
+
+    if ($sidebarFullName === '') {
+        $sidebarFullName = (string) ($profileUser->User_ID ?? $user->User_ID ?? 'Warehouse User');
+    }
+
+    $sidebarAvatarUrl = '';
+    try {
+        if (
+            $profileUser
+            && \Illuminate\Support\Facades\Schema::hasColumn('logins', 'profile_picture')
+            && !empty($profileUser->profile_picture)
+        ) {
+            $mime = \Illuminate\Support\Facades\Schema::hasColumn('logins', 'profile_picture_mime')
+                ? ((string) ($profileUser->profile_picture_mime ?: 'image/png'))
+                : 'image/png';
+            $sidebarAvatarUrl = 'data:' . $mime . ';base64,' . base64_encode($profileUser->profile_picture);
+        }
+    } catch (\Throwable $ignored) {
+    }
+
+    return view('Warehouse_User.master_list.Product_Master-list', [
+        'user' => $user,
+        'sidebarAvatarUrl' => $sidebarAvatarUrl,
+        'sidebarFullName' => $sidebarFullName,
+        'sidebarRoleLabel' => 'Warehouse User',
+    ]);
+})->name('warehouse.prod-master');
+
+Route::get('/warehouse/masterlist/product/data', [
+    \App\Http\Controllers\RegularProductMasterController::class,
+    'data',
+])->name('warehouse.prod-master.data');
+
+// Product detail remains read-only. Return transaction rows through the
+// existing historical ledger endpoint without exposing any write operation.
+Route::get('/warehouse/masterlist/product/ledger/{id}', function ($id) {
+    $user = session('user');
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if (!$user || (int) ($user->account_type ?? 0) !== 5) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    try {
+        $ledger = \App\Models\ProductLedger::query()
+            ->where('product_id', $id)
+            ->orderBy('date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'ledger' => $ledger,
+            'total_in' => $ledger->sum('quantity_in'),
+            'total_out' => $ledger->sum('quantity_out'),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to load product history.',
+        ], 422);
+    }
+})->whereNumber('id')->name('warehouse.prod-master.ledger');
+
+Route::get('/warehouse/masterlist/product/active-notes/{id}', function ($id) {
+    $user = session('user');
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if (!$user || (int) ($user->account_type ?? 0) !== 5) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    return response()->json([
+        'success' => true,
+        'rows' => [],
+    ]);
+})->whereNumber('id')->name('warehouse.prod-master.active-notes');
+
+// Warehouse starts in Product Master now.
+Route::get('/warehouse/dashboard', function () {
+    $user = session('user');
+    if (is_array($user)) {
+        $user = (object) $user;
+    }
+
+    if (!$user) {
+        return redirect()->route('login');
+    }
+
+    if ((int) ($user->account_type ?? 0) !== 5) {
+        abort(403);
+    }
+
+    return redirect()->route('warehouse.prod-master');
+})->name('warehouse.dashboard');
+
+// Old Warehouse inventory pages are no longer part of the Warehouse role.
+$warehouseReadOnlyRedirect = fn () => redirect()->route('warehouse.prod-master');
+$warehouseReadOnlyDenied = fn () => response()->json([
+    'success' => false,
+    'error' => 'Warehouse access is view-only. Inventory management is disabled.',
+], 403);
+
+Route::get('/warehouse/inventory/adjustment', $warehouseReadOnlyRedirect);
+Route::match(['GET', 'POST'], '/warehouse/inventory/adjustment/data', $warehouseReadOnlyDenied);
+Route::match(['GET', 'POST'], '/warehouse/inventory/adjustment/save', $warehouseReadOnlyDenied);
+
+Route::get('/warehouse/inventory/sales-junk', $warehouseReadOnlyRedirect);
+Route::match(['GET', 'POST'], '/warehouse/inventory/sales-junk/data', $warehouseReadOnlyDenied);
+Route::match(['GET', 'POST'], '/warehouse/inventory/sales-junk/restore', $warehouseReadOnlyDenied);
+
+Route::get('/warehouse/inventory/item-convert', $warehouseReadOnlyRedirect);
+Route::get('/warehouse/inventory/item-convert/data', $warehouseReadOnlyDenied);
+Route::post('/warehouse/inventory/item-convert/save', $warehouseReadOnlyDenied);
+Route::get('/warehouse/inventory/item-convert/targets', $warehouseReadOnlyDenied);
 
 /*
 |--------------------------------------------------------------------------
