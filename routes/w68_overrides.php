@@ -196,12 +196,12 @@ Route::match(['GET', 'POST'], '/logout', function (Request $request) {
 
 /*
 |--------------------------------------------------------------------------
-| Account type 5 dashboard redirect fix
+| Account type 6 dashboard redirect fix
 |--------------------------------------------------------------------------
 |
-| W68_ACCOUNT_TYPE_5_DASHBOARD_REDIRECT_20261026
+| W68_ACCOUNT_TYPE_6_DASHBOARD_REDIRECT_20261026
 | The normal GET /login route sends any authenticated session to the generic
-| dashboard route. The legacy generic dashboard omitted account_type 5, which
+| dashboard route. The legacy generic dashboard omitted account_type 6, which
 | sent that same authenticated session back to /login and created:
 | /login -> /dashboard -> /login -> ...
 |
@@ -225,7 +225,7 @@ Route::get('/dashboard', function () {
         2 => redirect()->route('regular.dashboard'),
         3 => redirect()->route('special.dashboard'),
         4 => redirect()->route('developer.control-panel'),
-        5 => redirect()->route('warehouse.prod-master'),
+        6 => redirect()->route('warehouse.prod-master'),
         default => redirect()->route('login')->with('error', 'Unsupported account type.'),
     };
 })->name('dashboard');
@@ -236,7 +236,7 @@ Route::get('/dashboard', function () {
 |--------------------------------------------------------------------------
 |
 | W68_WAREHOUSE_PRODUCT_MASTER_READ_ONLY_20261026
-| Account type 5 may view/search Product Master records only. Warehouse
+| Account type 6 may view/search Product Master records only. Warehouse
 | Inventory Adjustment, Junk and Item Convert access is disabled below.
 |
 */
@@ -251,7 +251,7 @@ Route::get('/warehouse/masterlist/product', function () {
         $user = (object) $user;
     }
 
-    if ((int) ($user->account_type ?? 0) !== 5) {
+    if ((int) ($user->account_type ?? 0) !== 6) {
         abort(403);
     }
 
@@ -309,7 +309,7 @@ Route::get('/warehouse/masterlist/product/ledger/{id}', function ($id) {
         $user = (object) $user;
     }
 
-    if (!$user || (int) ($user->account_type ?? 0) !== 5) {
+    if (!$user || (int) ($user->account_type ?? 0) !== 6) {
         return response()->json(['error' => 'Unauthorized'], 403);
     }
 
@@ -341,7 +341,7 @@ Route::get('/warehouse/masterlist/product/active-notes/{id}', function ($id) {
         $user = (object) $user;
     }
 
-    if (!$user || (int) ($user->account_type ?? 0) !== 5) {
+    if (!$user || (int) ($user->account_type ?? 0) !== 6) {
         return response()->json(['error' => 'Unauthorized'], 403);
     }
 
@@ -362,7 +362,7 @@ Route::get('/warehouse/dashboard', function () {
         return redirect()->route('login');
     }
 
-    if ((int) ($user->account_type ?? 0) !== 5) {
+    if ((int) ($user->account_type ?? 0) !== 6) {
         abort(403);
     }
 
