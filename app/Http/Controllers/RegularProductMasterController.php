@@ -31,7 +31,7 @@ class RegularProductMasterController extends Controller
             $user = (object) $user;
         }
 
-        if ((int) ($user->account_type ?? 0) !== 2) {
+        if (!in_array((int) ($user->account_type ?? 0), [2, 5], true)) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
