@@ -226,7 +226,10 @@ Route::get('/dashboard', function () {
         3 => redirect()->route('special.dashboard'),
         4 => redirect()->route('developer.control-panel'),
         6 => redirect()->route('warehouse.prod-master'),
-        default => redirect()->route('login')->with('error', 'Unsupported account type.'),
+        default => (function () {
+            session()->forget('user');
+            return redirect('/login')->with('error', 'This account type is not allowed in the internal W68 system.');
+        })(),
     };
 })->name('dashboard');
 
