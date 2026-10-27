@@ -2951,7 +2951,18 @@
                     const res = await fetch(`${routes().historyDetail}/${voucherId}`);
                     const data = await res.json();
                     if (!data.success) throw new Error(data.message);
-                    const v = data.voucher, invoices = data.invoices || [], suddenReturnRows = data.sudden_returns || [];
+                    const v = data.voucher;
+                    const invoices = [...(data.invoices || [])].sort((a, b) => {
+                        // W68_PAYABLE_CHEQUE_PRINT_LATEST_TO_OLDEST_20261027
+                        // Print invoice rows newest first without mutating the source response.
+                        const getInvoiceTime = (invoice) => {
+                            const raw = invoice.invoice_date || invoice.date || invoice.created_at || invoice.invoiceDate || '';
+                            const time = raw ? Date.parse(raw) : NaN;
+                            return Number.isFinite(time) ? time : 0;
+                        };
+                        return getInvoiceTime(b) - getInvoiceTime(a);
+                    });
+                    const suddenReturnRows = data.sudden_returns || [];
                     $('print-supplier').textContent = v.supplier_name || '---';
                     $('print-voucher-no').textContent = v.voucher_no || '---';
                     $('print-address').textContent = v.supplier_address || '---';
