@@ -1790,7 +1790,15 @@
                     `;
                 const checkSummaryHtml = buildCheckSummaryPrintSection(previewPayments, showCheckSummaryEnabled());
 
-                const invoiceRows = selected.map((inv) => {
+                const invoiceRows = [...selected].sort((a, b) => {
+                    // W68_PAYABLE_CHEQUE_REVIEW_PRINT_LATEST_TO_OLDEST_20261027
+                    const getInvoiceTime = (invoice) => {
+                        const raw = invoice.invoiceDate || invoice.date || invoice.createdAt || invoice.created_at || '';
+                        const time = raw ? Date.parse(raw) : NaN;
+                        return Number.isFinite(time) ? time : 0;
+                    };
+                    return getInvoiceTime(b) - getInvoiceTime(a);
+                }).map((inv) => {
                     const invAmt = invoiceCalculationAmount(inv);
                     const paid = Number(inv.amountPaid || 0);
                     const invoiceReturns = (selectedSuddenReturns || []).filter(sr => String(sr.po_id) === String(inv.sourceId));
