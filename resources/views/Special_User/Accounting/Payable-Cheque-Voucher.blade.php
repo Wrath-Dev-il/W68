@@ -1790,13 +1790,13 @@
                 const checkSummaryHtml = buildCheckSummaryPrintSection(previewPayments, showCheckSummaryEnabled());
 
                 const invoiceRows = [...selected].sort((a, b) => {
-                    // W68_PAYABLE_CHEQUE_REVIEW_PRINT_LATEST_TO_OLDEST_20261027
+                    // W68_PAYABLE_CHEQUE_REVIEW_PRINT_OLDEST_TO_LATEST_20261027
                     const getInvoiceTime = (invoice) => {
                         const raw = invoice.invoiceDate || invoice.date || invoice.createdAt || invoice.created_at || '';
                         const time = raw ? Date.parse(raw) : NaN;
                         return Number.isFinite(time) ? time : 0;
                     };
-                    return getInvoiceTime(b) - getInvoiceTime(a);
+                    return getInvoiceTime(a) - getInvoiceTime(b);
                 }).map((inv) => {
                     const invAmt = invoiceCalculationAmount(inv);
                     const paid = Number(inv.amountPaid || 0);
@@ -2961,14 +2961,14 @@
                     if (!data.success) throw new Error(data.message);
                     const v = data.voucher;
                     const invoices = [...(data.invoices || [])].sort((a, b) => {
-                        // W68_PAYABLE_CHEQUE_PRINT_LATEST_TO_OLDEST_20261027
-                        // Print invoice rows newest first without mutating the source response.
+                        // W68_PAYABLE_CHEQUE_PRINT_OLDEST_TO_LATEST_20261027
+                        // Print invoice rows oldest first without mutating the source response.
                         const getInvoiceTime = (invoice) => {
                             const raw = invoice.invoice_date || invoice.date || invoice.created_at || invoice.invoiceDate || '';
                             const time = raw ? Date.parse(raw) : NaN;
                             return Number.isFinite(time) ? time : 0;
                         };
-                        return getInvoiceTime(b) - getInvoiceTime(a);
+                        return getInvoiceTime(a) - getInvoiceTime(b);
                     });
                     const suddenReturnRows = data.sudden_returns || [];
                     $('print-supplier').textContent = v.supplier_name || '---';
