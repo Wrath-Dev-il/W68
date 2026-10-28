@@ -1361,9 +1361,11 @@
                         const calculatedRemaining = payableAmountAfterReturns(row);
                         row.userPaidAmount = calculatedRemaining;
                         row.amountPaid = calculatedRemaining;
+                        row.autoFullAmountPaid = true;
                     } else {
                         row.userPaidAmount = 0;
                         row.amountPaid = 0;
+                        row.autoFullAmountPaid = false;
                     }
                     renderInvoices();
                     fetchSuddenReturns(currentSupplier.id);
@@ -1387,6 +1389,7 @@
                         if (row && tr) {
                             row.userPaidAmount = Number(input.value || 0);
                             row.amountPaid = row.userPaidAmount;
+                            row.autoFullAmountPaid = false;
                             recalculateVoucherDeductions();
                             updateRowCells(row, tr);
                             renderStep2Summary();
@@ -2042,7 +2045,7 @@
                         ...currentSupplier,
                         ...data.supplier,
                         supplier: data.supplier.supplier,
-                        invoices: (data.invoices || []).map((invoice) => ({ ...invoice, userPaidAmount: 0, amountPaid: 0, discount1: 0, discount2: 0, rsDetails: invoice.rsDetails || '', returnNumber: invoice.returnNumber || '', selected: false }))
+                        invoices: (data.invoices || []).map((invoice) => ({ ...invoice, userPaidAmount: 0, amountPaid: 0, discount1: 0, discount2: 0, rsDetails: invoice.rsDetails || '', returnNumber: invoice.returnNumber || '', selected: false, autoFullAmountPaid: false }))
                     };
                     $('pcv-voucher-no').textContent = data.voucher_no || `PCV-${String(id).padStart(4, '0')}`;
                     fetchSuddenReturns(id);
@@ -2122,6 +2125,7 @@
                     const netDue = calcDiscountedAmount(i.amountDue, i.discount1);
                     i.userPaidAmount = netDue;
                     i.amountPaid = netDue;
+                    i.autoFullAmountPaid = true;
                     i.remarks = i.userPaidAmount >= netDue ? 'Paid' : i.userPaidAmount > 0 ? 'Partial Paid' : 'Not Paid';
                 });
                 renderInvoices();
@@ -2315,27 +2319,30 @@
                     tbody.querySelectorAll('[data-sr-check]').forEach((cb) => cb.addEventListener('change', () => {
                         const idx = Number(cb.dataset.srCheck);
                         const remarksInput = tbody.querySelector(`[data-sr-remarks="${idx}"]`);
-                        let invoiceToInitialize = null;
-                        let wasInvoiceSelected = false;
+                        const returnRow = suddenReturns[idx] || {};
+                        const invoiceToInitialize = currentSupplier?.invoices?.find((i) =>
+                            String(i.sourceId ?? i.purchase_order_id ?? '') === String(returnRow.po_id ?? returnRow.purchase_order_id ?? '')
+                        ) || null;
+                        const wasInvoiceSelected = Boolean(invoiceToInitialize?.selected);
                         if (cb.checked) {
-                            if (!selectedSuddenReturns.find((r) => r.return_number === suddenReturns[idx].return_number)) {
-                                selectedSuddenReturns.push({ ...suddenReturns[idx], remarks: remarksInput ? remarksInput.value : '' });
+                            if (!selectedSuddenReturns.find((r) => r.return_number === returnRow.return_number)) {
+                                selectedSuddenReturns.push({ ...returnRow, remarks: remarksInput ? remarksInput.value : '' });
                             }
-                            invoiceToInitialize = currentSupplier?.invoices?.find((i) =>
-                                String(i.sourceId ?? i.purchase_order_id ?? '') === String(suddenReturns[idx]?.po_id ?? suddenReturns[idx]?.purchase_order_id ?? '')
-                            ) || null;
-                            wasInvoiceSelected = Boolean(invoiceToInitialize?.selected);
                             if (invoiceToInitialize) invoiceToInitialize.selected = true;
                         } else {
-                            selectedSuddenReturns = selectedSuddenReturns.filter((r) => r.return_number !== suddenReturns[idx].return_number);
+                            selectedSuddenReturns = selectedSuddenReturns.filter((r) => r.return_number !== returnRow.return_number);
                         }
                         window.pcv_selectedSR = JSON.parse(JSON.stringify(selectedSuddenReturns));
                         updateSuddenSelectedTotal();
                         recalculateVoucherDeductions();
-                        if (cb.checked && invoiceToInitialize && !wasInvoiceSelected && numericAmount(invoiceToInitialize.userPaidAmount) <= 0.005) {
+                        if (invoiceToInitialize && (
+                            invoiceToInitialize.autoFullAmountPaid
+                            || (cb.checked && !wasInvoiceSelected && numericAmount(invoiceToInitialize.userPaidAmount) <= 0.005)
+                        )) {
                             const invoiceNetAfterReturn = payableAmountAfterReturns(invoiceToInitialize);
                             invoiceToInitialize.userPaidAmount = invoiceNetAfterReturn;
                             invoiceToInitialize.amountPaid = invoiceNetAfterReturn;
+                            invoiceToInitialize.autoFullAmountPaid = true;
                             recalculateVoucherDeductions();
                         }
                         renderInvoices();
@@ -2360,6 +2367,13 @@
                 selectedSuddenReturns = [];
                 window.pcv_selectedSR = [];
                 recalculateVoucherDeductions();
+                (currentSupplier?.invoices || []).filter(inv => inv.selected && inv.autoFullAmountPaid).forEach(inv => {
+                    const invoiceNet = payableAmountAfterReturns(inv);
+                    inv.userPaidAmount = invoiceNet;
+                    inv.amountPaid = invoiceNet;
+                });
+                recalculateVoucherDeductions();
+                renderInvoices();
                 window.pcvChangeStep(1);
             };
             window.pcvCloseConfirmModal = () => pcvToggleModal('pcv-confirm-modal', false);
