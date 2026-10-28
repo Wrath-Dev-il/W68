@@ -1184,7 +1184,6 @@
             }
             function invoiceGrossAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
                 const returnAmount = invoiceReturnAmountForVoucher(inv, returnRows);
-                const selectedReturn = selectedReturnAmountForInvoice(inv, returnRows);
                 const savedInvoiceAmount = numericAmount(inv?.invoiceAmount ?? inv?.invoice_amount ?? 0);
                 const amountDue = numericAmount(inv?.amountDue ?? inv?.amount_due ?? 0);
                 const dueBeforeReturn = amountDue + returnAmount;
