@@ -14,7 +14,6 @@ class SupplierLedgerItem extends Model
     protected $fillable = [
         'source_purchase_order_item_id',
         'supplier_ledger_id',
-        'date',
         'product_id',
         'product_code',
         'unit',
