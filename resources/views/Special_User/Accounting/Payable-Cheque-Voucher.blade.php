@@ -1171,6 +1171,7 @@
                     .reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
             }
             // W68_PCV_PRINT_RETURN_SINGLE_DEDUCTION_20261028
+            // W68_PCV_GROSS_INVOICE_AMOUNT_AND_RETURN_DEDUP_20261028
             // Keep AMOUNT at the original invoice value and deduct returns only once in TOTAL AMOUNT.
             function invoiceReturnAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
                 const selectedReturn = selectedReturnAmountForInvoice(inv, returnRows);
@@ -1180,6 +1181,54 @@
                     numericAmount(inv?.returnAmount),
                     numericAmount(inv?.return_amount)
                 );
+            }
+
+            // W68_PCV_HIDE_ALREADY_INVOICED_RETURNS_20261028
+            // A return displayed against an invoice must not also appear in the separate
+            // SUDDEN RETURNS section or be deducted a second time in the voucher total.
+            function filterSuddenReturnsAlreadyIncluded(returnRows, invoices, invoiceReturnAmountGetter, suddenReturnAmountGetter = suddenReturnAmount) {
+                const rows = Array.isArray(returnRows) ? returnRows : [];
+                const invoiceList = Array.isArray(invoices) ? invoices : [];
+                const normalize = (value) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                const splitReturnNumbers = (value) => String(value ?? '').split(/[,;|]/).map(normalize).filter(Boolean);
+                const getInvoiceReturn = typeof invoiceReturnAmountGetter === 'function'
+                    ? invoiceReturnAmountGetter
+                    : (invoice) => numericAmount(invoice?.return_amount ?? invoice?.returnAmount ?? invoice?.unusedReturnAmount);
+
+                const invoicesWithReturns = invoiceList.filter((invoice) => getInvoiceReturn(invoice) > 0.005);
+                if (!rows.length || !invoicesWithReturns.length) return rows;
+
+                const filtered = rows.filter((returnRow) => {
+                    const returnPoId = normalize(returnRow?.po_id ?? returnRow?.purchase_order_id ?? returnRow?.source_id ?? returnRow?.sourceId);
+                    const returnInvoiceId = normalize(returnRow?.payable_cheque_voucher_invoice_id ?? returnRow?.invoice_id);
+                    const returnPoNo = normalize(returnRow?.po_number ?? returnRow?.purchase_no ?? returnRow?.purchase_order_number ?? returnRow?.invoice_no);
+                    const returnNumbers = splitReturnNumbers(returnRow?.return_number ?? returnRow?.returnNumber);
+
+                    const alreadyInInvoice = invoicesWithReturns.some((invoice) => {
+                        const invoicePoId = normalize(invoice?.purchase_order_id ?? invoice?.sourceId ?? invoice?.source_id ?? invoice?.po_id);
+                        const invoiceId = normalize(invoice?.id ?? invoice?.payable_cheque_voucher_invoice_id);
+                        const invoicePoNo = normalize(invoice?.purchase_no ?? invoice?.purchaseNo ?? invoice?.po_number ?? invoice?.poNumber ?? invoice?.invoice_no);
+                        const invoiceReturnNumbers = splitReturnNumbers(invoice?.return_number ?? invoice?.returnNumber);
+
+                        if (returnPoId && invoicePoId && returnPoId === invoicePoId) return true;
+                        if (returnInvoiceId && invoiceId && returnInvoiceId === invoiceId) return true;
+                        if (returnPoNo && invoicePoNo && returnPoNo === invoicePoNo) return true;
+                        if (returnNumbers.length && invoiceReturnNumbers.some((number) => returnNumbers.includes(number))) return true;
+                        return false;
+                    });
+
+                    return !alreadyInInvoice;
+                });
+
+                // Some saved history responses omit PO/return identifiers. If the totals match
+                // exactly, treat the separate rows as the same returns already shown per invoice.
+                if (filtered.length === rows.length) {
+                    const invoiceReturnTotal = invoicesWithReturns.reduce((sum, invoice) => sum + getInvoiceReturn(invoice), 0);
+                    const separateReturnTotal = rows.reduce((sum, row) => sum + numericAmount(suddenReturnAmountGetter(row)), 0);
+                    if (invoiceReturnTotal > 0.005 && Math.abs(invoiceReturnTotal - separateReturnTotal) <= 0.01) return [];
+                }
+
+                return filtered;
             }
             function invoiceGrossAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
                 const returnAmount = invoiceReturnAmountForVoucher(inv, returnRows);
@@ -1782,18 +1831,18 @@
                 const grandTotal = (selected || []).reduce(
                     (sum, inv) => sum + invoiceGrossAmountForVoucher(inv, selectedSuddenReturns || []), 0
                 );
+                const reviewReturnRows = filterSuddenReturnsAlreadyIncluded(
+                    selectedSuddenReturns || [],
+                    selected || [],
+                    (inv) => invoiceReturnAmountForVoucher(inv, selectedSuddenReturns || []),
+                    (row) => suddenReturnAmount(row)
+                );
+                const unrepresentedReturnTotal = reviewReturnRows.reduce((sum, row) => sum + suddenReturnAmount(row), 0);
+                const allReturnTotal = previewReturnTotal + unrepresentedReturnTotal;
                 const previewGlobalDiscAmount = grandTotal * Number(globalDisc || 0) / 100;
-                const previewReturnCalculationRows = previewReturnTotal > 0 ? [{ total_amount: previewReturnTotal }] : [];
+                const previewReturnCalculationRows = allReturnTotal > 0 ? [{ total_amount: allReturnTotal }] : [];
                 const previewTotals = calculateDisplayTotals(grandTotal, previewGlobalDiscAmount, previewReturnCalculationRows, additionalDiscount);
                 const afterDiscAmount = previewTotals.finalTotal;
-                const reviewReturnRows = (selectedSuddenReturns || []).length
-                    ? selectedSuddenReturns
-                    : (selected || []).filter(inv => invoiceReturnAmountForVoucher(inv, []) > 0).map(inv => ({
-                        return_number: inv.returnNumber || inv.return_number || '---',
-                        po_number: inv.purchaseNo || inv.purchase_no || inv.invoiceNo || '---',
-                        remarks: inv.rsDetails || inv.rs_details || inv.remarks || '',
-                        total_amount: invoiceReturnAmountForVoucher(inv, []),
-                    }));
                 const suddenReturnSection = buildSuddenReturnPrintSection(reviewReturnRows);
                 
                 // Payment Details Section - multiple payment rows, negative credits included.
@@ -2178,12 +2227,29 @@
                         const returnedItems = invoiceReturns.flatMap(sr => sr.items || []);
                         const selectedReturnDetails = String(inv.rsDetails || '').trim()
                             || (returnedItems.length ? returnedItemsSummary(returnedItems) : '');
+                        const grossInvoiceAmount = invoiceGrossAmountForVoucher(inv, srForPayload);
+                        const amountDueForSave = invoiceCalculationAmount(inv, srForPayload);
+                        const amountPaidForSave = userPaidAmount(inv);
+                        const returnAmountForSave = hasSelectedReturns ? selectedReturnAmount : Number(inv.unusedReturnAmount ?? inv.returnAmount ?? 0);
+                        const totalReturnsForSave = hasSelectedReturns ? invoiceReturns.length : Number(inv.unusedReturnCount ?? inv.totalReturns ?? 0);
+                        const returnNumberForSave = hasSelectedReturns ? invoiceReturns.map(sr => sr.return_number).filter(Boolean).join(', ') : String(inv.returnNumber || '');
                         return {
                             ...inv,
-                            amountDue: invoiceCalculationAmount(inv, srForPayload),
-                            returnAmount: hasSelectedReturns ? selectedReturnAmount : Number(inv.unusedReturnAmount ?? inv.returnAmount ?? 0),
-                            totalReturns: hasSelectedReturns ? invoiceReturns.length : Number(inv.unusedReturnCount ?? inv.totalReturns ?? 0),
-                            returnNumber: hasSelectedReturns ? invoiceReturns.map(sr => sr.return_number).filter(Boolean).join(', ') : String(inv.returnNumber || ''),
+                            // Keep both naming styles for the legacy store endpoint and the update endpoint.
+                            invoiceAmount: grossInvoiceAmount,
+                            invoice_amount: grossInvoiceAmount,
+                            amountDue: amountDueForSave,
+                            amount_due: amountDueForSave,
+                            amountPaid: amountPaidForSave,
+                            amount_paid: amountPaidForSave,
+                            purchase_no: inv.purchaseNo ?? inv.purchase_no,
+                            invoice_no: inv.invoiceNo ?? inv.invoice_no,
+                            returnAmount: returnAmountForSave,
+                            return_amount: returnAmountForSave,
+                            totalReturns: totalReturnsForSave,
+                            total_returns: totalReturnsForSave,
+                            returnNumber: returnNumberForSave,
+                            return_number: returnNumberForSave,
                             slipNo: hasSelectedReturns ? invoiceReturns.map(sr => sr.slip_no).filter(Boolean).join(', ') : String(inv.slipNo || ''),
                             rsDetails: selectedReturnDetails,
                             suddenReturnDeduction: inv.suddenReturnDeduction || 0,
@@ -3062,25 +3128,31 @@
                         };
                         return getInvoiceTime(a) - getInvoiceTime(b);
                     });
-                    const savedSuddenReturnRows = Array.isArray(data.sudden_returns) ? data.sudden_returns : [];
+                    const rawSavedSuddenReturnRows = Array.isArray(data.sudden_returns) ? data.sudden_returns : [];
                     const getSavedReturnAmount = (inv) => Number(inv.return_amount || 0);
-                    const getSavedGrossInvoiceAmount = (inv) => Math.max(
-                        Number(inv.invoice_amount || 0),
-                        Number(inv.amount_due || 0),
-                        Number(inv.amount_paid || 0) + getSavedReturnAmount(inv)
-                    );
+                    const getSavedGrossInvoiceAmount = (inv) => {
+                        const returnAmount = getSavedReturnAmount(inv);
+                        const invoiceAmount = Number(inv.invoice_amount || 0);
+                        const amountDue = Number(inv.amount_due || 0);
+                        const amountPaid = Number(inv.amount_paid || 0);
+                        const paidPlusReturn = amountPaid + returnAmount;
+
+                        // invoice_amount is the canonical gross invoice value when available.
+                        // Older rows may have saved the post-return balance in invoice_amount/amount_due;
+                        // recover the original amount from the saved payment plus return when possible.
+                        if (invoiceAmount > 0) return Math.max(invoiceAmount, paidPlusReturn);
+                        return Math.max(amountDue + returnAmount, paidPlusReturn, amountDue);
+                    };
                     const invoiceReturnTotal = invoices.reduce((sum, inv) => sum + getSavedReturnAmount(inv), 0);
-                    const savedSuddenReturnTotal = savedSuddenReturnRows.reduce((sum, row) => sum + Number(row.return_amount ?? row.total_amount ?? 0), 0);
-                    const returnTotalForCalculation = invoiceReturnTotal > 0 ? invoiceReturnTotal : savedSuddenReturnTotal;
+                    const suddenReturnRows = filterSuddenReturnsAlreadyIncluded(
+                        rawSavedSuddenReturnRows,
+                        invoices,
+                        (inv) => getSavedReturnAmount(inv),
+                        (row) => Number(row.return_amount ?? row.total_amount ?? 0)
+                    );
+                    const savedSuddenReturnTotal = suddenReturnRows.reduce((sum, row) => sum + Number(row.return_amount ?? row.total_amount ?? 0), 0);
+                    const returnTotalForCalculation = invoiceReturnTotal + savedSuddenReturnTotal;
                     const returnCalculationRows = returnTotalForCalculation > 0 ? [{ total_amount: returnTotalForCalculation }] : [];
-                    const suddenReturnRows = savedSuddenReturnRows.length
-                        ? savedSuddenReturnRows
-                        : invoices.filter(inv => getSavedReturnAmount(inv) > 0).map(inv => ({
-                            return_number: inv.return_number || '---',
-                            po_number: inv.purchase_no || inv.invoice_no || '---',
-                            remarks: inv.rs_details || inv.remarks || '',
-                            total_amount: getSavedReturnAmount(inv),
-                        }));
                     $('print-supplier').textContent = v.supplier_name || '---';
                     $('print-voucher-no').textContent = v.voucher_no || '---';
                     $('print-address').textContent = v.supplier_address || '---';
