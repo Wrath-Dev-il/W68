@@ -3451,3 +3451,323 @@ Route::get('/developer/data-ups/download-all/{filename?}', function ($filename =
         ], 500);
     }
 })->where('filename', '[^/]+')->name('developer.data-ups.download-all');
+
+
+/*
+|--------------------------------------------------------------------------
+| Purchase Order transaction-date synchronization
+|--------------------------------------------------------------------------
+|
+| W68_PURCHASE_ORDER_TRANSACTION_DATE_SYNC_20261028
+| Processing and Edit Purchase Order share this wrapper for Admin, Regular,
+| and Special users. It delegates the existing business operation unchanged,
+| then synchronizes only the transaction-date columns on the saved PO and its
+| linked ledger rows. Amounts, quantities, balances, and created_at timestamps
+| are intentionally left untouched.
+|
+*/
+$w68SyncPurchaseOrderTransactionDate = function (int $purchaseOrderId, string $transactionDate): array {
+    $purchaseDb = DB::connection('purchase');
+    $ledgerDb = DB::connection('ledger');
+    $ledgerSchema = \Illuminate\Support\Facades\Schema::connection('ledger');
+
+    $purchaseOrder = $purchaseDb->table('purchase_orders')->where('id', $purchaseOrderId)->first();
+    if (!$purchaseOrder) {
+        throw new \RuntimeException('Saved Purchase Order #' . $purchaseOrderId . ' could not be found.');
+    }
+
+    // Save only the transaction-date field on the Purchase Order header.
+    $purchaseDb->table('purchase_orders')
+        ->where('id', $purchaseOrderId)
+        ->update(['date' => $transactionDate]);
+
+    $poNumber = trim((string) ($purchaseOrder->po_number ?? ''));
+    $invoiceNumber = trim((string) ($purchaseOrder->supplier_invoice_number ?? ''));
+    $supplierId = (int) ($purchaseOrder->supplier_id ?? 0);
+    $legacyNumbers = array_values(array_unique(array_filter(
+        [$poNumber, $invoiceNumber],
+        fn ($value) => $value !== ''
+    )));
+
+    $productLedgerRowsUpdated = 0;
+    if (
+        $ledgerSchema->hasTable('product_ledgers')
+        && $ledgerSchema->hasColumn('product_ledgers', 'date')
+    ) {
+        $hasSourceIdentity = $ledgerSchema->hasColumn('product_ledgers', 'source_type')
+            && $ledgerSchema->hasColumn('product_ledgers', 'source_id');
+        $hasLegacyIdentity = $supplierId > 0
+            && $legacyNumbers !== []
+            && $ledgerSchema->hasColumn('product_ledgers', 'supplier_id')
+            && $ledgerSchema->hasColumn('product_ledgers', 'transaction_type')
+            && $ledgerSchema->hasColumn('product_ledgers', 'transaction_number')
+            && $ledgerSchema->hasColumn('product_ledgers', 'remarks');
+
+        if ($hasSourceIdentity || $hasLegacyIdentity) {
+            $query = $ledgerDb->table('product_ledgers')->where(function ($outer) use (
+                $purchaseOrderId,
+                $supplierId,
+                $legacyNumbers,
+                $hasSourceIdentity,
+                $hasLegacyIdentity,
+                $ledgerSchema
+            ) {
+                $hasCondition = false;
+
+                if ($hasSourceIdentity) {
+                    $outer->where(function ($source) use ($purchaseOrderId) {
+                        $source->whereIn('source_type', ['purchase_order', 'purchase-order'])
+                            ->where('source_id', $purchaseOrderId);
+                    });
+                    $hasCondition = true;
+                }
+
+                if ($hasLegacyIdentity) {
+                    $method = $hasCondition ? 'orWhere' : 'where';
+                    $outer->{$method}(function ($legacy) use ($supplierId, $legacyNumbers, $ledgerSchema) {
+                        $legacy->where('supplier_id', $supplierId)
+                            ->where('transaction_type', 'IN')
+                            ->where('remarks', 'like', '%Purchase Order%')
+                            ->where(function ($identity) use ($legacyNumbers, $ledgerSchema) {
+                                $identity->whereIn('transaction_number', $legacyNumbers);
+                                if ($ledgerSchema->hasColumn('product_ledgers', 'reference_number')) {
+                                    $identity->orWhereIn('reference_number', $legacyNumbers);
+                                }
+                            });
+                    });
+                }
+            });
+
+            $productLedgerRowsUpdated = $query->update(['date' => $transactionDate]);
+        }
+    }
+
+    $supplierLedgerIds = [];
+    $supplierLedgerRowsUpdated = 0;
+    if (
+        $ledgerSchema->hasTable('supplier_ledgers')
+        && $ledgerSchema->hasColumn('supplier_ledgers', 'date')
+    ) {
+        $hasSourceIdentity = $ledgerSchema->hasColumn('supplier_ledgers', 'source_purchase_order_id');
+        $hasLegacyIdentity = $supplierId > 0
+            && $poNumber !== ''
+            && $ledgerSchema->hasColumn('supplier_ledgers', 'transaction_code')
+            && $ledgerSchema->hasColumn('supplier_ledgers', 'supplier_id')
+            && $ledgerSchema->hasColumn('supplier_ledgers', 'module_type');
+
+        if ($hasSourceIdentity || $hasLegacyIdentity) {
+            $query = $ledgerDb->table('supplier_ledgers')->where(function ($outer) use (
+                $purchaseOrderId,
+                $poNumber,
+                $supplierId,
+                $hasSourceIdentity,
+                $hasLegacyIdentity
+            ) {
+                $hasCondition = false;
+
+                if ($hasSourceIdentity) {
+                    $outer->where('source_purchase_order_id', $purchaseOrderId);
+                    $hasCondition = true;
+                }
+
+                if ($hasLegacyIdentity) {
+                    $method = $hasCondition ? 'orWhere' : 'where';
+                    $outer->{$method}(function ($legacy) use ($poNumber, $supplierId) {
+                        $legacy->where('transaction_code', $poNumber)
+                            ->where('supplier_id', $supplierId)
+                            ->where('module_type', 'Purchase Order');
+                    });
+                }
+            });
+
+            $supplierLedgerIds = $query->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $supplierLedgerRowsUpdated = $query->update(['date' => $transactionDate]);
+        }
+    }
+
+    $supplierLedgerItemRowsUpdated = 0;
+    if (
+        $ledgerSchema->hasTable('supplier_ledger_items')
+        && $ledgerSchema->hasColumn('supplier_ledger_items', 'date')
+    ) {
+        $purchaseOrderItemIds = [];
+        if (
+            $purchaseDb->getSchemaBuilder()->hasTable('purchase_order_items')
+            && $purchaseDb->getSchemaBuilder()->hasColumn('purchase_order_items', 'purchase_order_id')
+        ) {
+            $purchaseOrderItemIds = $purchaseDb->table('purchase_order_items')
+                ->where('purchase_order_id', $purchaseOrderId)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        $hasParentLink = $ledgerSchema->hasColumn('supplier_ledger_items', 'supplier_ledger_id')
+            && $supplierLedgerIds !== [];
+        $hasItemLink = $ledgerSchema->hasColumn('supplier_ledger_items', 'source_purchase_order_item_id')
+            && $purchaseOrderItemIds !== [];
+
+        if ($hasParentLink || $hasItemLink) {
+            $query = $ledgerDb->table('supplier_ledger_items')->where(function ($outer) use (
+                $supplierLedgerIds,
+                $purchaseOrderItemIds,
+                $hasParentLink,
+                $hasItemLink
+            ) {
+                $hasCondition = false;
+
+                if ($hasParentLink) {
+                    $outer->whereIn('supplier_ledger_id', $supplierLedgerIds);
+                    $hasCondition = true;
+                }
+
+                if ($hasItemLink) {
+                    $method = $hasCondition ? 'orWhereIn' : 'whereIn';
+                    $outer->{$method}('source_purchase_order_item_id', $purchaseOrderItemIds);
+                }
+            });
+
+            $supplierLedgerItemRowsUpdated = $query->update(['date' => $transactionDate]);
+        }
+    }
+
+    return [
+        'purchase_order_id' => $purchaseOrderId,
+        'transaction_date' => $transactionDate,
+        'product_ledger_rows_updated' => $productLedgerRowsUpdated,
+        'supplier_ledger_rows_updated' => $supplierLedgerRowsUpdated,
+        'supplier_ledger_item_rows_updated' => $supplierLedgerItemRowsUpdated,
+    ];
+};
+
+$w68WrapPurchaseOrderDateRoute = function (string $routeName, string $operation) use ($w68SyncPurchaseOrderTransactionDate): void {
+    $originalRoute = Route::getRoutes()->getByName($routeName);
+    if (!$originalRoute) {
+        Log::warning('Purchase Order transaction-date wrapper could not find route.', [
+            'route_name' => $routeName,
+            'operation' => $operation,
+        ]);
+        return;
+    }
+
+    $originalAction = $originalRoute->getAction('uses');
+    if (!is_callable($originalAction)) {
+        Log::warning('Purchase Order transaction-date wrapper skipped a non-callable route action.', [
+            'route_name' => $routeName,
+            'operation' => $operation,
+        ]);
+        return;
+    }
+
+    $methods = array_values(array_diff($originalRoute->methods(), ['HEAD']));
+    $uri = $originalRoute->uri();
+    $middleware = array_values(array_diff($originalRoute->gatherMiddleware(), ['web']));
+
+    Route::match($methods, $uri, function (Request $request) use (
+        $originalAction,
+        $operation,
+        $routeName,
+        $w68SyncPurchaseOrderTransactionDate
+    ) {
+        $transactionDate = trim((string) $request->input('date', ''));
+        if (
+            !preg_match('/^\d{4}-\d{2}-\d{2}$/', $transactionDate)
+            || !checkdate(
+                (int) substr($transactionDate, 5, 2),
+                (int) substr($transactionDate, 8, 2),
+                (int) substr($transactionDate, 0, 4)
+            )
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A valid Transaction Date is required (YYYY-MM-DD).',
+            ], 422);
+        }
+
+        // Run the original W68 operation unchanged first.
+        $response = app()->call($originalAction, ['request' => $request]);
+
+        if (!is_object($response) || !method_exists($response, 'getStatusCode')) {
+            return $response;
+        }
+
+        $status = (int) $response->getStatusCode();
+        if ($status < 200 || $status >= 300) {
+            return $response;
+        }
+
+        $responseData = [];
+        if (method_exists($response, 'getData')) {
+            try {
+                $responseData = $response->getData(true);
+            } catch (\Throwable $ignored) {
+                $responseData = [];
+            }
+        } elseif (method_exists($response, 'getContent')) {
+            $decoded = json_decode((string) $response->getContent(), true);
+            $responseData = is_array($decoded) ? $decoded : [];
+        }
+
+        if (is_array($responseData) && array_key_exists('success', $responseData) && $responseData['success'] !== true) {
+            return $response;
+        }
+
+        $purchaseOrderId = (int) (
+            $responseData['po_id']
+            ?? $responseData['purchase_order_id']
+            ?? $responseData['id']
+            ?? $request->input('po_id', 0)
+        );
+
+        if ($purchaseOrderId <= 0 && $operation === 'process') {
+            $poNumber = trim((string) $request->input('po_number', ''));
+            if ($poNumber !== '') {
+                $purchaseOrderId = (int) DB::connection('purchase')
+                    ->table('purchase_orders')
+                    ->where('po_number', $poNumber)
+                    ->value('id');
+            }
+        }
+
+        if ($purchaseOrderId <= 0) {
+            Log::error('Purchase Order saved but its transaction date could not be synchronized because the PO ID was not found.', [
+                'route_name' => $routeName,
+                'operation' => $operation,
+                'po_number' => $request->input('po_number'),
+            ]);
+            return $response;
+        }
+
+        try {
+            $syncResult = $w68SyncPurchaseOrderTransactionDate($purchaseOrderId, $transactionDate);
+            Log::info('Purchase Order transaction date synchronized across linked ledger rows.', $syncResult);
+        } catch (\Throwable $e) {
+            Log::error('Purchase Order transaction-date synchronization failed after the original save.', [
+                'route_name' => $routeName,
+                'operation' => $operation,
+                'purchase_order_id' => $purchaseOrderId,
+                'transaction_date' => $transactionDate,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'po_id' => $purchaseOrderId,
+                'message' => 'The Purchase Order was saved, but its Transaction Date could not be synchronized to all ledger tables. Do not submit it again; check the application log.',
+            ], 500);
+        }
+
+        return $response;
+    })->middleware($middleware)->name($routeName);
+};
+
+foreach ([
+    ['admin.purchase-order.process', 'process'],
+    ['admin.purchase-order.update', 'update'],
+    ['regular.purchase-order.process', 'process'],
+    ['regular.purchase-order.update', 'update'],
+    ['special.purchase-order.process', 'process'],
+    ['special.purchase-order.update', 'update'],
+] as [$routeName, $operation]) {
+    $w68WrapPurchaseOrderDateRoute($routeName, $operation);
+}
