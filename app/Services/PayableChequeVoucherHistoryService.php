@@ -77,7 +77,7 @@ class PayableChequeVoucherHistoryService
 
         $paymentRowsByVoucher = DB::connection('accounting')->table('payable_cheque_voucher_payments')
             ->whereIn('payable_cheque_voucher_id', $voucherIds)
-            ->select('payable_cheque_voucher_id', 'payment_method', 'bank_name', 'check_no', 'credit_amount')
+            ->select('payable_cheque_voucher_id', 'payment_method', 'bank_name', 'check_no', 'check_date', 'credit_amount')
             ->orderBy('id')
             ->get()
             ->groupBy('payable_cheque_voucher_id');
@@ -95,11 +95,22 @@ class PayableChequeVoucherHistoryService
             $paymentDetails = $paymentRowsByVoucher->get($voucher->id, collect())
                 ->map(function ($payment): array {
                     $checkNo = trim((string) ($payment->check_no ?? ''));
+                    $checkDate = trim((string) ($payment->check_date ?? ''));
                     $method = trim((string) ($payment->payment_method ?? ''));
                     $bankName = trim((string) ($payment->bank_name ?? ''));
+                    $formattedCheckDate = '';
+
+                    if ($checkDate !== '') {
+                        try {
+                            $formattedCheckDate = \Illuminate\Support\Carbon::parse($checkDate)->format('m-d-Y');
+                        } catch (\Throwable $dateError) {
+                            $formattedCheckDate = '';
+                        }
+                    }
 
                     if ($checkNo !== '') {
-                        $label = $checkNo;
+                        // History displays check number and check date together for quick matching.
+                        $label = $formattedCheckDate !== '' ? $checkNo . '-' . $formattedCheckDate : $checkNo;
                     } elseif (strtolower($method) === 'gcash') {
                         $label = 'GCASH';
                     } elseif ($bankName !== '') {
@@ -113,6 +124,7 @@ class PayableChequeVoucherHistoryService
                     return [
                         'label' => $label,
                         'check_no' => $checkNo,
+                        'check_date' => $checkDate,
                         'payment_method' => $method,
                         'bank_name' => $bankName,
                         'amount' => round((float) ($payment->credit_amount ?? 0), 2),
