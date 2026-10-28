@@ -354,6 +354,7 @@ class PurchaseOrderLedgerReconciliationService
             $payload = [
                 'source_purchase_order_item_id' => (int) $item->id,
                 'supplier_ledger_id' => (int) $supplierLedger->id,
+                'date' => $po->date ?? now()->toDateString(),
                 'product_id' => (int) $item->product_id,
                 'product_code' => $item->product_code,
                 'unit' => $this->normalizeUnit($item->unit),
