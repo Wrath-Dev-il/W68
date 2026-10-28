@@ -117,16 +117,15 @@
     <div id="pcv-history-panel" class="hidden">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div class="overflow-x-auto pcv-scroll">
-                <table class="w-full min-w-[1250px] text-left">
+                <table class="w-full min-w-[1180px] text-left">
                     <thead>
                         <tr class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-200">
                             <th class="px-4 py-4">PCV</th>
                             <th class="px-4 py-4">Supplier Name</th>
                             <th class="px-4 py-4 text-right">Invoice Amount</th>
                             <th class="px-4 py-4 text-right">Return Total</th>
+                            <th class="px-4 py-4">Check No.</th>
                             <th class="px-4 py-4 text-right">Amount Paid</th>
-                            <th class="px-4 py-4 text-right">Remaining</th>
-                            <th class="px-4 py-4 text-center">Status</th>
                             <th class="px-4 py-4">Date</th>
                         </tr>
                         <tr class="bg-white border-b border-slate-100 text-[9px] font-black uppercase tracking-wider text-slate-400">
@@ -134,9 +133,8 @@
                             <th class="px-4 py-2"><input data-hist-col="supplier_name" class="pcv-search" type="text" placeholder="Search Supplier..."></th>
                             <th class="px-4 py-2"><input data-hist-col="invoice_amount" class="pcv-search text-right" type="text" placeholder="Search Amount..."></th>
                             <th class="px-4 py-2"><input data-hist-col="return_total" class="pcv-search text-right" type="text" placeholder="Search Return..."></th>
+                            <th class="px-4 py-2"><input data-hist-col="check_no" class="pcv-search" type="text" placeholder="Search Check No..."></th>
                             <th class="px-4 py-2"><input data-hist-col="amount_paid" class="pcv-search text-right" type="text" placeholder="Search Paid..."></th>
-                            <th class="px-4 py-2"><input data-hist-col="remaining" class="pcv-search text-right" type="text" placeholder="Search Remaining..."></th>
-                            <th class="px-4 py-2"><input data-hist-col="status" class="pcv-search text-center" type="text" placeholder="Search Status..."></th>
                             <th class="px-4 py-2"><input data-hist-col="date" class="pcv-search" type="text" placeholder="YYYY-MM-DD"></th>
                         </tr>
                     </thead>
@@ -433,6 +431,21 @@
         </div>
     </div>
 
+    <div id="pcv-balance-warning-modal" class="fixed inset-0 z-[850] hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="pcv-balance-warning-title">
+        <div class="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" onclick="window.pcvCloseBalanceWarningModal()"></div>
+        <div class="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div class="bg-maroon-900 px-5 py-4 text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-400/15 flex items-center justify-center"><i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-300"></i></div>
+                <div><h3 id="pcv-balance-warning-title" class="text-sm font-black uppercase tracking-widest">Payment Balance Remaining</h3><p class="text-[11px] text-white/65 mt-1">Complete the payment details to continue.</p></div>
+            </div>
+            <div class="p-6">
+                <p class="text-sm font-semibold text-slate-700">You cannot proceed to the next step while the remaining balance is not zero.</p>
+                <p class="mt-3 text-sm font-black text-amber-700">Remaining: <span id="pcv-balance-warning-amount">PHP 0.00</span></p>
+                <p class="mt-2 text-xs text-slate-500">Adjust the payment amounts until Remaining is PHP 0.00, then click Next again.</p>
+                <div class="mt-6 flex justify-end"><button type="button" onclick="window.pcvCloseBalanceWarningModal()" class="px-6 py-2.5 rounded-xl bg-maroon-900 text-yellow-300 text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800">OK</button></div>
+            </div>
+        </div>
+    </div>
     <div id="pcv-confirm-modal" class="fixed inset-0 z-[700] hidden items-center justify-center p-4">
         <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
         <div class="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
@@ -2038,7 +2051,18 @@
                     alert('Unable to print. Please try again.');
                 }
             };
+            window.pcvCloseBalanceWarningModal = () => pcvToggleModal('pcv-balance-warning-modal', false);
             window.pcvChangeStep = (delta) => {
+                if (delta > 0 && currentStep === 4) {
+                    const remaining = Math.max(0, pcvInvoiceAmount() - paymentDetailsTotal());
+                    if (remaining > 0.005) {
+                        const amountEl = $('pcv-balance-warning-amount');
+                        if (amountEl) amountEl.textContent = peso.format(remaining);
+                        pcvToggleModal('pcv-balance-warning-modal', true);
+                        if (window.lucide) window.lucide.createIcons();
+                        return;
+                    }
+                }
                 let next = currentStep + delta;
                 const hasReturns = suddenReturns.length > 0;
                 const maxStep = 5;
@@ -2452,7 +2476,7 @@
                 const tbody = $('pcv-history-tbody');
                 if (!tbody) return;
                 histPage = Math.max(1, Number(page || 1));
-                tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-12 text-center text-sm font-bold text-slate-400">Loading PCV history...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-sm font-bold text-slate-400">Loading PCV history...</td></tr>';
                 try {
                     const params = new URLSearchParams({ page: String(histPage), per_page: String(histPerPage) });
                     if (globalInvoiceSearch) params.set('invoice', globalInvoiceSearch);
@@ -2469,7 +2493,7 @@
                     histTo = Number(data.to || 0);
                     renderHistory();
                 } catch (error) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-12 text-center text-sm font-bold text-red-500">${escapeHtml(error.message)}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-12 text-center text-sm font-bold text-red-500">${escapeHtml(error.message)}</td></tr>`;
                     histTotal = 0; histFrom = 0; histTo = 0;
                     renderHistoryPagination();
                 }
@@ -2484,23 +2508,27 @@
 
             function renderHistory() {
                 const tbody = $('pcv-history-tbody');
-                const statusClass = (status) => status === 'Paid'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : status === 'Partial'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200';
-
-                tbody.innerHTML = vouchers.map((v) => `
+                tbody.innerHTML = vouchers.map((v) => {
+                    const paymentRows = Array.isArray(v.payments) && v.payments.length
+                        ? v.payments
+                        : [{ label: '---', amount: Number(v.amount_paid || 0) }];
+                    const checkNoHtml = paymentRows.map((payment) =>
+                        `<div class="whitespace-nowrap">${escapeHtml(payment.label || '---')}</div>`
+                    ).join('');
+                    const amountHtml = paymentRows.map((payment) =>
+                        `<div class="whitespace-nowrap font-black text-emerald-700">${peso.format(Number(payment.amount || 0))}</div>`
+                    ).join('');
+                    return `
                     <tr data-history-row="${v.id}" class="cursor-pointer hover:bg-maroon-50 transition-colors" title="Click to view PCV details">
                         <td class="px-4 py-4 font-black text-maroon-700 whitespace-nowrap">${escapeHtml(v.pcv || v.voucher_no)}</td>
                         <td class="px-4 py-4 font-black text-slate-800 min-w-[260px]">${escapeHtml(v.supplier_name)}</td>
                         <td class="px-4 py-4 text-right font-black text-slate-700">${peso.format(Number(v.invoice_amount || 0))}</td>
                         <td class="px-4 py-4 text-right font-black ${Number(v.return_total || 0) > 0 ? 'text-rose-600' : 'text-slate-500'}">${peso.format(Number(v.return_total || 0))}</td>
-                        <td class="px-4 py-4 text-right font-black text-emerald-700">${peso.format(Number(v.amount_paid || 0))}</td>
-                        <td class="px-4 py-4 text-right font-black ${Number(v.remaining || 0) > 0 ? 'text-amber-700' : 'text-slate-500'}">${peso.format(Number(v.remaining || 0))}</td>
-                        <td class="px-4 py-4 text-center"><span class="inline-flex px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${statusClass(v.status)}">${escapeHtml(v.status || '---')}</span></td>
+                        <td class="px-4 py-4 text-[11px] font-bold text-slate-700"><div class="space-y-1">${checkNoHtml}</div></td>
+                        <td class="px-4 py-4 text-right text-[11px]"><div class="space-y-1">${amountHtml}</div></td>
                         <td class="px-4 py-4 font-bold text-slate-600 whitespace-nowrap">${escapeHtml(v.date || v.voucher_date || '---')}</td>
-                    </tr>`).join('') || '<tr><td colspan="8" class="px-5 py-12 text-center text-sm font-bold text-slate-400">No PCV history records found.</td></tr>';
+                    </tr>`;
+                }).join('') || '<tr><td colspan="7" class="px-5 py-12 text-center text-sm font-bold text-slate-400">No PCV history records found.</td></tr>';
 
                 renderHistoryPagination();
 
