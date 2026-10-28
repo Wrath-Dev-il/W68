@@ -1185,10 +1185,7 @@
                 const returnAmount = invoiceReturnAmountForVoucher(inv, returnRows);
                 const selectedReturn = selectedReturnAmountForInvoice(inv, returnRows);
                 const savedInvoiceAmount = numericAmount(inv?.invoiceAmount ?? inv?.invoice_amount ?? 0);
-                const amountDue = calcDiscountedAmount(
-                    inv?.amountDue ?? inv?.amount_due ?? 0,
-                    inv?.discount1 ?? inv?.discount_1 ?? 0
-                );
+                const amountDue = numericAmount(inv?.amountDue ?? inv?.amount_due ?? 0);
                 const dueBeforeReturn = amountDue + returnAmount;
                 return Math.max(savedInvoiceAmount, dueBeforeReturn, userPaidAmount(inv) + returnAmount);
             }
