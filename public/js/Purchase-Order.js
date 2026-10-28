@@ -1020,9 +1020,8 @@ function populatePrintLayout() {
     }
     
     if (dateEl) {
-        const selectedDate = document.getElementById('proceed-transaction-date')?.value;
-        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
-        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const today = new Date();
+        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         console.log('Date:', dateEl.textContent);
     }
     
@@ -1805,7 +1804,7 @@ async function finalizePO() {
 
         // Always send PHP amounts to the backend regardless of display currency
         const transactionDate = document.getElementById('proceed-transaction-date')?.value || '';
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(transactionDate)) {
             alert('Please select a valid Transaction Date before processing the Purchase Order.');
             return;
         }
@@ -2925,9 +2924,8 @@ function populateEditPrintLayout() {
     
     const dateEl = editStep3.querySelector('#cr-date');
     if (dateEl) {
-        const selectedDate = document.getElementById('edit-transaction-date')?.value;
-        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
-        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const today = new Date();
+        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
     
     // Get current values from Step 2 table
@@ -3153,7 +3151,7 @@ window.confirmSaveEdit = async function() {
 
         // Prepare payload
         const transactionDate = document.getElementById('edit-transaction-date')?.value || '';
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(transactionDate)) {
             alert('Please select a valid Transaction Date before saving the Purchase Order.');
             return;
         }
