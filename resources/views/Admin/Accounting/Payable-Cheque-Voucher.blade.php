@@ -439,7 +439,7 @@
                 <div><h3 id="pcv-balance-warning-title" class="text-sm font-black uppercase tracking-widest">Payment Balance Remaining</h3><p class="text-[11px] text-white/65 mt-1">Complete the payment details to continue.</p></div>
             </div>
             <div class="p-6">
-                <p class="text-sm font-semibold text-slate-700">You cannot continue until the payment total exactly matches the invoice amount. Any remaining balance or overpayment must be corrected.</p>
+                <p class="text-sm font-semibold text-slate-700">You cannot continue while a balance remains. Overpayment is allowed; only a positive remaining balance must be cleared before continuing.</p>
                 <p class="mt-3 text-sm font-black text-amber-700">Balance Difference: <span id="pcv-balance-warning-amount">PHP 0.00</span></p>
                 <p class="mt-2 text-xs text-slate-500">Correct the payment details until the balance difference is PHP 0.00, then click Next again.</p>
                 <div class="mt-6 flex justify-end"><button type="button" onclick="window.pcvCloseBalanceWarningModal()" class="px-6 py-2.5 rounded-xl bg-maroon-900 text-yellow-300 text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800">OK</button></div>
@@ -2094,12 +2094,10 @@
             window.pcvChangeStep = (delta) => {
                 if (delta > 0 && currentStep === 4) {
                     const balanceDifference = pcvInvoiceAmount() - paymentDetailsTotal();
-                    if (Math.abs(balanceDifference) > 0.005) {
+                    if (balanceDifference > 0.005) {
                         const amountEl = $('pcv-balance-warning-amount');
                         if (amountEl) {
-                            amountEl.textContent = balanceDifference > 0
-                                ? peso.format(balanceDifference)
-                                : 'Overpaid by ' + peso.format(Math.abs(balanceDifference));
+                            amountEl.textContent = peso.format(balanceDifference);
                         }
                         pcvToggleModal('pcv-balance-warning-modal', true);
                         if (window.lucide) window.lucide.createIcons();
