@@ -829,10 +829,6 @@
             </table>
         </div>
 
-        <div style="text-align: right; font-size: 13px; font-weight: bold; margin-bottom: 5px; display: none;" id="print-suddenly-return-line">
-            SUDDENLY RETURN: - <span id="print-suddenly-return-amount"></span>
-        </div>
-
         <div style="border-top: 1px solid #000; margin-bottom: 8px;"></div>
 
         <div style="border-top: 3px solid #000; width: 100%; margin: 50px 0 15px 0;"></div>
@@ -1193,7 +1189,7 @@
                     inv?.amountDue ?? inv?.amount_due ?? 0,
                     inv?.discount1 ?? inv?.discount_1 ?? 0
                 );
-                const dueBeforeReturn = selectedReturn > 0 ? amountDue : amountDue + returnAmount;
+                const dueBeforeReturn = amountDue + returnAmount;
                 return Math.max(savedInvoiceAmount, dueBeforeReturn, userPaidAmount(inv) + returnAmount);
             }
             function invoiceCalculationAmount(inv, returnRows = selectedSuddenReturns) {
@@ -1264,7 +1260,8 @@
                     const afterD1 = calcDiscountedAmount(inv.amountDue, inv.discount1);
                     const invoiceReturnDeduction = selectedReturnAmountForInvoice(inv);
                     inv.suddenReturnDeduction = invoiceReturnDeduction;
-                    const afterSR = Math.max(0, afterD1 - invoiceReturnDeduction);
+                    // amountDue already reflects the return shown in the invoice table; avoid a second deduction.
+                    const afterSR = Math.max(0, afterD1);
                     inv.afterSR = afterSR;
                 });
                 // Step 2: Additional Discount is NOT applied per invoice row — only total-level summary
@@ -1295,23 +1292,19 @@
                 const totalBeforeGlob = selected.reduce((sum, inv) => sum + invoiceCalculationAmount(inv), 0);
                 const globalDisc = getGlobalDiscount();
                 const globalDiscAmount = totalBeforeGlob * globalDisc / 100;
-                const suddenReturnTotal = selectedSuddenReturns.reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
                 const addlDiscPercent = readAdditionalDiscountPercent();
                 const totals = calculateDisplayTotals(totalBeforeGlob, globalDiscAmount, selectedSuddenReturns, addlDiscPercent);
                 const discDisplay = $('pcv-total-discount-display');
                
-                const afterDisc = Math.max(0, totalBeforeGlob - totals.additionalDiscount);
                 summaryEl.innerHTML = `
                     <div class="space-y-1 text-xs font-mono">
                         ${lines}
                         <div class="border-t border-dashed border-slate-400 my-2"></div>
                         <div class="flex justify-between font-black text-slate-800"><span>INVOICE PAID TOTAL</span><span>${peso.format(totalBeforeGlob)}</span></div>
                         ${totals.additionalDiscount > 0 ? `<div class="flex justify-between text-blue-600 font-bold"><span>- Additional Disc (${formatPercent(totals.additionalDiscountPercent)}%)</span><span>${peso.format(totals.additionalDiscount)}</span></div>` : ''}
-                        <div class="flex justify-between font-bold text-slate-800"><span>TOTAL AMOUNT</span><span>${peso.format(afterDisc)}</span></div>
-                        ${suddenReturnTotal > 0 ? `<div class="flex justify-between text-rose-600 font-bold"><span>SUDDENLY RETURN</span><span>${peso.format(suddenReturnTotal)}</span></div>` : ''}
                         ${globalDisc > 0 ? `<div class="flex justify-between text-amber-600 font-bold"><span>- Disc ${peso.format(globalDiscAmount)} (${globalDisc}%)</span><span></span></div>` : ''}
                         <div class="border-t border-dashed border-slate-400 my-2"></div>
-                        <div class="flex justify-between text-emerald-600 font-black text-sm"><span>NET AMOUNT</span><span>${peso.format(totals.finalTotal)}</span></div>
+                        <div class="flex justify-between font-black text-slate-800 text-sm"><span>TOTAL AMOUNT</span><span>${peso.format(totals.finalTotal)}</span></div>
                     </div>`;
             }
             function renderInvoices() {
@@ -1796,7 +1789,7 @@
                 const previewGlobalDiscAmount = grandTotal * Number(globalDisc || 0) / 100;
                 const previewReturnCalculationRows = previewReturnTotal > 0 ? [{ total_amount: previewReturnTotal }] : [];
                 const previewTotals = calculateDisplayTotals(grandTotal, previewGlobalDiscAmount, previewReturnCalculationRows, additionalDiscount);
-                const afterDiscAmount = Math.max(0, grandTotal - previewTotals.additionalDiscount);
+                const afterDiscAmount = previewTotals.finalTotal;
                 const reviewReturnRows = (selectedSuddenReturns || []).length
                     ? selectedSuddenReturns
                     : (selected || []).filter(inv => invoiceReturnAmountForVoucher(inv, []) > 0).map(inv => ({
@@ -1928,7 +1921,6 @@
                         ${paymentDetailsHtml}
                         ${checkSummaryHtml}
                         ${suddenReturnSection}
-                        ${previewTotals.suddenReturnsTotal > 0 ? `<div style="text-align: right; font-size: 13px; font-weight: bold; color: #b91c1c; margin-bottom: 5px;">SUDDENLY RETURN: - ${peso.format(previewTotals.suddenReturnsTotal)}</div>` : ''}
                         ${previewTotals.excessiveAmount > 0 ? `<div style="text-align: right; font-size: 13px; font-weight: bold; color: #ea580c; margin-bottom: 30px;">EXCESSIVE: ${peso.format(previewTotals.excessiveAmount)}</div>` : ''}
                         <div style="border-top: 3px solid #000; width: 100%; margin: 50px 0 15px 0;"></div>
                         <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 60px;">
@@ -3123,7 +3115,7 @@
                     const printAddlDiscPercent = Number(v.additional_discount || 0);
                     const printAddlDiscAmount = Number(v.additional_discount_amount || 0);
                     const printTotals = calculateDisplayTotals(grandTotal, globalDiscAmt, returnCalculationRows, printAddlDiscPercent, printAddlDiscAmount);
-                    const afterDiscAmount = Math.max(0, grandTotal - printTotals.additionalDiscount);
+                    const afterDiscAmount = printTotals.finalTotal;
                     const totalDiscountSection = $('print-total-discount-section');
                     const totalDiscountLabel = $('print-discount-label');
                     if (globalDisc > 0 && globalDiscAmt > 0) {
@@ -3147,11 +3139,8 @@
                         totalAmountSection.style.display = 'block';
                         totalAmountEl.textContent = peso.format(afterDiscAmount);
                     }
-                    // NET AMOUNT is set after Payment Details are loaded so the payment total is deducted.
                     const printSuddenSection = $('print-sudden-returns-section');
                     const printSuddenRows = $('print-sudden-return-rows');
-                    const printSuddenlyLine = $('print-suddenly-return-line');
-                    const printSuddenlyAmount = $('print-suddenly-return-amount');
                     if (printSuddenSection && printSuddenRows) {
                         if (suddenReturnRows.length) {
                             printSuddenSection.style.display = 'block';
@@ -3164,14 +3153,9 @@
                                     <td style="padding: 4px 6px; text-align: right; font-weight: bold; color: #b91c1c; border-right: 1px solid #000; border-bottom: 1px solid #000;">- ${peso.format(sr.total_amount)}</td>
                                 </tr>
                             `).join('');
-                            if (printSuddenlyLine && printSuddenlyAmount) {
-                                printSuddenlyLine.style.display = 'block';
-                                printSuddenlyAmount.textContent = peso.format(printTotals.suddenReturnsTotal);
-                            }
                         } else {
                             printSuddenSection.style.display = 'none';
                             printSuddenRows.innerHTML = '';
-                            if (printSuddenlyLine) printSuddenlyLine.style.display = 'none';
                         }
                     }
 
