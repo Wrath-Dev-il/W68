@@ -33,10 +33,12 @@ return new class extends Migration
             && $schema->hasColumn('supplier_ledger_items', 'supplier_ledger_id')
             && $schema->hasColumn('supplier_ledger_items', 'date')
             && $schema->hasColumn('supplier_ledgers', 'date')
+            && $schema->hasColumn('supplier_ledgers', 'module_type')
         ) {
             DB::connection('ledger')
                 ->table('supplier_ledger_items as sli')
                 ->join('supplier_ledgers as sl', 'sl.id', '=', 'sli.supplier_ledger_id')
+                ->where('sl.module_type', 'Purchase Order')
                 ->whereNull('sli.date')
                 ->update(['sli.date' => DB::raw('sl.date')]);
         }
