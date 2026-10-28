@@ -439,9 +439,9 @@
                 <div><h3 id="pcv-balance-warning-title" class="text-sm font-black uppercase tracking-widest">Payment Balance Remaining</h3><p class="text-[11px] text-white/65 mt-1">Complete the payment details to continue.</p></div>
             </div>
             <div class="p-6">
-                <p class="text-sm font-semibold text-slate-700">You cannot proceed to the next step while the remaining balance is not zero.</p>
-                <p class="mt-3 text-sm font-black text-amber-700">Remaining: <span id="pcv-balance-warning-amount">PHP 0.00</span></p>
-                <p class="mt-2 text-xs text-slate-500">Adjust the payment amounts until Remaining is PHP 0.00, then click Next again.</p>
+                <p class="text-sm font-semibold text-slate-700">You cannot continue until the payment total exactly matches the invoice amount. Any remaining balance or overpayment must be corrected.</p>
+                <p class="mt-3 text-sm font-black text-amber-700">Balance Difference: <span id="pcv-balance-warning-amount">PHP 0.00</span></p>
+                <p class="mt-2 text-xs text-slate-500">Correct the payment details until the balance difference is PHP 0.00, then click Next again.</p>
                 <div class="mt-6 flex justify-end"><button type="button" onclick="window.pcvCloseBalanceWarningModal()" class="px-6 py-2.5 rounded-xl bg-maroon-900 text-yellow-300 text-[10px] font-black uppercase tracking-widest hover:bg-maroon-800">OK</button></div>
             </div>
         </div>
@@ -1167,11 +1167,15 @@
             function userPaidAmount(inv) {
                 return numericAmount(inv?.userPaidAmount ?? inv?.amountPaid ?? 0);
             }
-            function selectedReturnAmountForInvoice(inv, returnRows = selectedSuddenReturns) {
+            function selectedReturnsForInvoice(inv, returnRows = selectedSuddenReturns) {
                 const sourceId = String(inv?.sourceId ?? inv?.purchase_order_id ?? '');
-                if (!sourceId) return 0;
-                return (returnRows || [])
-                    .filter(sr => String(sr?.po_id ?? sr?.purchase_order_id ?? '') === sourceId)
+                if (!sourceId) return [];
+                return (returnRows || []).filter((sr) =>
+                    String(sr?.po_id ?? sr?.purchase_order_id ?? '') === sourceId
+                );
+            }
+            function selectedReturnAmountForInvoice(inv, returnRows = selectedSuddenReturns) {
+                return selectedReturnsForInvoice(inv, returnRows)
                     .reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
             }
             function invoiceCalculationAmount(inv, returnRows = selectedSuddenReturns) {
@@ -1236,14 +1240,13 @@
                     syncCreditAmountFromNet([]);
                     return;
                 }
-                const suddenReturnTotal = selectedSuddenReturns.reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
-                const srShare = suddenReturnTotal / checkedCount;
-                // Step 1: Compute amount after invoice discount and SR deduction
+                // Deduct each selected return only from the invoice/PO it belongs to.
                 checkedInvoices.forEach(inv => {
                     if (inv.userPaidAmount === undefined) inv.userPaidAmount = numericAmount(inv.amountPaid || 0);
                     const afterD1 = calcDiscountedAmount(inv.amountDue, inv.discount1);
-                    inv.suddenReturnDeduction = srShare;
-                    const afterSR = Math.max(0, afterD1 - srShare);
+                    const invoiceReturnDeduction = selectedReturnAmountForInvoice(inv);
+                    inv.suddenReturnDeduction = invoiceReturnDeduction;
+                    const afterSR = Math.max(0, afterD1 - invoiceReturnDeduction);
                     inv.afterSR = afterSR;
                 });
                 // Step 2: Additional Discount is NOT applied per invoice row — only total-level summary
@@ -1569,7 +1572,11 @@
             function updatePaymentTotal() {
                 const total = paymentDetailsTotal();
                 const invoiceAmount = pcvInvoiceAmount();
-                const remaining = Math.max(0, invoiceAmount - total);
+                const balanceDifference = invoiceAmount - total;
+                const remaining = Math.max(0, balanceDifference);
+                const remainingText = balanceDifference < -0.005
+                    ? 'Overpaid ' + peso.format(Math.abs(balanceDifference))
+                    : peso.format(remaining);
                 const paymentEl = $('pcv-payment-total');
                 const invoiceAmountEl = $('pcv-invoice-amount');
                 const remainingEl = $('pcv-payment-remaining');
@@ -1578,10 +1585,10 @@
                 const headerRemainingEl = $('pcv-header-remaining');
                 if (paymentEl) paymentEl.textContent = peso.format(total);
                 if (invoiceAmountEl) invoiceAmountEl.textContent = peso.format(invoiceAmount);
-                if (remainingEl) remainingEl.textContent = peso.format(remaining);
+                if (remainingEl) remainingEl.textContent = remainingText;
                 if (headerPaymentEl) headerPaymentEl.textContent = peso.format(total);
                 if (headerInvoiceAmountEl) headerInvoiceAmountEl.textContent = peso.format(invoiceAmount);
-                if (headerRemainingEl) headerRemainingEl.textContent = peso.format(remaining);
+                if (headerRemainingEl) headerRemainingEl.textContent = remainingText;
                 return total;
             }
             function renderAdditionalPayments() {
@@ -1811,20 +1818,34 @@
                     };
                     return getInvoiceTime(a) - getInvoiceTime(b);
                 }).map((inv) => {
-                    const invAmt = invoiceCalculationAmount(inv);
-                    const paid = Number(inv.amountPaid || 0);
-                    const invoiceReturns = (selectedSuddenReturns || []).filter(sr => String(sr.po_id) === String(inv.sourceId));
-                    const hasRegularReturn = !invoiceReturns.length && Number(inv.unusedReturnAmount || 0) > 0;
-                    const retAmt = hasRegularReturn ? Number(inv.unusedReturnAmount || 0) : invoiceReturns.reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
-                    const totalRet = hasRegularReturn ? Number(inv.unusedReturnCount || 0) : invoiceReturns.length;
-                    const returnNumber = hasRegularReturn ? (inv.returnNumber || '') : invoiceReturns.map(sr => sr.return_number).filter(Boolean).join(', ');
-                    const slipNo = hasRegularReturn ? (inv.slipNo || '') : invoiceReturns.map(sr => sr.slip_no).filter(Boolean).join(', ');
+                    const invoiceReturns = selectedReturnsForInvoice(inv, selectedSuddenReturns || []);
+                    const selectedReturnTotal = invoiceReturns.reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
+                    const unusedReturnAmount = Number(inv.unusedReturnAmount ?? inv.returnAmount ?? 0);
+                    const hasRegularReturn = !invoiceReturns.length && unusedReturnAmount > 0;
+                    const retAmt = hasRegularReturn ? unusedReturnAmount : selectedReturnTotal;
+                    const totalRet = hasRegularReturn
+                        ? Number(inv.unusedReturnCount ?? inv.totalReturns ?? 0)
+                        : invoiceReturns.length;
+                    const returnNumber = hasRegularReturn
+                        ? (inv.returnNumber || '')
+                        : invoiceReturns.map(sr => sr.return_number).filter(Boolean).join(', ');
+                    const slipNo = hasRegularReturn
+                        ? (inv.slipNo || '')
+                        : invoiceReturns.map(sr => sr.slip_no).filter(Boolean).join(', ');
                     const returnedItems = hasRegularReturn ? [] : invoiceReturns.flatMap(sr => sr.items || []);
-                    const returnedItemsText = hasRegularReturn ? (totalRet > 0 ? String(totalRet) : '---') : (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
+                    const returnedItemsText = hasRegularReturn
+                        ? (totalRet > 0 ? String(totalRet) : '---')
+                        : (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
                     const rsDetails = String(inv.rsDetails || '').trim() || (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
                     const remaining = Number(inv.remainingBalance || 0);
                     const remarks = remaining <= 0.005 ? 'Paid' : (inv.remarks || 'Not Paid');
-                    const displayAmt = invAmt > 0 ? invAmt : (Number(inv.unusedReturnAmount || 0) > 0 ? Number(inv.invoiceAmount || 0) : invAmt);
+                    const netInvoiceAmount = hasRegularReturn
+                        ? Math.max(0, calcDiscountedAmount(inv.amountDue, inv.discount1))
+                        : Math.max(0, Number(inv.userPaidAmount ?? inv.amountPaid ?? 0));
+                    // Show the amount before the return, then deduct this invoice's return
+                    // to produce its own net total (never spread a return across other invoices).
+                    const displayAmt = netInvoiceAmount + retAmt;
+                    const totalAmountAfterReturn = Math.max(0, displayAmt - retAmt);
                     return `<tr>
                         <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoiceNo)}</td>
                         <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(displayAmt)}</td>
@@ -1833,7 +1854,7 @@
                         <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(retAmt > 0 ? returnedItemsText : (totalRet > 0 ? String(totalRet) : '---'))}</td>
                         <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(rsDetails || '---')}</td>
                         <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000; ${remaining <= 0.005 ? 'color: #059669;' : ''}">${escapeHtml(remarks)}</td>
-                        <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(paid)}</td>
+                        <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
                     </tr>`;
                 }).join('');
                 const printContent = `
@@ -2053,10 +2074,14 @@
             window.pcvCloseBalanceWarningModal = () => pcvToggleModal('pcv-balance-warning-modal', false);
             window.pcvChangeStep = (delta) => {
                 if (delta > 0 && currentStep === 4) {
-                    const remaining = Math.max(0, pcvInvoiceAmount() - paymentDetailsTotal());
-                    if (remaining > 0.005) {
+                    const balanceDifference = pcvInvoiceAmount() - paymentDetailsTotal();
+                    if (Math.abs(balanceDifference) > 0.005) {
                         const amountEl = $('pcv-balance-warning-amount');
-                        if (amountEl) amountEl.textContent = peso.format(remaining);
+                        if (amountEl) {
+                            amountEl.textContent = balanceDifference > 0
+                                ? peso.format(balanceDifference)
+                                : 'Overpaid by ' + peso.format(Math.abs(balanceDifference));
+                        }
                         pcvToggleModal('pcv-balance-warning-modal', true);
                         if (window.lucide) window.lucide.createIcons();
                         return;
@@ -2102,7 +2127,7 @@
             };
             function selectedVoucherInvoices() {
                 recalculateVoucherDeductions();
-                const selectedReturnPoIds = new Set((selectedSuddenReturns || []).map(sr => String(sr.po_id)));
+                const selectedReturnPoIds = new Set((selectedSuddenReturns || []).map(sr => String(sr?.po_id ?? sr?.purchase_order_id ?? '')));
                 return (currentSupplier?.invoices || []).filter((i) => i.selected && (userPaidAmount(i) > 0 || Number(i.unusedReturnAmount || 0) > 0 || selectedReturnPoIds.has(String(i.sourceId))));
             }
             function voucherPayload(invoices) {
@@ -2130,7 +2155,7 @@
                     additional_discount_amount: payloadTotals.additionalDiscount,
                     show_check_summary: showCheckSummaryEnabled(),
                     invoices: invoices.map(inv => {
-                        const invoiceReturns = srForPayload.filter(sr => String(sr.po_id) === String(inv.sourceId));
+                        const invoiceReturns = selectedReturnsForInvoice(inv, srForPayload);
                         const hasSelectedReturns = invoiceReturns.length > 0;
                         const selectedReturnAmount = invoiceReturns.reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
                         const returnedItems = invoiceReturns.flatMap(sr => sr.items || []);
@@ -2289,18 +2314,29 @@
                     tbody.querySelectorAll('[data-sr-check]').forEach((cb) => cb.addEventListener('change', () => {
                         const idx = Number(cb.dataset.srCheck);
                         const remarksInput = tbody.querySelector(`[data-sr-remarks="${idx}"]`);
+                        let invoiceToInitialize = null;
+                        let wasInvoiceSelected = false;
                         if (cb.checked) {
                             if (!selectedSuddenReturns.find((r) => r.return_number === suddenReturns[idx].return_number)) {
                                 selectedSuddenReturns.push({ ...suddenReturns[idx], remarks: remarksInput ? remarksInput.value : '' });
                             }
-                            const invoice = currentSupplier?.invoices?.find((i) => String(i.sourceId) === String(suddenReturns[idx]?.po_id));
-                            if (invoice) invoice.selected = true;
+                            invoiceToInitialize = currentSupplier?.invoices?.find((i) =>
+                                String(i.sourceId ?? i.purchase_order_id ?? '') === String(suddenReturns[idx]?.po_id ?? suddenReturns[idx]?.purchase_order_id ?? '')
+                            ) || null;
+                            wasInvoiceSelected = Boolean(invoiceToInitialize?.selected);
+                            if (invoiceToInitialize) invoiceToInitialize.selected = true;
                         } else {
                             selectedSuddenReturns = selectedSuddenReturns.filter((r) => r.return_number !== suddenReturns[idx].return_number);
                         }
                         window.pcv_selectedSR = JSON.parse(JSON.stringify(selectedSuddenReturns));
                         updateSuddenSelectedTotal();
                         recalculateVoucherDeductions();
+                        if (cb.checked && invoiceToInitialize && !wasInvoiceSelected && numericAmount(invoiceToInitialize.userPaidAmount) <= 0.005) {
+                            const invoiceNetAfterReturn = payableAmountAfterReturns(invoiceToInitialize);
+                            invoiceToInitialize.userPaidAmount = invoiceNetAfterReturn;
+                            invoiceToInitialize.amountPaid = invoiceNetAfterReturn;
+                            recalculateVoucherDeductions();
+                        }
                         renderInvoices();
                         if (typeof renderStep2Summary === 'function') renderStep2Summary();
                     }));
@@ -2331,7 +2367,7 @@
                 const invoices = selectedVoucherInvoices();
                 if (!invoices.length) { alert('Please select at least one invoice or sudden return.'); return; }
                 const selectedPoSet = new Set(invoices.map(inv => String(inv.sourceId)));
-                const unmatchedReturn = (selectedSuddenReturns || []).find(sr => !selectedPoSet.has(String(sr.po_id)));
+                const unmatchedReturn = (selectedSuddenReturns || []).find(sr => !selectedPoSet.has(String(sr?.po_id ?? sr?.purchase_order_id ?? '')));
                 if (unmatchedReturn) {
                     alert(`Please select the matching invoice for return ${unmatchedReturn.return_number}.`);
                     return;
