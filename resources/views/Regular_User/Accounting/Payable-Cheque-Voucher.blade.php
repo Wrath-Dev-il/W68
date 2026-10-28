@@ -835,10 +835,6 @@
 
         <div style="border-top: 1px solid #000; margin-bottom: 8px;"></div>
 
-        <div style="text-align: right; font-size: 13px; font-weight: bold; margin-bottom: 30px;">
-            NET AMOUNT: <span id="print-total"></span>
-        </div>
-
         <div style="border-top: 3px solid #000; width: 100%; margin: 50px 0 15px 0;"></div>
 
         <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 60px;">
@@ -1177,6 +1173,28 @@
             function selectedReturnAmountForInvoice(inv, returnRows = selectedSuddenReturns) {
                 return selectedReturnsForInvoice(inv, returnRows)
                     .reduce((sum, sr) => sum + suddenReturnAmount(sr), 0);
+            }
+            // W68_PCV_PRINT_RETURN_SINGLE_DEDUCTION_20261028
+            // Keep AMOUNT at the original invoice value and deduct returns only once in TOTAL AMOUNT.
+            function invoiceReturnAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
+                const selectedReturn = selectedReturnAmountForInvoice(inv, returnRows);
+                if (selectedReturn > 0) return selectedReturn;
+                return Math.max(
+                    numericAmount(inv?.unusedReturnAmount),
+                    numericAmount(inv?.returnAmount),
+                    numericAmount(inv?.return_amount)
+                );
+            }
+            function invoiceGrossAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
+                const returnAmount = invoiceReturnAmountForVoucher(inv, returnRows);
+                const selectedReturn = selectedReturnAmountForInvoice(inv, returnRows);
+                const savedInvoiceAmount = numericAmount(inv?.invoiceAmount ?? inv?.invoice_amount ?? 0);
+                const amountDue = calcDiscountedAmount(
+                    inv?.amountDue ?? inv?.amount_due ?? 0,
+                    inv?.discount1 ?? inv?.discount_1 ?? 0
+                );
+                const dueBeforeReturn = selectedReturn > 0 ? amountDue : amountDue + returnAmount;
+                return Math.max(savedInvoiceAmount, dueBeforeReturn, userPaidAmount(inv) + returnAmount);
             }
             function invoiceCalculationAmount(inv, returnRows = selectedSuddenReturns) {
                 return userPaidAmount(inv) + selectedReturnAmountForInvoice(inv, returnRows);
@@ -1769,16 +1787,28 @@
                 
                 // CRITICAL FIX: Use setTimeout to ensure iframe is rendered before writing to it
                 setTimeout(() => {
-                const grandTotal = (selected || []).reduce((sum, inv) => sum + invoiceCalculationAmount(inv), 0);
+                const previewReturnTotal = (selected || []).reduce(
+                    (sum, inv) => sum + invoiceReturnAmountForVoucher(inv, selectedSuddenReturns || []), 0
+                );
+                const grandTotal = (selected || []).reduce(
+                    (sum, inv) => sum + invoiceGrossAmountForVoucher(inv, selectedSuddenReturns || []), 0
+                );
                 const previewGlobalDiscAmount = grandTotal * Number(globalDisc || 0) / 100;
-                const previewTotals = calculateDisplayTotals(grandTotal, previewGlobalDiscAmount, selectedSuddenReturns, additionalDiscount);
+                const previewReturnCalculationRows = previewReturnTotal > 0 ? [{ total_amount: previewReturnTotal }] : [];
+                const previewTotals = calculateDisplayTotals(grandTotal, previewGlobalDiscAmount, previewReturnCalculationRows, additionalDiscount);
                 const afterDiscAmount = Math.max(0, grandTotal - previewTotals.additionalDiscount);
-                const suddenReturnSection = buildSuddenReturnPrintSection(selectedSuddenReturns);
+                const reviewReturnRows = (selectedSuddenReturns || []).length
+                    ? selectedSuddenReturns
+                    : (selected || []).filter(inv => invoiceReturnAmountForVoucher(inv, []) > 0).map(inv => ({
+                        return_number: inv.returnNumber || inv.return_number || '---',
+                        po_number: inv.purchaseNo || inv.purchase_no || inv.invoiceNo || '---',
+                        remarks: inv.rsDetails || inv.rs_details || inv.remarks || '',
+                        total_amount: invoiceReturnAmountForVoucher(inv, []),
+                    }));
+                const suddenReturnSection = buildSuddenReturnPrintSection(reviewReturnRows);
                 
                 // Payment Details Section - multiple payment rows, negative credits included.
                 const previewPayments = voucherPaymentDetails();
-                const previewPaymentTotal = previewPayments.reduce((sum, payment) => sum + Number(payment.credit_amount || 0), 0);
-                const previewNetAfterPayment = Math.max(0, previewTotals.finalTotal - previewPaymentTotal);
                 let paymentDetailsHtml = `
                     <table style="width: 100%; font-size: 13px; margin-top: 20px; margin-bottom: 6px; border-collapse: collapse;">
                         <thead>
@@ -1835,19 +1865,16 @@
                     const slipNo = hasRegularReturn
                         ? (inv.slipNo || '')
                         : invoiceReturns.map(sr => sr.slip_no).filter(Boolean).join(', ');
-                    const returnedItems = hasRegularReturn ? [] : invoiceReturns.flatMap(sr => sr.items || []);
-                    const returnedItemsText = hasRegularReturn
-                        ? (totalRet > 0 ? String(totalRet) : '---')
-                        : (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
-                    const rsDetails = String(inv.rsDetails || '').trim() || (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
+                    const returnedItems = invoiceReturns.flatMap(sr => Array.isArray(sr.items) ? sr.items : []);
+                    const savedReturnedItems = String(inv.returnedItems ?? inv.returned_items ?? '').trim();
+                    const returnedItemsText = returnedItems.length
+                        ? returnedItemsSummary(returnedItems)
+                        : (savedReturnedItems || (totalRet > 0 ? String(totalRet) : '---'));
+                    const rsDetails = String(inv.rsDetails || inv.rs_details || '').trim() || (returnedItems.length ? returnedItemsSummary(returnedItems) : '---');
                     const remaining = Number(inv.remainingBalance || 0);
                     const remarks = remaining <= 0.005 ? 'Paid' : (inv.remarks || 'Not Paid');
-                    const netInvoiceAmount = hasRegularReturn
-                        ? Math.max(0, calcDiscountedAmount(inv.amountDue, inv.discount1))
-                        : Math.max(0, Number(inv.userPaidAmount ?? inv.amountPaid ?? 0));
-                    // Show the amount before the return, then deduct this invoice's return
-                    // to produce its own net total (never spread a return across other invoices).
-                    const displayAmt = netInvoiceAmount + retAmt;
+                    // AMOUNT remains the invoice amount; the return is deducted once in TOTAL AMOUNT.
+                    const displayAmt = invoiceGrossAmountForVoucher(inv, selectedSuddenReturns || []);
                     const totalAmountAfterReturn = Math.max(0, displayAmt - retAmt);
                     return `<tr>
                         <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoiceNo)}</td>
@@ -1902,7 +1929,6 @@
                         ${checkSummaryHtml}
                         ${suddenReturnSection}
                         ${previewTotals.suddenReturnsTotal > 0 ? `<div style="text-align: right; font-size: 13px; font-weight: bold; color: #b91c1c; margin-bottom: 5px;">SUDDENLY RETURN: - ${peso.format(previewTotals.suddenReturnsTotal)}</div>` : ''}
-                        <div style="text-align: right; font-size: 13px; font-weight: bold; margin-bottom: 30px;">NET AMOUNT: ${peso.format(previewNetAfterPayment)}</div>
                         ${previewTotals.excessiveAmount > 0 ? `<div style="text-align: right; font-size: 13px; font-weight: bold; color: #ea580c; margin-bottom: 30px;">EXCESSIVE: ${peso.format(previewTotals.excessiveAmount)}</div>` : ''}
                         <div style="border-top: 3px solid #000; width: 100%; margin: 50px 0 15px 0;"></div>
                         <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 60px;">
@@ -3050,16 +3076,34 @@
                         };
                         return getInvoiceTime(a) - getInvoiceTime(b);
                     });
-                    const suddenReturnRows = data.sudden_returns || [];
+                    const savedSuddenReturnRows = Array.isArray(data.sudden_returns) ? data.sudden_returns : [];
+                    const getSavedReturnAmount = (inv) => Number(inv.return_amount || 0);
+                    const getSavedGrossInvoiceAmount = (inv) => Math.max(
+                        Number(inv.invoice_amount || 0),
+                        Number(inv.amount_due || 0),
+                        Number(inv.amount_paid || 0) + getSavedReturnAmount(inv)
+                    );
+                    const invoiceReturnTotal = invoices.reduce((sum, inv) => sum + getSavedReturnAmount(inv), 0);
+                    const savedSuddenReturnTotal = savedSuddenReturnRows.reduce((sum, row) => sum + Number(row.return_amount ?? row.total_amount ?? 0), 0);
+                    const returnTotalForCalculation = invoiceReturnTotal > 0 ? invoiceReturnTotal : savedSuddenReturnTotal;
+                    const returnCalculationRows = returnTotalForCalculation > 0 ? [{ total_amount: returnTotalForCalculation }] : [];
+                    const suddenReturnRows = savedSuddenReturnRows.length
+                        ? savedSuddenReturnRows
+                        : invoices.filter(inv => getSavedReturnAmount(inv) > 0).map(inv => ({
+                            return_number: inv.return_number || '---',
+                            po_number: inv.purchase_no || inv.invoice_no || '---',
+                            remarks: inv.rs_details || inv.remarks || '',
+                            total_amount: getSavedReturnAmount(inv),
+                        }));
                     $('print-supplier').textContent = v.supplier_name || '---';
                     $('print-voucher-no').textContent = v.voucher_no || '---';
                     $('print-address').textContent = v.supplier_address || '---';
                     $('print-date').textContent = v.voucher_date || '---';
                     const invoiceRows = invoices.map((inv) => {
-                        const invAmt = Number(inv.invoice_amount || 0);
-                        const paid = Number(inv.amount_paid || 0);
-                        const retAmt = Number(inv.return_amount || 0);
+                        const invAmt = getSavedGrossInvoiceAmount(inv);
+                        const retAmt = getSavedReturnAmount(inv);
                         const totalRet = Number(inv.total_returns || 0);
+                        const totalAmountAfterReturn = Math.max(0, invAmt - retAmt);
                         return `<tr>
                             <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(invAmt)}</td>
@@ -3068,17 +3112,17 @@
                             <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
                             <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.rs_details || '---')}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.remarks || '---')}</td>
-                            <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(paid)}</td>
+                            <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
                         </tr>`;
                     }).join('');
                     $('print-invoice-rows').innerHTML = invoiceRows;
-                    const grandTotal = invoices.reduce((s, i) => s + calcDiscountedAmount(i.amount_due, i.discount_1), 0);
+                    const grandTotal = invoices.reduce((sum, invoice) => sum + getSavedGrossInvoiceAmount(invoice), 0);
                     $('print-grand-total').textContent = peso.format(grandTotal);
                     const globalDisc = Number(v.global_discount || 0);
                     const globalDiscAmt = Number(v.global_discount_amount || 0);
                     const printAddlDiscPercent = Number(v.additional_discount || 0);
                     const printAddlDiscAmount = Number(v.additional_discount_amount || 0);
-                    const printTotals = calculateDisplayTotals(grandTotal, globalDiscAmt, suddenReturnRows, printAddlDiscPercent, printAddlDiscAmount);
+                    const printTotals = calculateDisplayTotals(grandTotal, globalDiscAmt, returnCalculationRows, printAddlDiscPercent, printAddlDiscAmount);
                     const afterDiscAmount = Math.max(0, grandTotal - printTotals.additionalDiscount);
                     const totalDiscountSection = $('print-total-discount-section');
                     const totalDiscountLabel = $('print-discount-label');
@@ -3151,7 +3195,6 @@
                     }
                     const savedPaymentTotal = paymentRows.reduce((sum, payment) => sum + Number(payment.credit_amount || 0), 0);
                     populateStaticCheckSummary(paymentRows, Boolean(Number(v.show_check_summary || 0)));
-                    if ($('print-total')) $('print-total').textContent = peso.format(Math.max(0, printTotals.finalTotal - savedPaymentTotal));
 
                     window.pcvClosePrintModal();
                     setTimeout(() => {
