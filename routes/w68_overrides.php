@@ -3712,12 +3712,19 @@ $w68WrapPurchaseOrderDateRoute = function (string $routeName, string $operation)
             return $response;
         }
 
-        $purchaseOrderId = (int) (
-            $responseData['po_id']
-            ?? $responseData['purchase_order_id']
-            ?? $responseData['id']
-            ?? $request->input('po_id', 0)
-        );
+        // For edits, trust the submitted PO ID first. Processing may only
+        // return the newly created ID, so fall back to its response payload.
+        $purchaseOrderId = (int) $request->input('po_id', 0);
+        if ($purchaseOrderId <= 0) {
+            $purchaseOrderId = (int) (
+                $responseData['po_id']
+                ?? $responseData['purchase_order_id']
+                ?? 0
+            );
+        }
+        if ($purchaseOrderId <= 0 && $operation === 'process') {
+            $purchaseOrderId = (int) ($responseData['id'] ?? 0);
+        }
 
         if ($purchaseOrderId <= 0 && $operation === 'process') {
             $poNumber = trim((string) $request->input('po_number', ''));
