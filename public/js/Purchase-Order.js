@@ -1803,6 +1803,11 @@ async function finalizePO() {
         }
 
         // Always send PHP amounts to the backend regardless of display currency
+        const transactionDate = document.getElementById('proceed-transaction-date')?.value || '';
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(transactionDate)) {
+            alert('Please select a valid Transaction Date before processing the Purchase Order.');
+            return;
+        }
         const totalAmount = window.poState?.grandTotal || parseFloat(document.getElementById('po-items-grand-total')?.innerText.replace(/[₱$,NT]/g, '').replace(/,/g, '')) || 0;
         const actualTotalAmount = window.poState?.actualGrandTotal || parseFloat(document.getElementById('po-items-actual-grand-total')?.innerText.replace(/[₱$,NT]/g, '').replace(/,/g, '')) || 0;
 
@@ -1825,7 +1830,7 @@ async function finalizePO() {
             additional_discount_percent: additionalDiscountPercent,
             additional_discount_amount: additionalDiscountAmount,
             supplier_code: supplierCode,
-            date: new Date().toISOString().split('T')[0],
+            date: transactionDate,
             total_amount: totalAmount,
             actual_total_amount: actualTotalAmount,
             currency: currency,
@@ -2128,6 +2133,11 @@ window.openEditHistoryModal = async function(poId) {
         document.getElementById('edit-supplier-name').value = result.note?.supplier_name || '';
         document.getElementById('edit-control-no').value = result.note?.receiving_no || '';
         document.getElementById('edit-pn-no').value = result.note?.po_number || '';
+        const editTransactionDate = document.getElementById('edit-transaction-date');
+        if (editTransactionDate) {
+            const savedTransactionDate = result.note?.date || result.note?.transaction_date || result.note?.created_at || '';
+            editTransactionDate.value = String(savedTransactionDate).slice(0, 10);
+        }
         document.getElementById('edit-currency').value = window.editState.currency;
         document.getElementById('edit-conv-rate').value = window.editState.conversionRate;
         document.getElementById('edit-additional-discount-percent').value = window.editState.additionalDiscountPercent;
@@ -3140,8 +3150,15 @@ window.confirmSaveEdit = async function() {
         const addlDiscAmount = totalBeforeAddlDisc * (addlDiscPercent / 100);
 
         // Prepare payload
+        const transactionDate = document.getElementById('edit-transaction-date')?.value || '';
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(transactionDate)) {
+            alert('Please select a valid Transaction Date before saving the Purchase Order.');
+            return;
+        }
+
         const payload = {
             po_id: window.editState.poId,
+            date: transactionDate,
             receiving_no: document.getElementById('edit-control-no')?.value || '',
             currency: document.getElementById('edit-currency')?.value || 'PHP',
             conversion_rate: parseFloat(document.getElementById('edit-conv-rate')?.value) || 1,
