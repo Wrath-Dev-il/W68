@@ -2027,6 +2027,7 @@
             async function openModal(id) {
                 currentSupplier = suppliers.find((s) => Number(s.id) === Number(id)); if (!currentSupplier) return;
                 currentStep = 1; invoicePage = 1; suddenReturns = []; selectedSuddenReturns = [];
+                window.pcv_selectedSR = [];
                 pcvToggleStep3Stepper(false);
                 currentSupplier.invoices.forEach((i) => { i.selected = false; i.discount1 = 0; i.discount2 = 0; });
                 $('pcv-proceed-modal').classList.remove('hidden'); $('pcv-proceed-modal').classList.add('flex');
@@ -2358,6 +2359,7 @@
             };
             window.pcvSkipSuddenReturns = () => {
                 selectedSuddenReturns = [];
+                window.pcv_selectedSR = [];
                 recalculateVoucherDeductions();
                 window.pcvChangeStep(1);
             };
@@ -2367,7 +2369,7 @@
                 recalculateVoucherDeductions();
                 const invoices = selectedVoucherInvoices();
                 if (!invoices.length) { alert('Please select at least one invoice or sudden return.'); return; }
-                const selectedPoSet = new Set(invoices.map(inv => String(inv.sourceId)));
+                const selectedPoSet = new Set(invoices.map(inv => String(inv.sourceId ?? inv.purchase_order_id ?? '')));
                 const unmatchedReturn = (selectedSuddenReturns || []).find(sr => !selectedPoSet.has(String(sr?.po_id ?? sr?.purchase_order_id ?? '')));
                 if (unmatchedReturn) {
                     alert(`Please select the matching invoice for return ${unmatchedReturn.return_number}.`);
