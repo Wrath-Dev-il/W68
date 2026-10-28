@@ -20,8 +20,7 @@ class PayableChequeVoucherHistoryService
             'invoice_amount' => trim((string) $request->input('invoice_amount', '')),
             'return_total' => trim((string) $request->input('return_total', '')),
             'amount_paid' => trim((string) $request->input('amount_paid', '')),
-            'remaining' => trim((string) $request->input('remaining', '')),
-            'status' => trim((string) $request->input('status', '')),
+            'check_no' => trim((string) $request->input('check_no', '')),
             'date' => trim((string) $request->input('date', '')),
         ];
 
@@ -76,7 +75,14 @@ class PayableChequeVoucherHistoryService
             ->get()
             ->keyBy('payable_cheque_voucher_id');
 
-        $rows = $vouchers->map(function ($voucher) use ($invoiceTotals, $paymentTotals) {
+        $paymentRowsByVoucher = DB::connection('accounting')->table('payable_cheque_voucher_payments')
+            ->whereIn('payable_cheque_voucher_id', $voucherIds)
+            ->select('payable_cheque_voucher_id', 'payment_method', 'bank_name', 'check_no', 'credit_amount')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('payable_cheque_voucher_id');
+
+        $rows = $vouchers->map(function ($voucher) use ($invoiceTotals, $paymentTotals, $paymentRowsByVoucher) {
             $inv = $invoiceTotals->get($voucher->id);
             $pay = $paymentTotals->get($voucher->id);
 
@@ -85,6 +91,47 @@ class PayableChequeVoucherHistoryService
             $allocatedPaid = round((float) ($inv->allocated_paid ?? $voucher->total_paid ?? 0), 2);
             $paymentCount = (int) ($pay->payment_count ?? 0);
             $paymentTotal = round($paymentCount > 0 ? (float) $pay->payment_total : (float) ($voucher->total_paid ?? 0), 2);
+
+            $paymentDetails = $paymentRowsByVoucher->get($voucher->id, collect())
+                ->map(function ($payment): array {
+                    $checkNo = trim((string) ($payment->check_no ?? ''));
+                    $method = trim((string) ($payment->payment_method ?? ''));
+                    $bankName = trim((string) ($payment->bank_name ?? ''));
+
+                    if ($checkNo !== '') {
+                        $label = $checkNo;
+                    } elseif (strtolower($method) === 'gcash') {
+                        $label = 'GCASH';
+                    } elseif ($bankName !== '') {
+                        $label = $bankName;
+                    } elseif ($method !== '') {
+                        $label = $method;
+                    } else {
+                        $label = '---';
+                    }
+
+                    return [
+                        'label' => $label,
+                        'check_no' => $checkNo,
+                        'payment_method' => $method,
+                        'bank_name' => $bankName,
+                        'amount' => round((float) ($payment->credit_amount ?? 0), 2),
+                    ];
+                })
+                ->values()
+                ->all();
+
+            if (empty($paymentDetails)) {
+                $legacyCheckNo = trim((string) ($voucher->check_no ?? ''));
+                $legacyMethod = trim((string) ($voucher->payment_method ?? ''));
+                $paymentDetails = [[
+                    'label' => $legacyCheckNo !== '' ? $legacyCheckNo : ($legacyMethod !== '' ? strtoupper($legacyMethod) : '---'),
+                    'check_no' => $legacyCheckNo,
+                    'payment_method' => $legacyMethod,
+                    'bank_name' => (string) ($voucher->bank_name ?? ''),
+                    'amount' => $paymentTotal,
+                ]];
+            }
 
             // This reconstructs the same "Computed Remaining" saved by the PCV flow:
             // invoice paid allocation + applied return, then deduct return + voucher discounts.
@@ -109,7 +156,12 @@ class PayableChequeVoucherHistoryService
                 'supplier_name' => (string) $voucher->supplier_name,
                 'invoice_amount' => $invoiceAmount,
                 'return_total' => $returnTotal,
+                'check_no' => implode(' / ', array_values(array_unique(array_filter(array_map(
+                    fn (array $payment) => trim((string) ($payment['label'] ?? '')),
+                    $paymentDetails
+                ), fn ($label) => $label !== '' && $label !== '---')))),
                 'amount_paid' => $paymentTotal,
+                'payments' => $paymentDetails,
                 'computed_remaining' => round($computedRemaining, 2),
                 'remaining' => round($remaining, 2),
                 'status' => $paymentStatus,
@@ -124,8 +176,7 @@ class PayableChequeVoucherHistoryService
                 && $this->matchesAmount($row['invoice_amount'], $filters['invoice_amount'])
                 && $this->matchesAmount($row['return_total'], $filters['return_total'])
                 && $this->matchesAmount($row['amount_paid'], $filters['amount_paid'])
-                && $this->matchesAmount($row['remaining'], $filters['remaining'])
-                && $this->matches($row['status'], $filters['status'])
+                && $this->matches($row['check_no'], $filters['check_no'])
                 && $this->matches($row['date'], $filters['date']);
         })->values();
 
