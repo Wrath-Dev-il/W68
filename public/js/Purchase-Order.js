@@ -1020,8 +1020,9 @@ function populatePrintLayout() {
     }
     
     if (dateEl) {
-        const today = new Date();
-        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const selectedDate = document.getElementById('proceed-transaction-date')?.value;
+        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         console.log('Date:', dateEl.textContent);
     }
     
@@ -2924,8 +2925,9 @@ function populateEditPrintLayout() {
     
     const dateEl = editStep3.querySelector('#cr-date');
     if (dateEl) {
-        const today = new Date();
-        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const selectedDate = document.getElementById('edit-transaction-date')?.value;
+        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
     
     // Get current values from Step 2 table
