@@ -3135,13 +3135,14 @@
                         const invoiceAmount = Number(inv.invoice_amount || 0);
                         const amountDue = Number(inv.amount_due || 0);
                         const amountPaid = Number(inv.amount_paid || 0);
-                        const paidPlusReturn = amountPaid + returnAmount;
+                        // invoice_amount is the canonical original invoice value when available.
+                        // Do not add the return to amount_paid: that can inflate a valid invoice
+                        // amount (e.g. 9,788 + 75) and double-count the return on the printed voucher.
+                        if (invoiceAmount > 0) return invoiceAmount;
 
-                        // invoice_amount is the canonical gross invoice value when available.
-                        // Older rows may have saved the post-return balance in invoice_amount/amount_due;
-                        // recover the original amount from the saved payment plus return when possible.
-                        if (invoiceAmount > 0) return Math.max(invoiceAmount, paidPlusReturn);
-                        return Math.max(amountDue + returnAmount, paidPlusReturn, amountDue);
+                        // Older records may store the post-return balance in amount_due.
+                        // Restore the gross invoice only when invoice_amount is unavailable.
+                        return Math.max(amountDue + returnAmount, amountPaid, amountDue);
                     };
                     const invoiceReturnTotal = invoices.reduce((sum, inv) => sum + getSavedReturnAmount(inv), 0);
                     const suddenReturnRows = filterSuddenReturnsAlreadyIncluded(
