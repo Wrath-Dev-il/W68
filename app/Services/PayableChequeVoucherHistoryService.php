@@ -64,6 +64,31 @@ class PayableChequeVoucherHistoryService
             ->get()
             ->keyBy('payable_cheque_voucher_id');
 
+        // W68_PCV_HISTORY_CANONICAL_INVOICE_AMOUNT_20261103
+        // Rebuild history invoice totals from the original purchase-order amount,
+        // not from possibly stale PCV invoice_amount values or payment allocations.
+        $historyInvoiceRows = DB::connection('accounting')->table('payable_cheque_voucher_invoices')
+            ->whereIn('payable_cheque_voucher_id', $voucherIds)
+            ->get(['payable_cheque_voucher_id', 'purchase_order_id', 'invoice_amount']);
+        $historyPoIds = $historyInvoiceRows->pluck('purchase_order_id')
+            ->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $historyPurchaseOrders = $historyPoIds->isEmpty()
+            ? collect()
+            : DB::connection('purchase')->table('purchase_orders')
+                ->whereIn('id', $historyPoIds)
+                ->get(['id', 'actual_total_amount'])->keyBy('id');
+        foreach ($historyInvoiceRows->groupBy('payable_cheque_voucher_id') as $voucherId => $rows) {
+            $canonicalTotal = $rows->sum(function ($row) use ($historyPurchaseOrders) {
+                $po = $historyPurchaseOrders->get((int) $row->purchase_order_id);
+                $actual = (float) ($po->actual_total_amount ?? 0);
+                return $actual > 0 ? $actual : (float) $row->invoice_amount;
+            });
+            $invoiceTotalRow = $invoiceTotals->get($voucherId);
+            if ($invoiceTotalRow) {
+                $invoiceTotalRow->invoice_amount = round((float) $canonicalTotal, 2);
+            }
+        }
+
         $paymentTotals = DB::connection('accounting')->table('payable_cheque_voucher_payments')
             ->whereIn('payable_cheque_voucher_id', $voucherIds)
             ->select(
@@ -299,7 +324,10 @@ class PayableChequeVoucherHistoryService
                 'purchase_no' => (string) $row->purchase_no,
                 'invoice_no' => (string) $row->invoice_no,
                 'invoice_date' => $po?->date ? substr((string) $po->date, 0, 10) : '',
-                'invoice_amount' => round((float) $row->invoice_amount, 2),
+                // Original invoice amount comes from core4_purchase, not PCV paid/due values.
+                'invoice_amount' => round((float) (($po && (float) ($po->actual_total_amount ?? 0) > 0)
+                    ? $po->actual_total_amount
+                    : $row->invoice_amount), 2),
                 'amount_due' => round((float) $row->amount_due, 2),
                 'amount_paid' => round((float) $row->amount_paid, 2),
                 'discount_1' => round((float) ($row->discount_1 ?? 0), 2),
