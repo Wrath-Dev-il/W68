@@ -229,7 +229,7 @@ class PayableChequeVoucherController extends Controller
                         'purchase_order_id' => $invoice['purchase_order_id'] ?? null,
                         'purchase_no' => $invoice['purchase_no'],
                         'invoice_no' => $invoice['invoice_no'],
-                        'invoice_amount' => $invoice['invoice_amount'] ?? 0,
+                        'invoice_amount' => $this->originalPurchaseInvoiceAmount($invoice['purchase_order_id'] ?? null, $invoice['invoice_amount'] ?? 0),
                         'amount_due' => $invoice['amount_due'],
                         'amount_paid' => $invoice['amount_paid'],
                         'remarks' => $invoice['remarks'] ?? null,
@@ -468,7 +468,7 @@ class PayableChequeVoucherController extends Controller
                         'purchase_order_id' => $invoice['sourceId'] ?? $invoice['purchase_order_id'] ?? null,
                         'purchase_no' => $invoice['purchaseNo'],
                         'invoice_no' => $invoice['invoiceNo'],
-                        'invoice_amount' => $invoice['invoiceAmount'] ?? 0,
+                        'invoice_amount' => $this->originalPurchaseInvoiceAmount($invoice['sourceId'] ?? $invoice['purchase_order_id'] ?? null, $invoice['invoiceAmount'] ?? 0),
                         'amount_due' => $due,
                         'amount_paid' => $paid,
                         'discount_1' => $discount1,
@@ -612,6 +612,29 @@ class PayableChequeVoucherController extends Controller
     /**
      * Get payment recommendations (bank/account history) for a supplier.
      */
+    /**
+     * W68_PCV_CANONICAL_INVOICE_AMOUNT_20261103
+     * The original supplier invoice amount belongs to core4_purchase.purchase_orders.
+     * Never derive it from PCV payments or add purchase returns back into it.
+     */
+    private function originalPurchaseInvoiceAmount($purchaseOrderId, $fallback = 0): float
+    {
+        $purchaseOrderId = (int) $purchaseOrderId;
+        if ($purchaseOrderId <= 0) {
+            return round((float) $fallback, 2);
+        }
+
+        $purchaseOrder = DB::connection('purchase')->table('purchase_orders')
+            ->where('id', $purchaseOrderId)
+            ->first(['actual_total_amount']);
+
+        if ($purchaseOrder && (float) ($purchaseOrder->actual_total_amount ?? 0) > 0) {
+            return round((float) $purchaseOrder->actual_total_amount, 2);
+        }
+
+        return round((float) $fallback, 2);
+    }
+
     public function paymentRecommendations($supplierId)
     {
         try {
