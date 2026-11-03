@@ -1230,11 +1230,10 @@
 
                 return filtered;
             }
-            function invoiceGrossAmountForVoucher(inv, returnRows = selectedSuddenReturns) {
-                const returnAmount = invoiceReturnAmountForVoucher(inv, returnRows);
+            function invoiceGrossAmountForVoucher(inv) {
                 const savedInvoiceAmount = numericAmount(inv?.invoiceAmount ?? inv?.invoice_amount ?? 0);
                 const amountDue = numericAmount(inv?.amountDue ?? inv?.amount_due ?? 0);
-                const dueBeforeReturn = amountDue + returnAmount;
+                // Keep the source invoice amount gross; returns are deducted only in the net total.
                 return savedInvoiceAmount > 0 ? savedInvoiceAmount : Math.max(amountDue, userPaidAmount(inv));
             }
             function invoiceCalculationAmount(inv, returnRows = selectedSuddenReturns) {
