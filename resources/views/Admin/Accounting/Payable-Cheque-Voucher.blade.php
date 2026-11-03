@@ -759,12 +759,14 @@
             <thead>
                 <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
                     <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE NO.</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">INVOICE DATE</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">Slip No.</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURN AMOUNT</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURNED ITEMS</th>
                     <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">RS DETAILS</th>
                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">REMARKS</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">STATUS</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">TOTAL AMOUNT</th>
                 </tr>
             </thead>
@@ -3165,12 +3167,14 @@
                         const totalAmountAfterReturn = Math.max(0, invAmt - retAmt);
                         return `<tr>
                             <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
+                            <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoice_date || '---')}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(invAmt)}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.slip_no || '---')}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
                             <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
                             <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.rs_details || '---')}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.remarks || '---')}</td>
+                            <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">Paid</td>
                             <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
                         </tr>`;
                     }).join('');
