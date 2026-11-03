@@ -758,8 +758,8 @@
         <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 8px;">
             <thead>
                 <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
-                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE NO.</th>
-                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">INVOICE DATE</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE DATE</th>
+                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">INVOICE NO.</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">Slip No.</th>
                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURN AMOUNT</th>
@@ -1917,13 +1917,15 @@
                     const displayAmt = invoiceGrossAmountForVoucher(inv, selectedSuddenReturns || []);
                     const totalAmountAfterReturn = Math.max(0, displayAmt - retAmt);
                     return `<tr>
+                        <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoiceDate || inv.date || inv.createdAt || inv.created_at || '---')}</td>
                         <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoiceNo)}</td>
                         <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(displayAmt)}</td>
                         <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(slipNo || '---')}</td>
                         <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
                         <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(retAmt > 0 ? returnedItemsText : (totalRet > 0 ? String(totalRet) : '---'))}</td>
                         <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(rsDetails || '---')}</td>
-                        <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000; ${remaining <= 0.005 ? 'color: #059669;' : ''}">${escapeHtml(remarks)}</td>
+                        <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">${escapeHtml(remarks)}</td>
+                        <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">PAID</td>
                         <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
                     </tr>`;
                 }).join('');
@@ -1948,13 +1950,15 @@
                         <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 8px;">
                             <thead>
                                 <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
-                                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE NO.</th>
+                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE DATE</th>
+                                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">INVOICE NO.</th>
                                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
                                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">SLIP NO.</th>
                                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURN AMOUNT</th>
                                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURNED ITEMS</th>
                                     <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">RS DETAILS</th>
                                     <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">REMARKS</th>
+                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">STATUS</th>
                                     <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">TOTAL AMOUNT</th>
                                 </tr>
                             </thead>
@@ -3166,8 +3170,8 @@
                         const totalRet = Number(inv.total_returns || 0);
                         const totalAmountAfterReturn = Math.max(0, invAmt - retAmt);
                         return `<tr>
-                            <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoice_date || '---')}</td>
+                            <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(invAmt)}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.slip_no || '---')}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
