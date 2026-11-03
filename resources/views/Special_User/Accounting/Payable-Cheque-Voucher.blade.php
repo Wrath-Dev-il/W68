@@ -1235,7 +1235,7 @@
                 const savedInvoiceAmount = numericAmount(inv?.invoiceAmount ?? inv?.invoice_amount ?? 0);
                 const amountDue = numericAmount(inv?.amountDue ?? inv?.amount_due ?? 0);
                 const dueBeforeReturn = amountDue + returnAmount;
-                return Math.max(savedInvoiceAmount, dueBeforeReturn, userPaidAmount(inv) + returnAmount);
+                return savedInvoiceAmount > 0 ? savedInvoiceAmount : Math.max(amountDue, userPaidAmount(inv));
             }
             function invoiceCalculationAmount(inv, returnRows = selectedSuddenReturns) {
                 return userPaidAmount(inv) + selectedReturnAmountForInvoice(inv, returnRows);
@@ -1306,7 +1306,7 @@
                     const invoiceReturnDeduction = selectedReturnAmountForInvoice(inv);
                     inv.suddenReturnDeduction = invoiceReturnDeduction;
                     // amountDue already reflects the return shown in the invoice table; avoid a second deduction.
-                    const afterSR = Math.max(0, afterD1);
+                    const afterSR = Math.max(0, afterD1 - invoiceReturnDeduction);
                     inv.afterSR = afterSR;
                 });
                 // Step 2: Additional Discount is NOT applied per invoice row — only total-level summary
@@ -1362,9 +1362,9 @@
                     const d1 = Number(i.discount1 || 0);
                     const retAmt = Number(i.returnAmount || 0);
                     const totalRet = Number(i.totalReturns || 0);
-                    const originalAmt = amt + retAmt;
+                    const originalAmt = amt;
                     const d1Amt = amt * d1 / 100;
-                    const netDue = amt - d1Amt;
+                    const netDue = Math.max(0, amt - d1Amt - retAmt);
                     // Always recompute remarks from live data (never trust server-side i.remarks alone)
                     const eps = 0.005;
                     const computedRemarks = paid >= netDue - eps ? 'Paid' : paid > eps ? 'Partial Paid' : 'Not Paid';
@@ -1472,9 +1472,9 @@
                 const amt = Number(row.amountDue || 0);
                 const d1 = Number(row.discount1 || 0);
                 const retAmt = Number(row.returnAmount || 0);
-                const originalAmt = amt + retAmt;
+                const originalAmt = amt;
                 const d1Amt = amt * d1 / 100;
-                const netDue = amt - d1Amt;
+                const netDue = Math.max(0, amt - d1Amt - retAmt);
                 const paid = Number(row.correctedPaidAmount ?? row.amountPaid ?? userPaidAmount(row));
                 const eps = 0.005;
                 const computedRemarks = paid >= netDue - eps ? 'Paid' : paid > eps ? 'Partial Paid' : 'Not Paid';
