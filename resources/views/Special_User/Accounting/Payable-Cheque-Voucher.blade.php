@@ -758,14 +758,15 @@
         <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 8px;">
             <thead>
                 <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
-                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE NO.</th>
-                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
-                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">Slip No.</th>
-                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURN AMOUNT</th>
-                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURNED ITEMS</th>
-                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">RS DETAILS</th>
-                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">REMARKS</th>
-                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">TOTAL AMOUNT</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000; width: 11%;">INVOICE DATE</th>
+                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000; width: 12%;">INVOICE NO.</th>
+                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 10%;">AMOUNT</th>
+                    <th style="padding: 5px 6px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 14%;">SLIP NO.</th>
+                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 10%;">RETURN AMOUNT</th>
+                    <th style="padding: 5px 6px; text-align: left; font-weight: bold; border-right: 1px solid #000; width: 23%;">RETURNED ITEMS</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 7%;">REMARKS</th>
+                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 6%;">STATUS</th>
+                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 11%;">TOTAL AMOUNT</th>
                 </tr>
             </thead>
             <tbody id="print-invoice-rows"></tbody>
@@ -992,8 +993,8 @@
                 if (!rows.length) return '---';
                 return rows.map((item) => {
                     const qty = Number(item.quantity || 0);
-                    const code = item.product_code || item.description || 'Item';
-                    return `${code}${qty > 0 ? ` (${qty})` : ''}`;
+                    const desc = item.description || item.product_name || item.product_code || 'Item';
+                    return `${desc}${qty > 0 ? ` (${qty})` : ''}`;
                 }).join(', ');
             }
             function numericAmount(value) {
@@ -1914,13 +1915,12 @@
                     const displayAmt = invoiceGrossAmountForVoucher(inv, selectedSuddenReturns || []);
                     const totalAmountAfterReturn = Math.max(0, displayAmt - retAmt);
                     return `<tr>
-                        <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoiceDate || inv.date || inv.createdAt || inv.created_at || '---')}</td>
+                        <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoiceDate || inv.date || inv.invoice_date || inv.createdAt || inv.created_at || '---')}</td>
                         <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoiceNo)}</td>
                         <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(displayAmt)}</td>
-                        <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(slipNo || '---')}</td>
+                        <td class="px-2 py-1 text-center" style="border: 1px solid #000; padding: 5px 6px; word-break: break-word;">${escapeHtml(slipNo || '---')}</td>
                         <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
-                        <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(retAmt > 0 ? returnedItemsText : (totalRet > 0 ? String(totalRet) : '---'))}</td>
-                        <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(rsDetails || '---')}</td>
+                        <td class="px-2 py-1 text-left" style="border: 1px solid #000; padding: 5px 6px; word-break: break-word;">${escapeHtml(retAmt > 0 ? returnedItemsText : (totalRet > 0 ? String(totalRet) : '---'))}</td>
                         <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">${escapeHtml(remarks)}</td>
                         <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">PAID</td>
                         <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
@@ -1940,23 +1940,22 @@
                                 <td style="width: 50%; text-align: right;"><span style="font-weight: bold;">VOUCHER NO.:</span> ${escapeHtml($('pcv-voucher-no').textContent.trim())}</td>
                             </tr>
                             <tr>
-                                <td><span style="font-weight: bold;">ADDRESS:</span> ${escapeHtml(currentSupplier.address || '---')}</td>
-                                <td style="text-align: right;"><span style="font-weight: bold;">DATE:</span> ${$('pcv-voucher-date').textContent.trim()}</td>
+                                <td style="width: 50%;"><span style="font-weight: bold;">ADDRESS:</span> ${escapeHtml(currentSupplier.address || '---')}</td>
+                                <td style="width: 50%; text-align: right;"><span style="font-weight: bold;">DATE:</span> ${$('pcv-voucher-date').textContent.trim()}</td>
                             </tr>
                         </table>
                         <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 8px;">
                             <thead>
                                 <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
-                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000;">INVOICE DATE</th>
-                                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">INVOICE NO.</th>
-                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">AMOUNT</th>
-                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">SLIP NO.</th>
-                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURN AMOUNT</th>
-                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">RETURNED ITEMS</th>
-                                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000;">RS DETAILS</th>
-                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">REMARKS</th>
-                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000;">STATUS</th>
-                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000;">TOTAL AMOUNT</th>
+                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-left: 1px solid #000; border-right: 1px solid #000; width: 11%;">INVOICE DATE</th>
+                                    <th style="padding: 5px 3px; text-align: left; font-weight: bold; border-right: 1px solid #000; width: 12%;">INVOICE NO.</th>
+                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 10%;">AMOUNT</th>
+                                    <th style="padding: 5px 6px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 14%;">SLIP NO.</th>
+                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 10%;">RETURN AMOUNT</th>
+                                    <th style="padding: 5px 6px; text-align: left; font-weight: bold; border-right: 1px solid #000; width: 23%;">RETURNED ITEMS</th>
+                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 7%;">REMARKS</th>
+                                    <th style="padding: 5px 3px; text-align: center; font-weight: bold; border-right: 1px solid #000; width: 6%;">STATUS</th>
+                                    <th style="padding: 5px 3px; text-align: right; font-weight: bold; border-right: 1px solid #000; width: 11%;">TOTAL AMOUNT</th>
                                 </tr>
                             </thead>
                             <tbody>${invoiceRows}</tbody>
@@ -3167,13 +3166,14 @@
                         const totalRet = Number(inv.total_returns || 0);
                         const totalAmountAfterReturn = Math.max(0, invAmt - retAmt);
                         return `<tr>
+                            <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.invoice_date || inv.invoiceDate || inv.date || inv.created_at || '---')}</td>
                             <td class="px-2 py-1" style="border: 1px solid #000;">${escapeHtml(inv.invoice_no)}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${peso.format(invAmt)}</td>
-                            <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.slip_no || '---')}</td>
+                            <td class="px-2 py-1 text-center" style="border: 1px solid #000; padding: 5px 6px; word-break: break-word;">${escapeHtml(inv.slip_no || '---')}</td>
                             <td class="px-2 py-1 text-right" style="border: 1px solid #000;">${retAmt > 0 ? peso.format(retAmt) : '---'}</td>
-                            <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
-                            <td class="px-2 py-1 text-left" style="border: 1px solid #000;">${escapeHtml(inv.rs_details || '---')}</td>
+                            <td class="px-2 py-1 text-left" style="border: 1px solid #000; padding: 5px 6px; word-break: break-word;">${escapeHtml(inv.returned_items || (totalRet > 0 ? String(totalRet) : '---'))}</td>
                             <td class="px-2 py-1 text-center" style="border: 1px solid #000;">${escapeHtml(inv.remarks || '---')}</td>
+                            <td class="px-2 py-1 text-center font-bold" style="border: 1px solid #000;">Paid</td>
                             <td class="px-2 py-1 text-right font-bold" style="border: 1px solid #000;">${peso.format(totalAmountAfterReturn)}</td>
                         </tr>`;
                     }).join('');

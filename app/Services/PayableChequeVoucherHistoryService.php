@@ -289,8 +289,8 @@ class PayableChequeVoucherHistoryService
             $totals = [];
             foreach ($returnRows as $returnRow) {
                 foreach ($returnItemsByReturnId->get($returnRow->id, collect()) as $item) {
-                    $code = trim((string) ($item->product_code ?: $item->description ?: 'Item'));
-                    $totals[$code] = ($totals[$code] ?? 0) + (float) ($item->quantity ?? 0);
+                    $desc = trim((string) ($item->description ?: $item->product_code ?: 'Item'));
+                    $totals[$desc] = ($totals[$desc] ?? 0) + (float) ($item->quantity ?? 0);
                 }
             }
 
