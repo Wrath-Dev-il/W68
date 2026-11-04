@@ -128,8 +128,10 @@ class PurchaseReturnProductLedgerService
                     $this->shiftBalancesAfter($productId, $returnDate, (int) $outLedgerId, -$outQty);
                 }
 
-                if ($junkQty > 0) {
-                    // JUNK is informational only. Its balance is copied from
+                if ($junkQty > 0 || $returnQty === 0) {
+                    // JUNK is informational only. A zero-quantity return still
+                    // gets a ledger audit row with junk = 0 and no stock effect.
+                    // Its balance is copied from
                     // the ledger state immediately before the new JUNK row and
                     // NO later balances are changed.
                     $junkBalance = $this->balanceImmediatelyBeforeNewRow($productId, $returnDate);
