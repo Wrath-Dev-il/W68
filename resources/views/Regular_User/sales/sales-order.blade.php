@@ -568,7 +568,7 @@
                 <div class="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
                     <i data-lucide="percent" class="w-5 h-5 text-amber-600"></i>
                     <label class="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Additional Discount (%)</label>
-                    <input type="number" id="proceed-addl-discount" value="0" min="0" max="100" step="0.01" class="w-20 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                    <input type="number" id="proceed-addl-discount" value="0" step="any" class="w-20 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
                 </div>
             </div>
         </div>
@@ -1138,9 +1138,7 @@
                                 <input type="number"
                                        id="edit-so-addl-discount"
                                        value="0"
-                                       min="0"
-                                       max="100"
-                                       step="0.01"
+                                       step="any"
                                        class="w-16 px-2 py-1 border border-amber-300 rounded-lg text-xs text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
                             </div>
 <p class="text-[10px] text-slate-400 font-bold uppercase">Total Amount:</p>

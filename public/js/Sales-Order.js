@@ -455,7 +455,7 @@ window.changeHistoryPerPage = function(val) {
 window.updateProceedStep2Totals = function() {
     let grossTotal = 0;
     let netTotal = 0;
-    const addlDisc = Math.max(0, Math.min(100, parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0));
+    const addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
 
     document.querySelectorAll('#proceed-items-tbody tr').forEach(row => {
         const checkbox = row.querySelector('.p-item-checkbox');
@@ -1077,7 +1077,7 @@ window.submitPrintReceipt = async function() {
                 const storedSubtotal = parseFloat(item.subtotal) || 0;
                 const rate = parseFloat(item.additional_discount) || 0;
                 // Reverse-calculate the "before additional discount" subtotal
-                const subtotalBeforeAddl = rate > 0 ? Math.round(storedSubtotal / (1 - rate / 100) * 100) / 100 : storedSubtotal;
+                const subtotalBeforeAddl = rate !== 0 ? Math.round(storedSubtotal / (1 - rate / 100) * 100) / 100 : storedSubtotal;
                 return {
                     // W68_PRINT_HISTORY_PRODUCT_ID_20260911
                     // Send Product Master ID so Brand/category can be resolved.

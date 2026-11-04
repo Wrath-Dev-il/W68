@@ -455,7 +455,7 @@ window.changeHistoryPerPage = function(val) {
 window.updateProceedStep2Totals = function() {
     let grossTotal = 0;
     let netTotal = 0;
-    const addlDisc = Math.max(0, Math.min(100, parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0));
+    const addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
 
     document.querySelectorAll('#proceed-items-tbody tr').forEach(row => {
         const checkbox = row.querySelector('.p-item-checkbox');
@@ -483,6 +483,74 @@ function getLocalSalesOrderDateValue() {
     const pad = (value) => String(value).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
+
+// W68_SALES_ORDER_TERMS_DUE_DATE_20260930
+function calculateSalesOrderDueDate(orderDateValue, termsValue) {
+    const termsText = String(termsValue ?? '').trim();
+
+    if (termsText === '' || !/^\d+$/.test(termsText)) {
+        return '';
+    }
+
+    const baseText = String(orderDateValue || '').trim() || getLocalSalesOrderDateValue();
+    const match = baseText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+        return '';
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+
+    const due = new Date(year, month - 1, day);
+
+    if (
+        due.getFullYear() !== year ||
+        due.getMonth() !== month - 1 ||
+        due.getDate() !== day
+    ) {
+        return '';
+    }
+
+    due.setDate(due.getDate() + Number(termsText));
+
+    return due.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    });
+}
+
+function refreshSalesOrderDueDate(prefix) {
+    const orderDateInput = document.getElementById(`${prefix}-order-date`);
+    const termsInput = document.getElementById(`${prefix}-terms`);
+    const dueDateInput = document.getElementById(`${prefix}-due-date`);
+
+    if (!dueDateInput) {
+        return;
+    }
+
+    const orderDate = orderDateInput?.value || getLocalSalesOrderDateValue();
+    const terms = termsInput?.value ?? '';
+
+    dueDateInput.value = calculateSalesOrderDueDate(orderDate, terms);
+}
+
+function handleSalesOrderDueDateChange(event) {
+    const id = event.target?.id || '';
+
+    if (id === 'proceed-order-date' || id === 'proceed-terms') {
+        refreshSalesOrderDueDate('proceed');
+    }
+
+    if (id === 'edit-so-order-date' || id === 'edit-so-terms') {
+        refreshSalesOrderDueDate('edit-so');
+    }
+}
+
+document.addEventListener('input', handleSalesOrderDueDateChange);
+document.addEventListener('change', handleSalesOrderDueDateChange);
 
 function normalizeSalesOrderPrintDate(value) {
     const raw = String(value || '').trim();
@@ -545,6 +613,19 @@ window.openProceedModal = async function(noteId) {
                 // A new Sales Order starts with today's date, not the Sales Note date.
                 orderDateInput.value = getLocalSalesOrderDateValue();
             }
+
+            const proceedTermsInput = document.getElementById('proceed-terms');
+            if (proceedTermsInput) {
+                proceedTermsInput.value = '';
+            }
+
+            const proceedOrderTypeInput = document.getElementById('proceed-order-type');
+            if (proceedOrderTypeInput) {
+                proceedOrderTypeInput.value = 'NONE';
+            }
+
+            refreshSalesOrderDueDate('proceed');
+
             window._processedSalesOrderDate = '';
             window._processedSalesOrderId = null;
             
@@ -860,14 +941,41 @@ window.finalizeSalesOrder = async function() {
             if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Yes, Confirm'; }
             return;
         }
-        const orderDate = document.getElementById('proceed-order-date')?.value || '';
+        let orderDate = document.getElementById('proceed-order-date')?.value || '';
+
         if (!orderDate) {
-            alert('Please select the Sales Order date.');
+            orderDate = getLocalSalesOrderDateValue();
+
+            const orderDateInput = document.getElementById('proceed-order-date');
+            if (orderDateInput) {
+                orderDateInput.value = orderDate;
+            }
+        }
+
+        const termsText = String(document.getElementById('proceed-terms')?.value ?? '').trim();
+
+        if (termsText !== '' && !/^\d+$/.test(termsText)) {
+            alert('Terms must be a whole number of days.');
             window._proceedingOrder = false;
             if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Yes, Confirm'; }
             return;
         }
-        
+
+        const terms = termsText === '' ? null : parseInt(termsText, 10);
+
+        const orderType = String(
+            document.getElementById('proceed-order-type')?.value || 'NONE'
+        ).trim().toUpperCase();
+
+        if (!['NONE', 'COD', 'COD 30 DAYS'].includes(orderType)) {
+            alert('Invalid Order Type.');
+            window._proceedingOrder = false;
+            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Yes, Confirm'; }
+            return;
+        }
+
+        refreshSalesOrderDueDate('proceed');
+
         const addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
         const items = Array.from(document.querySelectorAll('#proceed-items-tbody tr'))
             .filter(row => {
@@ -905,6 +1013,8 @@ window.finalizeSalesOrder = async function() {
                 sales_note_id: window._proceedNoteId, 
                 invoice_number: invoiceNumber,
                 order_date: orderDate,
+                terms: terms,
+                order_type: orderType,
                 items: items 
             }),
         });
@@ -958,7 +1068,7 @@ window.submitPrintReceipt = async function() {
             // History detail returns the exact sales_orders.id. Send it to print so
             // the server can re-read sales_orders.created_at as the authoritative date.
             printSalesOrderId = note.id || window._historyPrintOrderId || null;
-            printInvoiceNumber = note.invoice_number || '';
+            printInvoiceNumber = note.invoice_number || note.invoice_no || note.invoice_numbers || '';
             
             // Read additional discount rate from stored items
             addlDiscRate = (note.items && note.items.length > 0) ? parseFloat(note.items[0].additional_discount) || 0 : 0;
@@ -967,8 +1077,11 @@ window.submitPrintReceipt = async function() {
                 const storedSubtotal = parseFloat(item.subtotal) || 0;
                 const rate = parseFloat(item.additional_discount) || 0;
                 // Reverse-calculate the "before additional discount" subtotal
-                const subtotalBeforeAddl = rate > 0 ? Math.round(storedSubtotal / (1 - rate / 100) * 100) / 100 : storedSubtotal;
+                const subtotalBeforeAddl = rate !== 0 ? Math.round(storedSubtotal / (1 - rate / 100) * 100) / 100 : storedSubtotal;
                 return {
+                    // W68_PRINT_HISTORY_PRODUCT_ID_20260911
+                    // Send Product Master ID so Brand/category can be resolved.
+                    product_id: parseInt(item.product_id || '0', 10) || null,
                     product_code: item.product_code || '',
                     price_code: item.price_code || '',
                     description: item.description || '',
@@ -1016,6 +1129,9 @@ window.submitPrintReceipt = async function() {
                 const printSubtotal = actualQty * price * (1 - disc / 100);
                 const pCodeInput = row.querySelector('.p-item-code');
                 return {
+                    // W68_PRINT_PROCEED_PRODUCT_ID_20260911
+                    // Send Product Master ID so Brand/category can be resolved.
+                    product_id: parseInt(row.getAttribute('data-product-id') || '0', 10) || null,
                     product_code: pCodeInput?.dataset?.originalCode || pCodeInput?.value || '',
                     price_code: row.querySelector('.p-item-price-code')?.value || '',
                     description: row.querySelector('.p-item-desc')?.value || '',
@@ -1319,6 +1435,7 @@ window.resetOnlineReportModal = function() {
     window._onlineReportIds = [];
     window._onlineReportCounterParts = {};
     window._onlineReportAddedItems = {};
+    window._onlineReportAvailableNotes = [];
 
     document.querySelector('#online-report-modal h3').textContent = 'Online Report Generation';
     document.getElementById('online-report-subtitle').textContent = 'Step 1: Basic Info';
@@ -1338,6 +1455,10 @@ window.resetOnlineReportModal = function() {
     document.getElementById('or-notes-tbody').innerHTML = '<tr><td colspan="3" class="p-6 text-center text-slate-300 italic">No sales notes loaded.</td></tr>';
     document.getElementById('or-items-container').innerHTML = '';
     document.getElementById('or-items-loading').classList.add('hidden');
+    const editDateWrap = document.getElementById('or-edit-invoice-date-wrap');
+    const editDateInput = document.getElementById('or-edit-invoice-date');
+    if (editDateWrap) editDateWrap.classList.add('hidden');
+    if (editDateInput) editDateInput.value = '';
     _dateRangeRowCount = 0;
     const onlineTotal = document.getElementById('or-total-amount');
     if (onlineTotal) onlineTotal.textContent = '₱ 0.00';
@@ -1367,21 +1488,44 @@ window.openOnlineReportEdit = async function(reportId) {
             : {};
         window._onlineReportAddedItems = {};
         window._onlineReportEditData = data;
+        window._onlineReportAvailableNotes = Array.isArray(data.available_online_notes)
+            ? data.available_online_notes
+            : [];
 
-        // Populate Step 1: invoice numbers, addresses, date ranges
+        const editDateWrap = document.getElementById('or-edit-invoice-date-wrap');
+        const editDateInput = document.getElementById('or-edit-invoice-date');
+        if (editDateWrap) editDateWrap.classList.remove('hidden');
+        if (editDateInput) editDateInput.value = data.report?.invoice_date || '';
+
+        // Populate Step 1: ONLINE Sales Note/customer, invoice numbers, addresses
         const tbody = document.getElementById('or-notes-tbody');
         if (notes.length > 0) {
-            tbody.innerHTML = notes.map((note, idx) => `
-                <tr class="or-note-row" data-idx="${idx}">
-                    <td class="p-3 px-4 font-bold text-slate-800">${note.sales_number || '---'}</td>
-                    <td class="p-3 px-4"><input type="text" class="or-invoice-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${(note.invoice_no || '').replace(/"/g, '&quot;')}"></td>
-                    <td class="p-3 px-4"><input type="text" class="or-address-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${(note.address || '').replace(/"/g, '&quot;')}"></td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = notes.map((note, idx) => {
+                const available = Array.isArray(window._onlineReportAvailableNotes) ? window._onlineReportAvailableNotes : [];
+                const currentExists = available.some(opt => Number(opt.id) === Number(note.id));
+                const currentFallback = currentExists ? '' : '<option value="' + Number(note.id) + '" selected>' + escapeHtml(note.sales_number || '---') + ' — ' + escapeHtml(note.customer_name || '---') + ' (CURRENT)</option>';
+                const options = available.map(function(opt) {
+                    const selected = Number(opt.id) === Number(note.id) ? ' selected' : '';
+                    const label = (opt.sales_number || '---') + ' — ' + (opt.customer_name || '---');
+                    return '<option value="' + Number(opt.id) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+                }).join('');
+
+                return `
+                    <tr class="or-note-row" data-idx="${idx}">
+                        <td class="p-3 px-4 min-w-[280px]">
+                            <select class="or-note-select w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon bg-white" onchange="changeOnlineReportNote(${idx}, this.value)">
+                                ${currentFallback}${options}
+                            </select>
+                            <div class="or-note-customer mt-1 text-[10px] font-semibold text-maroon/70">${escapeHtml(note.customer_name || '---')}</div>
+                        </td>
+                        <td class="p-3 px-4"><input type="text" class="or-invoice-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${escapeHtml(note.invoice_no || '')}"></td>
+                        <td class="p-3 px-4"><input type="text" class="or-address-input w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" value="${escapeHtml(note.address || '')}"></td>
+                    </tr>
+                `;
+            }).join('');
         } else {
             tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-slate-300 italic">No sales notes found.</td></tr>';
         }
-
         // Populate date ranges
         const dateRanges = data.date_ranges || [];
         document.getElementById('date-range-container').innerHTML = '';
@@ -1427,7 +1571,9 @@ window.openOnlineReportEdit = async function(reportId) {
             return {
                 id: note.id,
                 sales_number: note.sales_number,
+                customer_id: Number(note.customer_id || 0),
                 customer_name: note.customer_name,
+                order_date: note.order_date || '',
                 net_total: netTotal,
                 items: [],
             };
@@ -1455,6 +1601,23 @@ window.openOnlineReportEdit = async function(reportId) {
     }
 };
 
+window.changeOnlineReportNote = function(noteIdx, noteId) {
+    const idx = Number(noteIdx);
+    const selectedId = Number(noteId);
+    const available = Array.isArray(window._onlineReportAvailableNotes) ? window._onlineReportAvailableNotes : [];
+    const selected = available.find(function(note) { return Number(note.id) === selectedId; });
+    if (!selected || !_onlineReportNotes[idx]) return;
+
+    _onlineReportNotes[idx].id = selectedId;
+    _onlineReportNotes[idx].sales_number = selected.sales_number || '';
+    _onlineReportNotes[idx].customer_id = Number(selected.customer_id || 0);
+    _onlineReportNotes[idx].customer_name = selected.customer_name || '';
+    _onlineReportNotes[idx].order_date = selected.order_date || '';
+
+    const row = document.querySelector('#or-notes-tbody .or-note-row[data-idx="' + idx + '"]');
+    const customerLabel = row?.querySelector('.or-note-customer');
+    if (customerLabel) customerLabel.textContent = selected.customer_name || '---';
+};
 function net_total_from_items(items, prices) {
     let total = 0;
     (items || []).forEach(function(item) {
@@ -1529,6 +1692,13 @@ window.updateOnlineReport = async function() {
     try {
         const reportId = window._editingReportId;
         if (!reportId) { alert('No report selected for update.'); return; }
+
+        const invoiceDate = document.getElementById('or-edit-invoice-date')?.value || '';
+        if (!invoiceDate) {
+            alert('Please select the Online Invoice date.');
+            toggleModal('online-report-modal', true);
+            return;
+        }
 
         // Collect data same as generateOnlineReceipt
         const prices = {};
@@ -1632,6 +1802,7 @@ window.updateOnlineReport = async function() {
 
         const payload = {
             data: {
+                invoice_date: invoiceDate,
                 date_ranges: dateRanges,
                 prices: prices,
                 invoice_numbers: invoiceNumbers,
@@ -1658,7 +1829,7 @@ window.updateOnlineReport = async function() {
         if (data.success) {
             const notice = document.createElement('div');
             notice.className = 'fixed top-4 right-4 z-[9999] bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl text-sm font-bold animate-fade-in';
-            notice.textContent = 'Online Invoice updated successfully.';
+            notice.textContent = 'Online Invoice note, customer and date synchronized successfully.';
             document.body.appendChild(notice);
             setTimeout(function() { notice.remove(); }, 3000);
             fetchOiPage();
@@ -3413,7 +3584,26 @@ window.editSalesOrder = async function(salesOrderId) {
             document.getElementById('edit-so-date').textContent = so.order_date || '---';
             document.getElementById('edit-so-status').textContent = so.status || '---';
             const editOrderDateInput = document.getElementById('edit-so-order-date');
-            if (editOrderDateInput) editOrderDateInput.value = so.order_date || '';
+            if (editOrderDateInput) {
+                editOrderDateInput.value = so.order_date || getLocalSalesOrderDateValue();
+            }
+
+            const editTermsInput = document.getElementById('edit-so-terms');
+            if (editTermsInput) {
+                editTermsInput.value = so.terms === null || so.terms === undefined
+                    ? ''
+                    : String(so.terms);
+            }
+
+            const editOrderTypeInput = document.getElementById('edit-so-order-type');
+            if (editOrderTypeInput) {
+                const savedOrderType = String(so.order_type || 'NONE').trim().toUpperCase();
+                editOrderTypeInput.value = ['NONE', 'COD', 'COD 30 DAYS'].includes(savedOrderType)
+                    ? savedOrderType
+                    : 'NONE';
+            }
+
+            refreshSalesOrderDueDate('edit-so');
 
             // Invoice numbers
             const invField = document.getElementById('edit-so-invoices');
@@ -3574,11 +3764,37 @@ window.confirmEditSalesOrder = async function() {
 
 window.finalizeEditSalesOrder = async function() {
     const invoices = document.getElementById('edit-so-invoices').value.split(',').map(v => v.trim()).filter(v => v);
-    const orderDate = document.getElementById('edit-so-order-date')?.value || '';
+    let orderDate = document.getElementById('edit-so-order-date')?.value || '';
+
     if (!orderDate) {
-        alert('Please select the Sales Order date.');
+        orderDate = getLocalSalesOrderDateValue();
+
+        const orderDateInput = document.getElementById('edit-so-order-date');
+        if (orderDateInput) {
+            orderDateInput.value = orderDate;
+        }
+    }
+
+    const termsText = String(document.getElementById('edit-so-terms')?.value ?? '').trim();
+
+    if (termsText !== '' && !/^\d+$/.test(termsText)) {
+        alert('Terms must be a whole number of days.');
         return;
     }
+
+    const terms = termsText === '' ? null : parseInt(termsText, 10);
+
+    const orderType = String(
+        document.getElementById('edit-so-order-type')?.value || 'NONE'
+    ).trim().toUpperCase();
+
+    if (!['NONE', 'COD', 'COD 30 DAYS'].includes(orderType)) {
+        alert('Invalid Order Type.');
+        return;
+    }
+
+    refreshSalesOrderDueDate('edit-so');
+
     const waybillNo = document.getElementById('edit-so-waybill-no').value.trim();
     const waybillDate = document.getElementById('edit-so-waybill-date').value;
     const remarks = document.getElementById('edit-so-remarks').value.trim();
@@ -3618,6 +3834,8 @@ window.finalizeEditSalesOrder = async function() {
             body: JSON.stringify({
                 invoices: invoices,
                 order_date: orderDate,
+                terms: terms,
+                order_type: orderType,
                 waybill_no: waybillNo,
                 waybill_date: waybillDate,
                 remarks: remarks,

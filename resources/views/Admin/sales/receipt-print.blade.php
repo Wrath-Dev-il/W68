@@ -558,21 +558,25 @@
         <div class="rush-text">{{ $rushText }}</div>
         @endif
 
-        @if($totalAddlDiscount > 0)
-        <table class="summary">
-            <tr><td class="lb">Additional Discount ({{ number_format($addlDiscountRate, 2) }}%):</td><td class="vl">{{ number_format($totalAddlDiscount, 2) }}</td></tr>
-        </table>
-        @endif
-
         @if($printType === 'invoice')
         <table class="summary invoice-financial-summary">
+            @if($totalAddlDiscount != 0 || $addlDiscountRate != 0)
+            <tr><td class="invoice-spacer invoice-reference">{{ $printInvoiceNumber }}</td><td class="invoice-label">ADDL DISC ({{ number_format($addlDiscountRate, 2) }}%):</td><td class="invoice-value">{{ $totalAddlDiscount < 0 ? '+' : '-' }}{{ number_format(abs($totalAddlDiscount), 2) }}</td></tr>
+            <tr><td class="invoice-spacer"></td><td class="invoice-label bd">NET OF VAT:</td><td class="invoice-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
+            @else
             <tr><td class="invoice-spacer invoice-reference">{{ $printInvoiceNumber }}</td><td class="invoice-label bd">NET OF VAT:</td><td class="invoice-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
+            @endif
             <tr><td class="invoice-spacer"></td><td class="invoice-label">VAT({{ number_format($vatRate, 2) }}%):</td><td class="invoice-value">{{ number_format($vatAmount, 2) }}</td></tr>
             <tr><td class="invoice-spacer"></td><td class="invoice-label bd">TOTAL AMOUNT DUE:</td><td class="invoice-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
         </table>
         @else
         <table class="summary order-financial-summary">
+            @if($totalAddlDiscount != 0 || $addlDiscountRate != 0)
+            <tr><td class="order-spacer order-reference">{{ $printInvoiceNumber }}</td><td class="order-label">ADDL DISC ({{ number_format($addlDiscountRate, 2) }}%):</td><td class="order-value">{{ $totalAddlDiscount < 0 ? '+' : '-' }}{{ number_format(abs($totalAddlDiscount), 2) }}</td></tr>
+            <tr><td class="order-spacer"></td><td class="order-label bd">INVOICE AMOUNT:</td><td class="order-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            @else
             <tr><td class="order-spacer order-reference">{{ $printInvoiceNumber }}</td><td class="order-label bd">INVOICE AMOUNT:</td><td class="order-value bd">{{ number_format($netAfterAddl, 2) }}</td></tr>
+            @endif
             <tr><td class="order-spacer"></td><td class="order-label bd">NET AMOUNT:</td><td class="order-value bd">{{ number_format($grandTotal, 2) }}</td></tr>
         </table>
         @endif

@@ -17998,7 +17998,7 @@ Route::post('/admin/sales/sales-order/update/{salesOrderId}', function (Request 
             'items.*.oum' => 'nullable|string',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.discount' => 'nullable|numeric|min:0',
-            'items.*.additional_discount' => 'nullable|numeric|min:0',
+            'items.*.additional_discount' => 'nullable|numeric',
             'items.*.price_code' => 'nullable|string',
             'items.*.subtotal' => 'required|numeric|min:0',
             'items.*.particulars' => 'nullable|string',
