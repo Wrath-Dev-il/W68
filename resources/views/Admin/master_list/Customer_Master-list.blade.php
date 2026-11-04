@@ -67,13 +67,16 @@
                 <i data-lucide="users" class="w-6 h-6 text-gold"></i>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+        <div id="stat-card-auth-no-acct" onclick="filterWssStatus('auth_no_account')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:border-blue-500 hover:shadow-md group relative" title="Click to filter customers with QR authorization but no Special Store account">
             <div class="space-y-1">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Regular</span>
-                <h3 id="stat-total-regular" class="text-2xl font-extrabold text-blue-600">0</h3>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">WSS AUTH W/O ACCT</span>
+                    <span id="badge-auth-no-acct-active" class="hidden px-1.5 py-0.5 text-[8px] font-bold uppercase rounded-full bg-blue-100 text-blue-700">Active</span>
+                </div>
+                <h3 id="stat-total-auth-no-account" class="text-2xl font-extrabold text-blue-600">0</h3>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg">
-                <i data-lucide="user-check" class="w-6 h-6 text-gold"></i>
+            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                <i data-lucide="key" class="w-6 h-6 text-gold"></i>
             </div>
         </div>
         <div id="stat-card-wss" onclick="filterWssStatus('wss')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500 hover:shadow-md group relative" title="Click to filter WSS customers (Registered)">

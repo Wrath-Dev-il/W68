@@ -2023,6 +2023,44 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         $allRegisteredCustomerIds = collect();
     }
 
+    // Customers with QR authorization token but WITHOUT a Special Store account
+    $authNoAccountIds = collect();
+    try {
+        if (\Illuminate\Support\Facades\Schema::connection('masterlist')->hasTable('customer_portal_authorizations')) {
+            $allAuthorizedIds = DB::connection('masterlist')
+                ->table('customer_portal_authorizations')
+                ->pluck('customer_id')
+                ->map(fn ($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values();
+
+            $authNoAccountIds = $allAuthorizedIds->diff($allRegisteredCustomerIds)->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $authNoAccountIds = collect();
+    }
+
+    // Customers with QR authorization token but WITHOUT a Special Store account
+    $authNoAccountIds = collect();
+    try {
+        if (\Illuminate\Support\Facades\Schema::connection('masterlist')->hasTable('customer_portal_authorizations')) {
+            $allAuthorizedIds = DB::connection('masterlist')
+                ->table('customer_portal_authorizations')
+                ->pluck('customer_id')
+                ->map(fn ($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values();
+
+            $authNoAccountIds = $allAuthorizedIds->diff($allRegisteredCustomerIds)->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $authNoAccountIds = collect();
+    }
+
     // WSS Customer / Special Store Account filter (Registered vs Not Registered)
     $wssFilter = trim((string) ($request->query('wss_status', $request->query('wss_filter', $search['wss_status'] ?? ''))));
     if ($wssFilter === 'wss' || $wssFilter === 'registered') {
@@ -2035,6 +2073,18 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         if ($allRegisteredCustomerIds->isNotEmpty()) {
             $query->whereNotIn('id', $allRegisteredCustomerIds->all());
         }
+    } elseif ($wssFilter === 'auth_no_account') {
+        if ($authNoAccountIds->isNotEmpty()) {
+            $query->whereIn('id', $authNoAccountIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+    } elseif ($wssFilter === 'auth_no_account') {
+        if ($authNoAccountIds->isNotEmpty()) {
+            $query->whereIn('id', $authNoAccountIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
+        }
     }
 
     $totalMatching = $query->count();
@@ -2043,6 +2093,9 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         ? \App\Models\Customer::whereIn('id', $allRegisteredCustomerIds->all())->count()
         : 0;
     $nonWssCount = max(0, $totalCustomers - $wssCount);
+    $authNoAccountCount = $authNoAccountIds->isNotEmpty()
+        ? \App\Models\Customer::whereIn('id', $authNoAccountIds->all())->count()
+        : 0;
 
     $stats = [
         'total' => $totalCustomers,
@@ -2051,10 +2104,31 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         'non_wss' => $nonWssCount,
         'b2b' => $wssCount,
         'casual' => $nonWssCount,
+        'auth_no_account' => $authNoAccountCount,
     ];
 
+    $sortBy = trim((string) $request->query('sort_by', ''));
+    $sortDir = strtolower(trim((string) $request->query('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+
+    if ($sortBy === 'auth_no_account' && $authNoAccountIds->isNotEmpty()) {
+        $idList = implode(',', $authNoAccountIds->all());
+        if ($sortDir === 'desc') {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END DESC");
+        } else {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END ASC");
+        }
+    } elseif (($sortBy === 'wss' || $sortBy === 'portal_account') && $allRegisteredCustomerIds->isNotEmpty()) {
+        $idList = implode(',', $allRegisteredCustomerIds->all());
+        if ($sortDir === 'desc') {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END DESC");
+        } else {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END ASC");
+        }
+    }
+    $query->orderByDesc('created_at')->orderByDesc('id');
+
     if ($perPageInput === 'all') {
-        $customers = $query->orderByDesc('created_at')->orderByDesc('id')->get();
+        $customers = $query->get();
         $pagination = [
             'current_page' => 1,
             'last_page' => 1,
@@ -2591,6 +2665,25 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         });
     }
 
+    // Customers with QR authorization token but WITHOUT a Special Store account
+    $authNoAccountIds = collect();
+    try {
+        if (\Illuminate\Support\Facades\Schema::connection('masterlist')->hasTable('customer_portal_authorizations')) {
+            $allAuthorizedIds = DB::connection('masterlist')
+                ->table('customer_portal_authorizations')
+                ->pluck('customer_id')
+                ->map(fn ($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values();
+
+            $authNoAccountIds = $allAuthorizedIds->diff($allRegisteredCustomerIds)->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $authNoAccountIds = collect();
+    }
+
     // WSS Customer / Special Store Account filter (Registered vs Not Registered)
     $wssFilter = trim((string) ($request->query('wss_status', $request->query('wss_filter', $search['wss_status'] ?? ''))));
     if ($wssFilter === 'wss' || $wssFilter === 'registered') {
@@ -2602,6 +2695,12 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
     } elseif ($wssFilter === 'non_wss' || $wssFilter === 'unregistered') {
         if ($allRegisteredCustomerIds->isNotEmpty()) {
             $query->whereNotIn('id', $allRegisteredCustomerIds->all());
+        }
+    } elseif ($wssFilter === 'auth_no_account') {
+        if ($authNoAccountIds->isNotEmpty()) {
+            $query->whereIn('id', $authNoAccountIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
         }
     }
 
@@ -2668,6 +2767,9 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         ? \App\Models\Customer::whereIn('id', $allRegisteredCustomerIds->all())->count()
         : 0;
     $nonWssCount = max(0, $totalCustomers - $wssCount);
+    $authNoAccountCount = $authNoAccountIds->isNotEmpty()
+        ? \App\Models\Customer::whereIn('id', $authNoAccountIds->all())->count()
+        : 0;
 
     $stats = [
         'total' => $totalCustomers,
@@ -2676,13 +2778,21 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         'non_wss' => $nonWssCount,
         'b2b' => $wssCount,
         'casual' => $nonWssCount,
+        'auth_no_account' => $authNoAccountCount,
     ];
 
     // Sorting by WSS / Portal registration status if requested
     $sortBy = trim((string) $request->query('sort_by', ''));
     $sortDir = strtolower(trim((string) $request->query('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
 
-    if (($sortBy === 'wss' || $sortBy === 'portal_account') && $allRegisteredCustomerIds->isNotEmpty()) {
+    if ($sortBy === 'auth_no_account' && $authNoAccountIds->isNotEmpty()) {
+        $idList = implode(',', $authNoAccountIds->all());
+        if ($sortDir === 'desc') {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END DESC");
+        } else {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END ASC");
+        }
+    } elseif (($sortBy === 'wss' || $sortBy === 'portal_account') && $allRegisteredCustomerIds->isNotEmpty()) {
         $idList = implode(',', $allRegisteredCustomerIds->all());
         if ($sortDir === 'desc') {
             $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END DESC");

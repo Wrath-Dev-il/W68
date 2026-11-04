@@ -566,12 +566,12 @@ window.openEditModal = function(id) {
 
 function updateStats(stats = null) {
     const totalEl = document.getElementById('stat-total-customers');
-    const regularEl = document.getElementById('stat-total-regular');
+    const authNoAcctEl = document.getElementById('stat-total-auth-no-account') || document.getElementById('stat-total-regular');
     const wssEl = document.getElementById('stat-total-wss') || document.getElementById('stat-total-b2b');
     const nonWssEl = document.getElementById('stat-total-non-wss') || document.getElementById('stat-total-casual');
 
     if (totalEl) totalEl.textContent = stats ? stats.total : customers.length;
-    if (regularEl) regularEl.textContent = stats ? stats.regular : customers.filter(c => c.type === 'Regular').length;
+    if (authNoAcctEl) authNoAcctEl.textContent = stats ? (stats.auth_no_account ?? stats.regular ?? 0) : customers.filter(c => c?.portal?.active && !c?.portalAccount?.registered).length;
     if (wssEl) wssEl.textContent = stats ? (stats.wss ?? stats.b2b ?? 0) : customers.filter(c => c?.portalAccount?.registered).length;
     if (nonWssEl) nonWssEl.textContent = stats ? (stats.non_wss ?? stats.casual ?? 0) : customers.filter(c => !c?.portalAccount?.registered).length;
 }
@@ -601,8 +601,10 @@ window.toggleSortWss = function() {
 
 function updateWssCardUI() {
     const cardTotal = document.getElementById('stat-card-total');
+    const cardAuthNoAcct = document.getElementById('stat-card-auth-no-acct');
     const cardWss = document.getElementById('stat-card-wss');
     const cardNonWss = document.getElementById('stat-card-non-wss');
+    const badgeAuthNoAcct = document.getElementById('badge-auth-no-acct-active');
     const badgeWss = document.getElementById('badge-wss-active');
     const badgeNonWss = document.getElementById('badge-non-wss-active');
     const filterIndicator = document.getElementById('wss-filter-indicator');
@@ -614,6 +616,15 @@ function updateWssCardUI() {
         } else {
             cardTotal.classList.remove('ring-2', 'ring-slate-400', 'bg-slate-50/50');
         }
+    }
+
+    if (cardAuthNoAcct) {
+        const isActive = activeWssFilter === 'auth_no_account';
+        cardAuthNoAcct.classList.toggle('ring-2', isActive);
+        cardAuthNoAcct.classList.toggle('ring-blue-500', isActive);
+        cardAuthNoAcct.classList.toggle('border-blue-500', isActive);
+        cardAuthNoAcct.classList.toggle('bg-blue-50/40', isActive);
+        if (badgeAuthNoAcct) badgeAuthNoAcct.classList.toggle('hidden', !isActive);
     }
 
     if (cardWss) {
@@ -635,7 +646,10 @@ function updateWssCardUI() {
     }
 
     if (filterIndicator && filterIndicatorText) {
-        if (activeWssFilter === 'wss') {
+        if (activeWssFilter === 'auth_no_account') {
+            filterIndicator.classList.remove('hidden');
+            filterIndicatorText.textContent = 'Filtered: WSS Auth w/o Acct (Has Token, No Account)';
+        } else if (activeWssFilter === 'wss') {
             filterIndicator.classList.remove('hidden');
             filterIndicatorText.textContent = 'Filtered: WSS Customer (Special Store Registered)';
         } else if (activeWssFilter === 'non_wss') {
