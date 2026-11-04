@@ -58,7 +58,7 @@
 
     <!-- STATS GRID -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+        <div id="stat-card-total" onclick="filterWssStatus('')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:border-slate-300 hover:shadow-md" title="Click to view all customers">
             <div class="space-y-1">
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Customer</span>
                 <h3 id="stat-total-customers" class="text-2xl font-extrabold text-slate-800">0</h3>
@@ -76,29 +76,40 @@
                 <i data-lucide="user-check" class="w-6 h-6 text-gold"></i>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+        <div id="stat-card-wss" onclick="filterWssStatus('wss')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500 hover:shadow-md group relative" title="Click to filter WSS customers (Registered)">
             <div class="space-y-1">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">B2B Customer</span>
-                <h3 id="stat-total-b2b" class="text-2xl font-extrabold text-red-600">0</h3>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">WSS CUSTOMER</span>
+                    <span id="badge-wss-active" class="hidden px-1.5 py-0.5 text-[8px] font-bold uppercase rounded-full bg-emerald-100 text-emerald-700">Active</span>
+                </div>
+                <h3 id="stat-total-wss" class="text-2xl font-extrabold text-emerald-600">0</h3>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg">
-                <i data-lucide="building-2" class="w-6 h-6 text-gold"></i>
+            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                <i data-lucide="store" class="w-6 h-6 text-gold"></i>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+        <div id="stat-card-non-wss" onclick="filterWssStatus('non_wss')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:border-amber-500 hover:shadow-md group relative" title="Click to filter Non WSS customers (Not Registered)">
             <div class="space-y-1">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Casual</span>
-                <h3 id="stat-total-casual" class="text-2xl font-extrabold text-emerald-600">0</h3>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">NON WSS CUSTOMER</span>
+                    <span id="badge-non-wss-active" class="hidden px-1.5 py-0.5 text-[8px] font-bold uppercase rounded-full bg-amber-100 text-amber-700">Active</span>
+                </div>
+                <h3 id="stat-total-non-wss" class="text-2xl font-extrabold text-amber-600">0</h3>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg">
-                <i data-lucide="user-plus" class="w-6 h-6 text-gold"></i>
+            <div class="w-12 h-12 rounded-xl bg-maroon-gradient flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                <i data-lucide="user-x" class="w-6 h-6 text-gold"></i>
             </div>
         </div>
     </div>
 
-    <!-- MAIN SEARCH FOR LIST -->
-    <div class="flex justify-end">
-        <div class="relative w-full max-w-md">
+    <!-- MAIN SEARCH & FILTER FOR LIST -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div id="wss-filter-indicator" class="hidden flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 rounded-full border border-slate-200 text-xs font-semibold text-slate-700">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="wss-filter-indicator-text">Filtered: WSS Customer</span>
+            <button onclick="filterWssStatus('')" class="ml-1 text-slate-400 hover:text-slate-600 font-bold leading-none" title="Clear filter">&times;</button>
+        </div>
+        <div class="relative w-full max-w-md ml-auto">
             <input type="text" id="main-search-input" onkeyup="filterMainSearch()" placeholder="Search by name, person or address..." class="w-full px-5 py-3 pl-12 bg-white border border-slate-200 rounded-2xl text-sm shadow-sm outline-none focus:border-maroon focus:ring-4 focus:ring-maroon/5 transition-all">
             <i data-lucide="search" class="w-5 h-5 absolute left-4 top-3 text-slate-400"></i>
         </div>
@@ -112,7 +123,7 @@
                     <tr class="bg-slate-50/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                         <th class="py-5 px-6">QR Code Picture</th>
                         <th class="py-5 px-6">Name</th>
-                        <th class="py-5 px-6">Pricelist Account</th>
+                        <th class="py-5 px-6 cursor-pointer select-none hover:text-slate-600" onclick="toggleSortWss()" title="Click to sort by Pricelist Account">Pricelist Account <i data-lucide="arrow-up-down" class="inline w-3 h-3 ml-1 text-slate-400"></i></th>
                         <th class="py-5 px-6">QR Validation</th>
                         <th class="py-5 px-6">QR Remaining Time</th>
                         <th class="py-5 px-6">Contact No#</th>

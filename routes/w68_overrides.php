@@ -2000,13 +2000,57 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         });
     }
 
+    $totalCustomers = \App\Models\Customer::count();
+    $allRegisteredCustomerIds = collect();
+    try {
+        if (
+            \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+        ) {
+            $allRegisteredCustomerIds = DB::connection('system')
+                ->table('customer_portal_accounts as cpa')
+                ->join('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+                ->where('l.account_type', 5)
+                ->whereNotNull('cpa.customer_id')
+                ->pluck('cpa.customer_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter()
+                ->unique()
+                ->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $allRegisteredCustomerIds = collect();
+    }
+
+    // WSS Customer / Special Store Account filter (Registered vs Not Registered)
+    $wssFilter = trim((string) ($request->query('wss_status', $request->query('wss_filter', $search['wss_status'] ?? ''))));
+    if ($wssFilter === 'wss' || $wssFilter === 'registered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereIn('id', $allRegisteredCustomerIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+    } elseif ($wssFilter === 'non_wss' || $wssFilter === 'unregistered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereNotIn('id', $allRegisteredCustomerIds->all());
+        }
+    }
+
     $totalMatching = $query->count();
 
+    $wssCount = $allRegisteredCustomerIds->isNotEmpty()
+        ? \App\Models\Customer::whereIn('id', $allRegisteredCustomerIds->all())->count()
+        : 0;
+    $nonWssCount = max(0, $totalCustomers - $wssCount);
+
     $stats = [
-        'total' => \App\Models\Customer::count(),
+        'total' => $totalCustomers,
         'regular' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Regular'))->count(),
-        'b2b' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'B2B Customer'))->count(),
-        'casual' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Casual'))->count(),
+        'wss' => $wssCount,
+        'non_wss' => $nonWssCount,
+        'b2b' => $wssCount,
+        'casual' => $nonWssCount,
     ];
 
     if ($perPageInput === 'all') {
@@ -2507,6 +2551,29 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
     $page = max(1, (int) $request->query('page', 1));
     $perPageInput = $request->query('perPage', 50);
 
+    // Fetch all customer IDs registered in the Special Store account (system.logins account_type=5)
+    $allRegisteredCustomerIds = collect();
+    try {
+        if (
+            \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+        ) {
+            $allRegisteredCustomerIds = DB::connection('system')
+                ->table('customer_portal_accounts as cpa')
+                ->join('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+                ->where('l.account_type', 5)
+                ->whereNotNull('cpa.customer_id')
+                ->pluck('cpa.customer_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter()
+                ->unique()
+                ->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $allRegisteredCustomerIds = collect();
+    }
+
     $query = \App\Models\Customer::with(['type', 'bankAccount']);
 
     $searchableColumns = ['name', 'contact_number', 'contact_person', 'address'];
@@ -2522,6 +2589,20 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         $query->whereHas('type', function ($typeQuery) use ($typeSearch) {
             $typeQuery->where('name', 'LIKE', '%' . $typeSearch . '%');
         });
+    }
+
+    // WSS Customer / Special Store Account filter (Registered vs Not Registered)
+    $wssFilter = trim((string) ($request->query('wss_status', $request->query('wss_filter', $search['wss_status'] ?? ''))));
+    if ($wssFilter === 'wss' || $wssFilter === 'registered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereIn('id', $allRegisteredCustomerIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+    } elseif ($wssFilter === 'non_wss' || $wssFilter === 'unregistered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereNotIn('id', $allRegisteredCustomerIds->all());
+        }
     }
 
     // W68 Customer Master "Pricelist Account" column search.
@@ -2582,15 +2663,37 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
 
     $totalMatching = (clone $query)->count();
 
+    $totalCustomers = \App\Models\Customer::count();
+    $wssCount = $allRegisteredCustomerIds->isNotEmpty()
+        ? \App\Models\Customer::whereIn('id', $allRegisteredCustomerIds->all())->count()
+        : 0;
+    $nonWssCount = max(0, $totalCustomers - $wssCount);
+
     $stats = [
-        'total' => \App\Models\Customer::count(),
+        'total' => $totalCustomers,
         'regular' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Regular'))->count(),
-        'b2b' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'B2B Customer'))->count(),
-        'casual' => \App\Models\Customer::whereHas('type', fn ($q) => $q->where('name', 'Casual'))->count(),
+        'wss' => $wssCount,
+        'non_wss' => $nonWssCount,
+        'b2b' => $wssCount,
+        'casual' => $nonWssCount,
     ];
 
+    // Sorting by WSS / Portal registration status if requested
+    $sortBy = trim((string) $request->query('sort_by', ''));
+    $sortDir = strtolower(trim((string) $request->query('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+
+    if (($sortBy === 'wss' || $sortBy === 'portal_account') && $allRegisteredCustomerIds->isNotEmpty()) {
+        $idList = implode(',', $allRegisteredCustomerIds->all());
+        if ($sortDir === 'desc') {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END DESC");
+        } else {
+            $query->orderByRaw("CASE WHEN id IN ({$idList}) THEN 1 ELSE 0 END ASC");
+        }
+    }
+    $query->orderByDesc('created_at');
+
     if ($perPageInput === 'all') {
-        $customers = $query->orderByDesc('created_at')->get();
+        $customers = $query->get();
         $pagination = [
             'current_page' => 1,
             'last_page' => 1,
@@ -2606,7 +2709,6 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         $skip = ($page - 1) * $perPage;
 
         $customers = $query
-            ->orderByDesc('created_at')
             ->skip($skip)
             ->take($perPage)
             ->get();

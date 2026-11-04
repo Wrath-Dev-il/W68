@@ -8597,14 +8597,59 @@ Route::get('/admin/masterlist/customer/data', function (Request $request) {
         });
     }
 
+    // Fetch all customer IDs registered in the Special Store account (system.logins account_type=5)
+    $allRegisteredCustomerIds = collect();
+    try {
+        if (
+            \Illuminate\Support\Facades\Schema::connection('system')->hasTable('logins')
+            && \Illuminate\Support\Facades\Schema::connection('system')->hasTable('customer_portal_accounts')
+        ) {
+            $allRegisteredCustomerIds = DB::connection('system')
+                ->table('customer_portal_accounts as cpa')
+                ->join('logins as l', 'l.login_ID', '=', 'cpa.login_id')
+                ->where('l.account_type', 5)
+                ->whereNotNull('cpa.customer_id')
+                ->pluck('cpa.customer_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter()
+                ->unique()
+                ->values();
+        }
+    } catch (\Throwable $exception) {
+        report($exception);
+        $allRegisteredCustomerIds = collect();
+    }
+
+    // WSS Customer / Special Store Account filter (Registered vs Not Registered)
+    $wssFilter = trim((string) ($request->query('wss_status', $request->query('wss_filter', $search['wss_status'] ?? ''))));
+    if ($wssFilter === 'wss' || $wssFilter === 'registered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereIn('id', $allRegisteredCustomerIds->all());
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+    } elseif ($wssFilter === 'non_wss' || $wssFilter === 'unregistered') {
+        if ($allRegisteredCustomerIds->isNotEmpty()) {
+            $query->whereNotIn('id', $allRegisteredCustomerIds->all());
+        }
+    }
+
     $totalMatching = $query->count();
+
+    $totalCustomers = \App\Models\Customer::count();
+    $wssCount = $allRegisteredCustomerIds->isNotEmpty()
+        ? \App\Models\Customer::whereIn('id', $allRegisteredCustomerIds->all())->count()
+        : 0;
+    $nonWssCount = max(0, $totalCustomers - $wssCount);
 
     // Unfiltered stats
     $stats = [
-        'total' => \App\Models\Customer::count(),
+        'total' => $totalCustomers,
         'regular' => \App\Models\Customer::whereHas('type', fn($q) => $q->where('name', 'Regular'))->count(),
-        'b2b' => \App\Models\Customer::whereHas('type', fn($q) => $q->where('name', 'B2B Customer'))->count(),
-        'casual' => \App\Models\Customer::whereHas('type', fn($q) => $q->where('name', 'Casual'))->count(),
+        'wss' => $wssCount,
+        'non_wss' => $nonWssCount,
+        'b2b' => $wssCount,
+        'casual' => $nonWssCount,
     ];
 
     if ($perPageInput === 'all') {

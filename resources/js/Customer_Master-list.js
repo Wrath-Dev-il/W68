@@ -12,6 +12,8 @@ let perPage = 50;
 let pagination = null;
 let searchValues = {};
 let generalSearch = '';
+let activeWssFilter = '';
+let wssSortDir = '';
 let currentCustomerHistoryId = null;
 let currentCustomerNotesOriginal = '';
 let customerNotesSaveRequest = 0;
@@ -54,7 +56,9 @@ const CUSTOMER_ENDPOINTS = (() => {
         brandDiscountBrands: (id) => (r.brandDiscountBrands || '/admin/masterlist/customer/brand-discounts/:id/brands').replace(':id', id),
         brandDiscountAdd: (id) => (r.brandDiscountAdd || '/admin/masterlist/customer/brand-discounts/:id/add').replace(':id', id),
         brandDiscountSave: (id) => (r.brandDiscountSave || '/admin/masterlist/customer/brand-discounts/:id/save').replace(':id', id),
-        brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id)
+        brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id),
+        soaAutoStatus: r.soaAutoStatus || '/admin/master-list/customer-master/soa-auto',
+        soaAutoSave: r.soaAutoSave || '/admin/master-list/customer-master/soa-auto'
     };
 })();
 
@@ -254,6 +258,14 @@ async function fetchCustomers(page) {
             if (val) params.set('search[' + col + ']', val);
         }
         if (generalSearch) params.set('search[general]', generalSearch);
+        if (activeWssFilter) {
+            params.set('wss_status', activeWssFilter);
+            params.set('search[wss_status]', activeWssFilter);
+        }
+        if (wssSortDir) {
+            params.set('sort_by', 'wss');
+            params.set('sort_dir', wssSortDir);
+        }
 
         const response = await fetch(CUSTOMER_ENDPOINTS.data + '?' + params.toString(), {
             headers: {
@@ -266,6 +278,7 @@ async function fetchCustomers(page) {
         renderView();
         renderPagination();
         updateStats(result.stats);
+        updateWssCardUI();
     } catch (error) {
         console.error('Error fetching customers:', error);
         customers = [];
@@ -273,6 +286,7 @@ async function fetchCustomers(page) {
         renderView();
         renderPagination();
         updateStats();
+        updateWssCardUI();
     }
 }
 
@@ -551,10 +565,87 @@ window.openEditModal = function(id) {
 }
 
 function updateStats(stats = null) {
-    document.getElementById('stat-total-customers').textContent = stats ? stats.total : customers.length;
-    document.getElementById('stat-total-regular').textContent = stats ? stats.regular : customers.filter(c => c.type === 'Regular').length;
-    document.getElementById('stat-total-b2b').textContent = stats ? stats.b2b : customers.filter(c => c.type === 'B2B Customer').length;
-    document.getElementById('stat-total-casual').textContent = stats ? stats.casual : customers.filter(c => c.type === 'Casual').length;
+    const totalEl = document.getElementById('stat-total-customers');
+    const regularEl = document.getElementById('stat-total-regular');
+    const wssEl = document.getElementById('stat-total-wss') || document.getElementById('stat-total-b2b');
+    const nonWssEl = document.getElementById('stat-total-non-wss') || document.getElementById('stat-total-casual');
+
+    if (totalEl) totalEl.textContent = stats ? stats.total : customers.length;
+    if (regularEl) regularEl.textContent = stats ? stats.regular : customers.filter(c => c.type === 'Regular').length;
+    if (wssEl) wssEl.textContent = stats ? (stats.wss ?? stats.b2b ?? 0) : customers.filter(c => c?.portalAccount?.registered).length;
+    if (nonWssEl) nonWssEl.textContent = stats ? (stats.non_wss ?? stats.casual ?? 0) : customers.filter(c => !c?.portalAccount?.registered).length;
+}
+
+window.filterWssStatus = function(status) {
+    if (activeWssFilter === status) {
+        activeWssFilter = '';
+    } else {
+        activeWssFilter = status || '';
+    }
+    updateWssCardUI();
+    currentPage = 1;
+    fetchCustomers(1);
+};
+
+window.toggleSortWss = function() {
+    if (wssSortDir === 'desc') {
+        wssSortDir = 'asc';
+    } else if (wssSortDir === 'asc') {
+        wssSortDir = '';
+    } else {
+        wssSortDir = 'desc';
+    }
+    currentPage = 1;
+    fetchCustomers(1);
+};
+
+function updateWssCardUI() {
+    const cardTotal = document.getElementById('stat-card-total');
+    const cardWss = document.getElementById('stat-card-wss');
+    const cardNonWss = document.getElementById('stat-card-non-wss');
+    const badgeWss = document.getElementById('badge-wss-active');
+    const badgeNonWss = document.getElementById('badge-non-wss-active');
+    const filterIndicator = document.getElementById('wss-filter-indicator');
+    const filterIndicatorText = document.getElementById('wss-filter-indicator-text');
+
+    if (cardTotal) {
+        if (!activeWssFilter) {
+            cardTotal.classList.add('ring-2', 'ring-slate-400', 'bg-slate-50/50');
+        } else {
+            cardTotal.classList.remove('ring-2', 'ring-slate-400', 'bg-slate-50/50');
+        }
+    }
+
+    if (cardWss) {
+        const isActive = activeWssFilter === 'wss';
+        cardWss.classList.toggle('ring-2', isActive);
+        cardWss.classList.toggle('ring-emerald-500', isActive);
+        cardWss.classList.toggle('border-emerald-500', isActive);
+        cardWss.classList.toggle('bg-emerald-50/40', isActive);
+        if (badgeWss) badgeWss.classList.toggle('hidden', !isActive);
+    }
+
+    if (cardNonWss) {
+        const isActive = activeWssFilter === 'non_wss';
+        cardNonWss.classList.toggle('ring-2', isActive);
+        cardNonWss.classList.toggle('ring-amber-500', isActive);
+        cardNonWss.classList.toggle('border-amber-500', isActive);
+        cardNonWss.classList.toggle('bg-amber-50/40', isActive);
+        if (badgeNonWss) badgeNonWss.classList.toggle('hidden', !isActive);
+    }
+
+    if (filterIndicator && filterIndicatorText) {
+        if (activeWssFilter === 'wss') {
+            filterIndicator.classList.remove('hidden');
+            filterIndicatorText.textContent = 'Filtered: WSS Customer (Special Store Registered)';
+        } else if (activeWssFilter === 'non_wss') {
+            filterIndicator.classList.remove('hidden');
+            filterIndicatorText.textContent = 'Filtered: Non WSS Customer (Not Yet Registered)';
+        } else {
+            filterIndicator.classList.add('hidden');
+            filterIndicatorText.textContent = '';
+        }
+    }
 }
 
 window.toggleView = function(view) {
@@ -2205,3 +2296,141 @@ const debouncedFilterMainSearch = debounce(function() {
 window.filterMainSearch = function() {
     debouncedFilterMainSearch();
 };
+
+// W68_GLOBAL_SOA_AUTO_JS_20260918
+function setSoaAutoError(message = '') {
+    const box = document.getElementById('soa-auto-error');
+    if (!box) return;
+    box.textContent = message;
+    box.classList.toggle('hidden', !message);
+}
+
+function updateSoaAutoExample() {
+    const el = document.getElementById('soa-auto-example');
+    if (!el) return;
+
+    const enabled = Boolean(document.getElementById('soa-auto-enabled')?.checked);
+    const rawValue = document.getElementById('soa-auto-lead-value')?.value || '';
+    const unit = document.getElementById('soa-auto-lead-unit')?.value || '';
+    const value = Number(rawValue || 0);
+
+    if (!enabled || !value || !unit) {
+        el.textContent = 'Enable SOA(AUTO) and enter a lead time. The same setting will apply to every linked customer account, while each finalized invoice uses its own Sales Order Terms.';
+        return;
+    }
+
+    if (unit === 'days') {
+        const sampleTerms = 130;
+        const sendAge = sampleTerms - value;
+        el.textContent = sendAge >= 0
+            ? `Example: an invoice with ${sampleTerms}-day Terms and ${value} day(s) before due receives its own SOA at invoice age ${sendAge} day(s).`
+            : `The lead time is longer than ${sampleTerms} days, so an invoice with ${sampleTerms}-day Terms becomes eligible as soon as the finalized unpaid invoice is seen.`;
+        return;
+    }
+
+    el.textContent = `The same ${value} ${unit} lead time is calculated backward from each finalized invoice's own due date.`;
+}
+
+window.openSoaAutoModal = async function() {
+    setSoaAutoError('');
+    const saveButton = document.getElementById('soa-auto-save-btn');
+    if (saveButton) saveButton.disabled = true;
+
+    document.getElementById('soa-auto-linked-count').textContent = '—';
+    document.getElementById('soa-auto-email-count').textContent = '—';
+    document.getElementById('soa-auto-terms-count').textContent = '—';
+    document.getElementById('soa-auto-last-sent').textContent = '—';
+    document.getElementById('soa-auto-mail-status').textContent = 'Checking...';
+
+    toggleModal('customer-soa-auto-modal', true);
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.soaAutoStatus, { headers: { 'Accept': 'application/json' } });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.success) throw new Error(body.message || 'Unable to load global SOA(AUTO) configuration.');
+
+        const scope = body.scope || {};
+        const config = body.configuration || {};
+        const mail = body.mail || {};
+
+        document.getElementById('soa-auto-linked-count').textContent = Number(scope.linked_customer_count || 0).toLocaleString();
+        document.getElementById('soa-auto-email-count').textContent = Number(scope.valid_email_count || 0).toLocaleString();
+        document.getElementById('soa-auto-terms-count').textContent = Number(scope.numeric_terms_count || 0).toLocaleString();
+        document.getElementById('soa-auto-enabled').checked = Boolean(config.enabled);
+        document.getElementById('soa-auto-lead-value').value = config.lead_value ?? '';
+        document.getElementById('soa-auto-lead-unit').value = config.lead_unit ?? '';
+        document.getElementById('soa-auto-last-sent').textContent = config.last_sent_at || 'Never';
+        document.getElementById('soa-auto-mail-status').textContent = mail.ready
+            ? `Ready (${mail.mailer || 'mailer'})`
+            : `Not ready (${mail.mailer || 'log'}). Configure production SMTP.`;
+
+        if (!body.storage_ready) {
+            setSoaAutoError('SOA(AUTO) database schema needs the global migration. Run php artisan migrate --force.');
+        } else if (config.last_error) {
+            setSoaAutoError(config.last_error);
+        }
+
+        if (saveButton) saveButton.disabled = !body.storage_ready;
+        updateSoaAutoExample();
+    } catch (error) {
+        setSoaAutoError(error.message || 'Unable to load global SOA(AUTO) configuration.');
+        if (saveButton) saveButton.disabled = true;
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+window.closeSoaAutoModal = function() {
+    toggleModal('customer-soa-auto-modal', false);
+};
+
+window.saveSoaAutoConfiguration = async function() {
+    const enabled = Boolean(document.getElementById('soa-auto-enabled')?.checked);
+    const rawLeadValue = document.getElementById('soa-auto-lead-value')?.value || '';
+    const leadUnit = document.getElementById('soa-auto-lead-unit')?.value || '';
+    const saveButton = document.getElementById('soa-auto-save-btn');
+
+    if (enabled && (!rawLeadValue || Number(rawLeadValue) < 1 || !leadUnit)) {
+        setSoaAutoError('When SOA(AUTO) is enabled, enter the lead amount and select Minutes, Days, or Months.');
+        return;
+    }
+
+    setSoaAutoError('');
+    if (saveButton) saveButton.disabled = true;
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.soaAutoSave, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                enabled,
+                lead_value: enabled ? Number(rawLeadValue) : null,
+                lead_unit: enabled ? leadUnit : null
+            })
+        });
+
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.success) {
+            const validation = body.errors ? Object.values(body.errors).flat().join(' ') : '';
+            throw new Error(validation || body.message || 'Unable to save global SOA(AUTO) configuration.');
+        }
+
+        showSuccessModal('SOA(AUTO) Saved', body.message || 'Global Statement of Account configuration has been saved.');
+        closeSoaAutoModal();
+    } catch (error) {
+        setSoaAutoError(error.message || 'Unable to save global SOA(AUTO) configuration.');
+    } finally {
+        if (saveButton) saveButton.disabled = false;
+    }
+};
+
+document.addEventListener('input', function(event) {
+    if (event.target?.id === 'soa-auto-lead-value') updateSoaAutoExample();
+});
+document.addEventListener('change', function(event) {
+    if (['soa-auto-enabled', 'soa-auto-lead-unit'].includes(event.target?.id)) updateSoaAutoExample();
+});

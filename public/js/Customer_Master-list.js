@@ -12,6 +12,8 @@ let perPage = 50;
 let pagination = null;
 let searchValues = {};
 let generalSearch = '';
+let activeWssFilter = '';
+let wssSortDir = '';
 let currentCustomerHistoryId = null;
 let currentCustomerNotesOriginal = '';
 let customerNotesSaveRequest = 0;
@@ -256,6 +258,14 @@ async function fetchCustomers(page) {
             if (val) params.set('search[' + col + ']', val);
         }
         if (generalSearch) params.set('search[general]', generalSearch);
+        if (activeWssFilter) {
+            params.set('wss_status', activeWssFilter);
+            params.set('search[wss_status]', activeWssFilter);
+        }
+        if (wssSortDir) {
+            params.set('sort_by', 'wss');
+            params.set('sort_dir', wssSortDir);
+        }
 
         const response = await fetch(CUSTOMER_ENDPOINTS.data + '?' + params.toString(), {
             headers: {
@@ -268,6 +278,7 @@ async function fetchCustomers(page) {
         renderView();
         renderPagination();
         updateStats(result.stats);
+        updateWssCardUI();
     } catch (error) {
         console.error('Error fetching customers:', error);
         customers = [];
@@ -275,6 +286,7 @@ async function fetchCustomers(page) {
         renderView();
         renderPagination();
         updateStats();
+        updateWssCardUI();
     }
 }
 
@@ -553,10 +565,87 @@ window.openEditModal = function(id) {
 }
 
 function updateStats(stats = null) {
-    document.getElementById('stat-total-customers').textContent = stats ? stats.total : customers.length;
-    document.getElementById('stat-total-regular').textContent = stats ? stats.regular : customers.filter(c => c.type === 'Regular').length;
-    document.getElementById('stat-total-b2b').textContent = stats ? stats.b2b : customers.filter(c => c.type === 'B2B Customer').length;
-    document.getElementById('stat-total-casual').textContent = stats ? stats.casual : customers.filter(c => c.type === 'Casual').length;
+    const totalEl = document.getElementById('stat-total-customers');
+    const regularEl = document.getElementById('stat-total-regular');
+    const wssEl = document.getElementById('stat-total-wss') || document.getElementById('stat-total-b2b');
+    const nonWssEl = document.getElementById('stat-total-non-wss') || document.getElementById('stat-total-casual');
+
+    if (totalEl) totalEl.textContent = stats ? stats.total : customers.length;
+    if (regularEl) regularEl.textContent = stats ? stats.regular : customers.filter(c => c.type === 'Regular').length;
+    if (wssEl) wssEl.textContent = stats ? (stats.wss ?? stats.b2b ?? 0) : customers.filter(c => c?.portalAccount?.registered).length;
+    if (nonWssEl) nonWssEl.textContent = stats ? (stats.non_wss ?? stats.casual ?? 0) : customers.filter(c => !c?.portalAccount?.registered).length;
+}
+
+window.filterWssStatus = function(status) {
+    if (activeWssFilter === status) {
+        activeWssFilter = '';
+    } else {
+        activeWssFilter = status || '';
+    }
+    updateWssCardUI();
+    currentPage = 1;
+    fetchCustomers(1);
+};
+
+window.toggleSortWss = function() {
+    if (wssSortDir === 'desc') {
+        wssSortDir = 'asc';
+    } else if (wssSortDir === 'asc') {
+        wssSortDir = '';
+    } else {
+        wssSortDir = 'desc';
+    }
+    currentPage = 1;
+    fetchCustomers(1);
+};
+
+function updateWssCardUI() {
+    const cardTotal = document.getElementById('stat-card-total');
+    const cardWss = document.getElementById('stat-card-wss');
+    const cardNonWss = document.getElementById('stat-card-non-wss');
+    const badgeWss = document.getElementById('badge-wss-active');
+    const badgeNonWss = document.getElementById('badge-non-wss-active');
+    const filterIndicator = document.getElementById('wss-filter-indicator');
+    const filterIndicatorText = document.getElementById('wss-filter-indicator-text');
+
+    if (cardTotal) {
+        if (!activeWssFilter) {
+            cardTotal.classList.add('ring-2', 'ring-slate-400', 'bg-slate-50/50');
+        } else {
+            cardTotal.classList.remove('ring-2', 'ring-slate-400', 'bg-slate-50/50');
+        }
+    }
+
+    if (cardWss) {
+        const isActive = activeWssFilter === 'wss';
+        cardWss.classList.toggle('ring-2', isActive);
+        cardWss.classList.toggle('ring-emerald-500', isActive);
+        cardWss.classList.toggle('border-emerald-500', isActive);
+        cardWss.classList.toggle('bg-emerald-50/40', isActive);
+        if (badgeWss) badgeWss.classList.toggle('hidden', !isActive);
+    }
+
+    if (cardNonWss) {
+        const isActive = activeWssFilter === 'non_wss';
+        cardNonWss.classList.toggle('ring-2', isActive);
+        cardNonWss.classList.toggle('ring-amber-500', isActive);
+        cardNonWss.classList.toggle('border-amber-500', isActive);
+        cardNonWss.classList.toggle('bg-amber-50/40', isActive);
+        if (badgeNonWss) badgeNonWss.classList.toggle('hidden', !isActive);
+    }
+
+    if (filterIndicator && filterIndicatorText) {
+        if (activeWssFilter === 'wss') {
+            filterIndicator.classList.remove('hidden');
+            filterIndicatorText.textContent = 'Filtered: WSS Customer (Special Store Registered)';
+        } else if (activeWssFilter === 'non_wss') {
+            filterIndicator.classList.remove('hidden');
+            filterIndicatorText.textContent = 'Filtered: Non WSS Customer (Not Yet Registered)';
+        } else {
+            filterIndicator.classList.add('hidden');
+            filterIndicatorText.textContent = '';
+        }
+    }
 }
 
 window.toggleView = function(view) {
