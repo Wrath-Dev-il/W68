@@ -132,9 +132,6 @@ class PurchaseReturnLedgerSynchronizerService
         }
 
         $quantity = max(0, (int) ($source->quantity ?? 0));
-        if ($quantity <= 0) {
-            throw new \RuntimeException('Purchase Return quantity must be greater than zero before it can be synchronized.');
-        }
 
         $returnDate = trim((string) ($source->return_date ?? ''));
         if ($returnDate === '') {
@@ -143,6 +140,20 @@ class PurchaseReturnLedgerSynchronizerService
 
         $result = DB::connection('ledger')->transaction(function () use ($source, $quantity, $returnDate, $mode) {
             $existing = $this->existingLedgerRow($source);
+            $productId = (int) $source->product_id;
+
+            // A zero-quantity return must still have a ledger audit row.
+            // If an older row exists, remove only its prior OUT effect first.
+            // This makes editing a previously non-zero return down to zero safe.
+            if ($existing && $quantity === 0) {
+                $oldOut = max(0, (int) ($existing->quantity_out ?? 0));
+                if ($oldOut > 0) {
+                    $this->shiftBalancesAfter($productId, (string) $existing->date, (int) $existing->id, $oldOut);
+                }
+                DB::connection('ledger')->table('product_ledgers')->where('id', (int) $existing->id)->delete();
+                $existing = null;
+            }
+
             if ($existing) {
                 return [
                     'success' => true,
@@ -156,9 +167,9 @@ class PurchaseReturnLedgerSynchronizerService
                 ];
             }
 
-            $productId = (int) $source->product_id;
             $balanceBefore = $this->balanceImmediatelyBeforeNewRow($productId, $returnDate);
-            $isOut = $mode === self::OUT_MODE;
+            $isOut = $mode === self::OUT_MODE && $quantity > 0;
+            $isZeroReturn = $quantity === 0;
             $balanceAfter = $isOut ? $balanceBefore - $quantity : $balanceBefore;
             $createdAt = $this->ledgerCreatedAt($returnDate, $source->return_created_at ?? null);
 
@@ -170,7 +181,7 @@ class PurchaseReturnLedgerSynchronizerService
                 'source_id' => (int) $source->purchase_return_id,
                 'source_item_id' => (int) $source->purchase_return_item_id,
                 'processed_actual_qty' => 0,
-                'transaction_type' => $mode,
+                'transaction_type' => $isZeroReturn ? 'JUNK' : $mode,
                 // CRITICAL: preserve the source Purchase Return date exactly.
                 // Example: 01-08-2026 stays 2026-08-01 in the DB date column
                 // and displays again as 01-08-2026 in the Control Panel.
@@ -248,7 +259,7 @@ class PurchaseReturnLedgerSynchronizerService
             ->table('purchase_return_items as pri')
             ->join('purchase_returns as pr', 'pr.id', '=', 'pri.purchase_return_id')
             ->leftJoin('purchase_orders as po', 'po.id', '=', 'pr.po_id')
-            ->where('pri.quantity', '>', 0)
+            ->where('pri.quantity', '>=', 0)
             ->whereBetween('pr.date', [$dateFrom, $dateTo])
             ->orderBy('pr.date')
             ->orderBy('pr.id')
