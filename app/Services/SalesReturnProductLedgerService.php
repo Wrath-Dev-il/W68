@@ -131,9 +131,8 @@ class SalesReturnProductLedgerService
                 $goodQty = min($goodQty, $returnQty);
                 $junkQty = max(0, $returnQty - $goodQty);
 
-                if ($returnQty <= 0 && $goodQty <= 0 && $junkQty <= 0) {
-                    continue;
-                }
+                // Keep zero-quantity items: they still require a zero-valued
+                // Sales Return ledger audit row without affecting stock.
 
                 $affectedProductIds[$productId] = true;
                 $product = $products->get($productId);
@@ -183,9 +182,11 @@ class SalesReturnProductLedgerService
                     );
                 }
 
-                if ($junkQty > 0) {
+                if ($junkQty > 0 || $returnQty === 0) {
                     // JUNK is a separate historical ledger row only. It copies
                     // the current balance and never changes later balances.
+                    // A zero-quantity Sales Return still gets an audit row with
+                    // junk = 0; it must not change the stock balance.
                     $junkBalance = $this->balanceImmediatelyBeforeNewRow($productId, $returnDate, $ledgerCreatedAt);
 
                     DB::connection('ledger')->table('product_ledgers')->insert([
