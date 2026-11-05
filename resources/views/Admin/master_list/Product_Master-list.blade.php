@@ -271,7 +271,7 @@
                                 </div>
                             </div>
                             <!-- Item Code 2 & Pricelist Codes -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                                         Item Code 2
@@ -287,36 +287,38 @@
                                     >
                                 </div>
 
-                                <div>
-                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                                        Pricelist Code
-                                        <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
-                                    </label>
+                                <div class="space-y-6">
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                                            Pricelist Code
+                                            <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
+                                        </label>
 
-                                    <input
-                                        type="text"
-                                        name="pricelist_code"
-                                        id="add-pricelist-code"
-                                        maxlength="255"
-                                        placeholder="Optional pricelist code"
-                                        class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
-                                    >
-                                </div>
+                                        <input
+                                            type="text"
+                                            name="pricelist_code"
+                                            id="add-pricelist-code"
+                                            maxlength="255"
+                                            placeholder="Optional pricelist code"
+                                            class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
+                                        >
+                                    </div>
 
-                                <div>
-                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                                        Pricelist Code 2
-                                        <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
-                                    </label>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                                            Pricelist Code 2
+                                            <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
+                                        </label>
 
-                                    <input
-                                        type="text"
-                                        name="pricelist_code2"
-                                        id="add-pricelist-code2"
-                                        maxlength="255"
-                                        placeholder="Optional second pricelist code"
-                                        class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
-                                    >
+                                        <input
+                                            type="text"
+                                            name="pricelist_code2"
+                                            id="add-pricelist-code2"
+                                            maxlength="255"
+                                            placeholder="Optional second pricelist code"
+                                            class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
+                                        >
+                                    </div>
                                 </div>
                             </div>
 
@@ -536,7 +538,7 @@
 
                         <!-- Editable Product Fields -->
                         <div id="view-product-edit-form" class="grid grid-cols-1 gap-y-3">
-                            <div class="grid grid-cols-3 gap-2">
+                            <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Product Code</label>
                                     <textarea
@@ -580,32 +582,34 @@
                                     ></textarea>
                                 </div>
 
-                                <div>
-                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                                        Pricelist Code
-                                    </label>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                            Pricelist Code
+                                        </label>
 
-                                    <input
-                                        id="view-pricelist-code"
-                                        data-view-field="pricelist_code"
-                                        type="text"
-                                        readonly
-                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
-                                    >
-                                </div>
+                                        <input
+                                            id="view-pricelist-code"
+                                            data-view-field="pricelist_code"
+                                            type="text"
+                                            readonly
+                                            class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                                        >
+                                    </div>
 
-                                <div>
-                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                                        Pricelist Code 2
-                                    </label>
+                                    <div>
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                            Pricelist Code 2
+                                        </label>
 
-                                    <input
-                                        id="view-pricelist-code2"
-                                        data-view-field="pricelist_code2"
-                                        type="text"
-                                        readonly
-                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
-                                    >
+                                        <input
+                                            id="view-pricelist-code2"
+                                            data-view-field="pricelist_code2"
+                                            type="text"
+                                            readonly
+                                            class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                                        >
+                                    </div>
                                 </div>
 
                             </div>
