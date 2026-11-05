@@ -14,6 +14,7 @@ class Product extends Model
         'product_code',
         'product_code2',
         'pricelist_code',
+        'pricelist_code2',
         'part_number',
         'category',
         'specification',

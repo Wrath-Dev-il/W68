@@ -24,7 +24,8 @@
         'catalog': '{{ route("special.prod-master.catalog") }}',
         'priceList': '{{ route("special.prod-master.price-list") }}',
         'activeNotes': '{{ route("special.prod-master.active-notes", ["id" => ":id"]) }}',
-        'priceCodesUpdate': '{{ route("special.prod-master.price-codes.update", ["id" => ":id"]) }}'
+        'priceCodesUpdate': '{{ route("special.prod-master.price-codes.update", ["id" => ":id"]) }}',
+        'pricelistGroups': '{{ route("special.prod-master.pricelist-groups") }}'
     };
     window.productMasterViewEditor = true;
 </script>
@@ -53,7 +54,7 @@
             </button>
 
             <!-- Search Specific Button -->
-            <button onclick="toggleModal('search-specific-modal', true)" class="px-4 py-2.5 bg-white border border-slate-200 hover:border-blue-200 hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-sm flex items-center space-x-2 transition-all">
+            <button onclick="openProductSearchModal()" class="px-4 py-2.5 bg-white border border-slate-200 hover:border-blue-200 hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-sm flex items-center space-x-2 transition-all">
                 <i data-lucide="search" class="w-4 h-4 text-blue-500"></i>
                 <span>Search Specific</span>
             </button>
@@ -273,8 +274,8 @@
                             </div>
 
                             <!-- W68_SPECIAL_PRODUCT_CODE2_LAYOUT_FIX_20260917 -->
-                            <!-- Item Code 2 & Pricelist Code -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Item Code 2 & Pricelist Codes -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                                 <div>
                                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
@@ -303,6 +304,22 @@
                                         id="add-pricelist-code"
                                         maxlength="255"
                                         placeholder="Optional pricelist code"
+                                        class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                                        Pricelist Code 2
+                                        <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span>
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="pricelist_code2"
+                                        id="add-pricelist-code2"
+                                        maxlength="255"
+                                        placeholder="Optional second pricelist code"
                                         class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all"
                                     >
                                 </div>
@@ -535,7 +552,7 @@
                                     <input id="view-prod-part" data-view-field="part_number" type="text" readonly class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none">
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-3 gap-2">
 
                                 <div>
                                     <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
@@ -561,6 +578,20 @@
                                     <input
                                         id="view-pricelist-code"
                                         data-view-field="pricelist_code"
+                                        type="text"
+                                        readonly
+                                        class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                        Pricelist Code 2
+                                    </label>
+
+                                    <input
+                                        id="view-pricelist-code2"
+                                        data-view-field="pricelist_code2"
                                         type="text"
                                         readonly
                                         class="view-product-input w-full px-2.5 py-2 rounded-lg border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none"
@@ -854,10 +885,16 @@
                                 </div>
                             </div>
 
-                            <!-- Pricelist Code -->
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pricelist Code <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span></label>
-                                <input type="text" name="pricelist_code" id="edit-pricelist-code" maxlength="255" placeholder="Optional pricelist code" class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all">
+                            <!-- Pricelist Codes -->
+                            <div class="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pricelist Code <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span></label>
+                                    <input type="text" name="pricelist_code" id="edit-pricelist-code" maxlength="255" placeholder="Optional pricelist code" class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pricelist Code 2 <span class="text-[9px] font-semibold text-slate-400 normal-case tracking-normal ml-1">(Optional)</span></label>
+                                    <input type="text" name="pricelist_code2" id="edit-pricelist-code2" maxlength="255" placeholder="Optional second pricelist code" class="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-maroon focus:ring-4 focus:ring-maroon/5 text-sm outline-none transition-all">
+                                </div>
                             </div>
 
                             <!-- Row 2: Description -->
@@ -972,7 +1009,7 @@
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div onclick="toggleModal('search-specific-modal', false)" class="fixed inset-0 bg-maroon-900/60 transition-opacity backdrop-blur-sm" aria-hidden="true"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="modal-animate-in inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full border-2 border-goldlining-500/20">
+            <div class="modal-animate-in inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border-2 border-goldlining-500/20">
                 <div class="bg-maroon-gradient px-6 py-4 flex items-center justify-between border-b border-goldlining-500">
                     <div class="flex items-center space-x-2">
                         <i data-lucide="search" class="w-5 h-5 text-gold"></i>
@@ -985,8 +1022,36 @@
                 <div class="p-6 space-y-4">
                     <input type="text" id="search-product-code" placeholder="Search by Product Code..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="text" id="search-part-number" placeholder="Search by Part Number..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+                    <input type="text" id="search-pricelist-code" placeholder="Search by Pricelist Code 1 or 2..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+                    <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Search in:</span>
+                        <label class="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 cursor-pointer">
+                            <input type="checkbox" id="search-pricelist-code1" class="w-4 h-4 accent-maroon" checked onchange="handlePricelistCodeFieldToggle()">
+                            Pricelist Code 1
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 cursor-pointer">
+                            <input type="checkbox" id="search-pricelist-code2" class="w-4 h-4 accent-maroon" checked onchange="handlePricelistCodeFieldToggle()">
+                            Pricelist Code 2
+                        </label>
+                    </div>
                     <input type="text" id="search-category" placeholder="Search by Category..." class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
                     <input type="date" id="search-date" class="block w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+
+                    <div class="border-t border-slate-100 pt-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div>
+                                <p class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Select by Pricelist Code</p>
+                                <p class="mt-1 text-[9px] text-slate-400 font-semibold">Check a group to select every product under that exact code across the checked Pricelist Code fields and all pages.</p>
+                            </div>
+                            <button type="button" onclick="loadPricelistCodeGroups()" class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[9px] font-bold text-slate-500 hover:text-maroon hover:border-maroon/20">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="search-pricelist-group-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                            <div class="col-span-full py-5 text-center text-[10px] font-semibold text-slate-400 italic">Open Search Parameters to load Pricelist Code groups.</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="bg-slate-50 px-6 py-4 flex justify-center border-t border-slate-100">
                     <button onclick="applySpecificSearch()" class="px-8 py-2 bg-maroon text-white text-xs font-bold rounded-xl shadow-md">Search</button>

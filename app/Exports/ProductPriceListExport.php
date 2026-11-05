@@ -183,6 +183,7 @@ class ProductPriceListExport implements FromCollection, WithEvents
             $safeCode = $this->escapeLike($pricelistCode);
             $query->where(function ($q) use ($safeCode) {
                 $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
+                  ->orWhere('pricelist_code2', 'like', '%' . $safeCode . '%')
                   ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
                       $sub->where('price_code', 'like', '%' . $safeCode . '%');
                   });

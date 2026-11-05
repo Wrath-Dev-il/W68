@@ -27,6 +27,7 @@ use App\Http\Controllers\ShopeeWebhookController;
 use App\Http\Controllers\DeveloperInventoryControlController;
 use App\Http\Controllers\CustomerPortalAccessController;
 use App\Support\W68PricelistUrl;
+use App\Support\ProductPricelistCodeFields;
 
 // CRITICAL: This route must be defined early to avoid conflicts
 /* W68_VIBER_EXISTING_NOTE_ROUTES_START
@@ -2022,6 +2023,7 @@ Route::prefix('special')->name('special.')->group(function () {
                 'product_code' => "required|unique:masterlist.products,product_code,$id",
                 'product_code2' => 'nullable|string|max:255',
                 'pricelist_code' => 'nullable|string|max:255',
+                'pricelist_code2' => 'nullable|string|max:255',
                 'part_number' => 'required|string',
                 'specification' => 'nullable|string',
                 'category' => 'required|string',
@@ -2045,6 +2047,9 @@ Route::prefix('special')->name('special.')->group(function () {
             $validated['unit'] ??= '';
             $validated['pricelist_code'] = isset($validated['pricelist_code']) && trim((string) $validated['pricelist_code']) !== ''
                 ? trim((string) $validated['pricelist_code'])
+                : null;
+            $validated['pricelist_code2'] = isset($validated['pricelist_code2']) && trim((string) $validated['pricelist_code2']) !== ''
+                ? trim((string) $validated['pricelist_code2'])
                 : null;
             // Product Master view editor must never directly alter stock or cost.
             $validated['on_hand'] = (int) ($product->on_hand ?? 0);
@@ -2313,6 +2318,7 @@ Route::prefix('special')->name('special.')->group(function () {
     Route::match(['GET', 'POST'], '/master-list/product-master/reorder-level', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.reorder-level'))->name('prod-master.reorder-level');
     Route::match(['GET', 'POST'], '/master-list/product-master/catalog', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.catalog'))->name('prod-master.catalog');
     Route::match(['GET', 'POST'], '/master-list/product-master/price-list', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.price-list'))->name('prod-master.price-list');
+    Route::match(['GET', 'POST'], '/master-list/product-master/pricelist-groups', fn () => hatdogRegularProxyToAdminRoute('admin.prod-master.pricelist-groups'))->name('prod-master.pricelist-groups');
     Route::get('/master-list/online-product-config', fn () => hatdogSpecialUserView('Special_User.master_list.Online-Product-Configuration'))->name('prod-online-config');
     Route::match(['GET', 'POST'], '/master-list/online-product-config/dashboard-counts', fn () => hatdogRegularProxyToAdminRoute('admin.prod-online-config.dashboard-counts'))->name('prod-online-config.dashboard-counts');
     Route::match(['GET', 'POST'], '/master-list/online-product-config/converted-products', fn () => hatdogRegularProxyToAdminRoute('admin.prod-online-config.converted-products'))->name('prod-online-config.converted-products');
@@ -3670,6 +3676,10 @@ Route::prefix('regular')->name('regular.')->group(function () {
                     $onHandSearch = (string) $val;
                     continue;
                 }
+                if ($col === 'pricelistCode') {
+                    ProductPricelistCodeFields::like($query, (string) $val, ProductPricelistCodeFields::selected($req));
+                    continue;
+                }
 
                 $db = match($col) {
                     'productCode' => 'product_code',
@@ -3817,8 +3827,9 @@ Route::prefix('regular')->name('regular.')->group(function () {
     Route::post('/master-list/product-master/create', function (\Illuminate\Http\Request $req) {
         $user = session('user'); if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
         try {
-            $v = $req->validate(['product_code' => 'required|unique:masterlist.products,product_code', 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
+            $v = $req->validate(['product_code' => 'required|unique:masterlist.products,product_code', 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'pricelist_code2' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
             $v['pricelist_code'] = isset($v['pricelist_code']) && trim((string) $v['pricelist_code']) !== '' ? trim((string) $v['pricelist_code']) : null;
+            $v['pricelist_code2'] = isset($v['pricelist_code2']) && trim((string) $v['pricelist_code2']) !== '' ? trim((string) $v['pricelist_code2']) : null;
             $v['description'] ??= ''; $v['application'] ??= ''; $v['position'] ??= ''; $v['unit'] ??= ''; $v['cost'] ??= 0; $v['price_online'] = $v['price_online'] ?? 0; $v['specification'] = isset($v['specification']) && trim((string) $v['specification']) !== '' ? trim((string) $v['specification']) : null;
             $product = \App\Models\Product::create($v);
             $actor = hatdogAuditActor($user); $rn = trim((string) ($product->description ?: ($product->part_number ?: $product->product_code)));
@@ -3831,8 +3842,9 @@ Route::prefix('regular')->name('regular.')->group(function () {
         $user = session('user'); if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
         try {
             $product = \App\Models\Product::findOrFail($id); $before = $product->toArray();
-            $v = $req->validate(['product_code' => "required|unique:masterlist.products,product_code,$id", 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
+            $v = $req->validate(['product_code' => "required|unique:masterlist.products,product_code,$id", 'product_code2' => 'nullable|string|max:255', 'pricelist_code' => 'nullable|string|max:255', 'pricelist_code2' => 'nullable|string|max:255', 'part_number' => 'required|string', 'specification' => 'nullable|string', 'category' => 'required|string', 'description' => 'nullable|string', 'application' => 'nullable|string', 'position' => 'nullable|string', 'unit' => 'nullable|string|max:50', 'on_hand' => 'required|integer|min:0', 'Re_order_level' => 'nullable|integer|min:0', 'status' => 'required|string', 'selling_price' => 'required|numeric|min:0', 'price_online' => 'nullable|numeric|min:0', 'cost' => 'nullable|numeric|min:0', 'date_added' => 'required|date', 'Product_Picture' => 'nullable|string']);
             $v['pricelist_code'] = isset($v['pricelist_code']) && trim((string) $v['pricelist_code']) !== '' ? trim((string) $v['pricelist_code']) : null;
+            $v['pricelist_code2'] = isset($v['pricelist_code2']) && trim((string) $v['pricelist_code2']) !== '' ? trim((string) $v['pricelist_code2']) : null;
             $v['description'] ??= ''; $v['application'] ??= ''; $v['position'] ??= ''; $v['unit'] ??= ''; $v['price_online'] = $v['price_online'] ?? 0; $v['specification'] = isset($v['specification']) && trim((string) $v['specification']) !== '' ? trim((string) $v['specification']) : null;
             // Product Master inline editor must never directly alter inventory or cost.
             $v['on_hand'] = (int) ($product->on_hand ?? 0);
@@ -7331,7 +7343,6 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     $searchMap = [
         'productCode' => 'product_code',
                     'productCode2' => 'product_code2',
-        'pricelistCode' => 'pricelist_code',
         'partNumber' => 'part_number',
         'description' => 'description',
         'application' => 'application',
@@ -7348,6 +7359,10 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     $escapeLike = function ($value) {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value);
     };
+
+    if (!empty($search['pricelistCode'])) {
+        ProductPricelistCodeFields::like($query, (string) $search['pricelistCode'], ProductPricelistCodeFields::selected($request));
+    }
 
     foreach ($searchMap as $jsCol => $dbCol) {
         if (!empty($search[$jsCol])) {
@@ -7518,6 +7533,7 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
             'product_code' => 'required|string|unique:masterlist.products,product_code',
             'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
+            'pricelist_code2' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'specification' => 'nullable|string',
             'description' => 'nullable|string',
@@ -7537,6 +7553,9 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
 
         $validated['pricelist_code'] = isset($validated['pricelist_code']) && trim((string) $validated['pricelist_code']) !== ''
             ? trim((string) $validated['pricelist_code'])
+            : null;
+        $validated['pricelist_code2'] = isset($validated['pricelist_code2']) && trim((string) $validated['pricelist_code2']) !== ''
+            ? trim((string) $validated['pricelist_code2'])
             : null;
 
 
@@ -7570,6 +7589,7 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
             // W68_ADMIN_PRODUCT_CODE2_UPDATE_FIX_20260917
             'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
+            'pricelist_code2' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'specification' => 'nullable|string',
             'description' => 'nullable|string',
@@ -7589,6 +7609,9 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
 
         $validated['pricelist_code'] = isset($validated['pricelist_code']) && trim((string) $validated['pricelist_code']) !== ''
             ? trim((string) $validated['pricelist_code'])
+            : null;
+        $validated['pricelist_code2'] = isset($validated['pricelist_code2']) && trim((string) $validated['pricelist_code2']) !== ''
+            ? trim((string) $validated['pricelist_code2'])
             : null;
 
 
@@ -7725,6 +7748,8 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
             'search.*' => 'nullable|string|max:255',
             'tab' => 'nullable|string|in:all,newly,low',
             'pricelist_code' => 'nullable|string|max:255',
+            'pricelist_code_fields' => 'nullable|array',
+            'pricelist_code_fields.*' => 'in:pricelist_code,pricelist_code2',
         ]);
 
         if ($validator->fails()) {
@@ -7747,9 +7772,13 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
                 throw new \InvalidArgumentException('Pricelist Code is required.');
             }
 
-            $updated = DB::connection('masterlist')->table('products')
-                ->whereRaw('TRIM(pricelist_code) = ?', [$pricelistCode])
-                ->update(['is_selected_for_report' => $isSelected]);
+            $pricelistGroupQuery = DB::connection('masterlist')->table('products');
+            ProductPricelistCodeFields::exact(
+                $pricelistGroupQuery,
+                $pricelistCode,
+                ProductPricelistCodeFields::selected($request)
+            );
+            $updated = $pricelistGroupQuery->update(['is_selected_for_report' => $isSelected]);
         } elseif ($id === 'filtered') {
             // W68_PRODUCT_MASTER_PRICELIST_GROUP_SELECT_20261016
             // Select/deselect the complete filtered Product Master group across
@@ -7770,7 +7799,6 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
             $searchMap = [
                 'productCode' => 'product_code',
                 'productCode2' => 'product_code2',
-                'pricelistCode' => 'pricelist_code',
                 'partNumber' => 'part_number',
                 'description' => 'description',
                 'application' => 'application',
@@ -7789,6 +7817,14 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
                 ['\\\\', '\\%', '\\_'],
                 (string) $value
             );
+
+            if (isset($search['pricelistCode']) && trim((string) $search['pricelistCode']) !== '') {
+                ProductPricelistCodeFields::like(
+                    $query,
+                    (string) $search['pricelistCode'],
+                    ProductPricelistCodeFields::selected($request)
+                );
+            }
 
             foreach ($searchMap as $requestColumn => $databaseColumn) {
                 if (!isset($search[$requestColumn]) || trim((string) $search[$requestColumn]) === '') {
@@ -7828,32 +7864,46 @@ Route::post('/admin/masterlist/product/select', function (Request $request) {
 
 // W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
 // Dynamic Pricelist Code groups for Search Parameters (Admin + Regular proxy).
-Route::get('/admin/masterlist/product/pricelist-groups', function () {
+Route::get('/admin/masterlist/product/pricelist-groups', function (Request $request) {
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        $groups = DB::connection('masterlist')->table('products')
-            ->whereNotNull('pricelist_code')
-            ->whereRaw("TRIM(pricelist_code) <> ''")
-            ->selectRaw("
-                TRIM(pricelist_code) AS pricelist_code,
-                COUNT(*) AS total_count,
-                SUM(CASE WHEN COALESCE(is_selected_for_report, 0) = 1 THEN 1 ELSE 0 END) AS selected_count
-            ")
-            ->groupBy(DB::raw('TRIM(pricelist_code)'))
-            ->orderBy('pricelist_code')
-            ->get()
-            ->map(fn ($group) => [
-                'pricelist_code' => (string) $group->pricelist_code,
-                'total_count' => (int) $group->total_count,
-                'selected_count' => (int) $group->selected_count,
-            ])
-            ->values();
+        $fields = ProductPricelistCodeFields::selected($request);
+        $columns = array_values(array_unique(array_merge(['id', 'is_selected_for_report'], $fields)));
+        $rows = DB::connection('masterlist')->table('products')->select($columns)->get();
+
+        $groups = [];
+        foreach ($rows as $row) {
+            $codes = [];
+            foreach ($fields as $field) {
+                $code = trim((string) ($row->{$field} ?? ''));
+                if ($code !== '') {
+                    $codes[strtoupper($code)] = $code;
+                }
+            }
+
+            $isSelected = (int) ($row->is_selected_for_report ?? 0) === 1;
+            foreach ($codes as $key => $code) {
+                if (!isset($groups[$key])) {
+                    $groups[$key] = [
+                        'pricelist_code' => $code,
+                        'total_count' => 0,
+                        'selected_count' => 0,
+                    ];
+                }
+                $groups[$key]['total_count']++;
+                if ($isSelected) {
+                    $groups[$key]['selected_count']++;
+                }
+            }
+        }
+
+        uksort($groups, fn ($a, $b) => strnatcasecmp($a, $b));
 
         return response()->json([
             'success' => true,
-            'groups' => $groups,
+            'groups' => array_values($groups),
         ]);
     } catch (\Throwable $e) {
         Log::error('Product Master Pricelist Code groups error: ' . $e->getMessage());
@@ -7872,12 +7922,15 @@ Route::get('/admin/masterlist/product/selected-filters', function (Request $requ
     try {
         $products = \App\Models\Product::where('is_selected_for_report', true)
             ->with('priceCodes')
-            ->get(['id', 'description', 'category', 'application', 'created_at', 'pricelist_code']);
+            ->get(['id', 'description', 'category', 'application', 'created_at', 'pricelist_code', 'pricelist_code2']);
 
         $pricelistCodes = collect();
         foreach ($products as $p) {
             if ($p->pricelist_code !== null && trim((string) $p->pricelist_code) !== '') {
                 $pricelistCodes->push(trim((string) $p->pricelist_code));
+            }
+            if ($p->pricelist_code2 !== null && trim((string) $p->pricelist_code2) !== '') {
+                $pricelistCodes->push(trim((string) $p->pricelist_code2));
             }
             if ($p->priceCodes) {
                 foreach ($p->priceCodes as $pc) {
@@ -7964,7 +8017,8 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
                 ->pluck('product_id')
                 ->all();
             $q->where(function ($sub) use ($safeCode, $idsWithPriceCode) {
-                $sub->where('pricelist_code', 'like', '%' . $safeCode . '%');
+                $sub->where('pricelist_code', 'like', '%' . $safeCode . '%')
+                    ->orWhere('pricelist_code2', 'like', '%' . $safeCode . '%');
                 if (!empty($idsWithPriceCode)) {
                     $sub->orWhereIn('id', $idsWithPriceCode);
                 }
@@ -7987,7 +8041,7 @@ Route::get('/admin/masterlist/product/catalog', function (Request $request) {
 
     // 12 columns — intentionally EXCLUDE Product_Picture (BLOB) from bulk load.
     // It will be fetched per-row inside Blade to avoid keeping N copies in memory.
-    $selectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
+    $selectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'pricelist_code2', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
     $ajaxSelectColumns = array_merge($selectColumns, ['Product_Picture']);
 
     if ($request->ajax() && $request->has('page_num')) {
@@ -8034,6 +8088,7 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
         $safeCode = $escapeLike($pricelistCode);
         $query->where(function ($q) use ($safeCode) {
             $q->where('pricelist_code', 'like', '%' . $safeCode . '%')
+              ->orWhere('pricelist_code2', 'like', '%' . $safeCode . '%')
               ->orWhereHas('priceCodes', function ($sub) use ($safeCode) {
                   $sub->where('price_code', 'like', '%' . $safeCode . '%');
               });
@@ -8054,7 +8109,7 @@ Route::get('/admin/masterlist/product/price-list', function (Request $request) {
 
     $query->orderBy('pricelist_code', 'asc')->orderBy('description', 'asc')->orderBy('application', 'asc')->orderBy('product_code', 'asc');
 
-    $plSelectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
+    $plSelectColumns = ['id', 'product_code', 'part_number', 'pricelist_code', 'pricelist_code2', 'description', 'category', 'application', 'Application', 'position', 'Position', 'selling_price', 'is_selected_for_report'];
 
     // If it's an AJAX request for a specific page
     if ($request->ajax() && $request->has('page_num')) {
@@ -27845,6 +27900,7 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
             'product_code' => 'required|unique:masterlist.products,product_code',
             'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
+            'pricelist_code2' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'category' => 'required|string',
             'specification' => 'nullable|string',
@@ -27865,6 +27921,9 @@ Route::post('/admin/masterlist/product/create', function (Request $request) {
 
         $validated['pricelist_code'] = isset($validated['pricelist_code']) && trim((string) $validated['pricelist_code']) !== ''
             ? trim((string) $validated['pricelist_code'])
+            : null;
+        $validated['pricelist_code2'] = isset($validated['pricelist_code2']) && trim((string) $validated['pricelist_code2']) !== ''
+            ? trim((string) $validated['pricelist_code2'])
             : null;
 
 
@@ -27958,6 +28017,7 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
             // W68_ADMIN_PRODUCT_CODE2_VALIDATION_ALL_ROUTES_20260917
             'product_code2' => 'nullable|string|max:255',
             'pricelist_code' => 'nullable|string|max:255',
+            'pricelist_code2' => 'nullable|string|max:255',
             'part_number' => 'required|string',
             'category' => 'required|string',
             'specification' => 'nullable|string',
@@ -27978,6 +28038,9 @@ Route::post('/admin/masterlist/product/update/{id}', function (Request $request,
 
         $validated['pricelist_code'] = isset($validated['pricelist_code']) && trim((string) $validated['pricelist_code']) !== ''
             ? trim((string) $validated['pricelist_code'])
+            : null;
+        $validated['pricelist_code2'] = isset($validated['pricelist_code2']) && trim((string) $validated['pricelist_code2']) !== ''
+            ? trim((string) $validated['pricelist_code2'])
             : null;
 
 

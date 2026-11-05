@@ -596,6 +596,9 @@ if (!window.__productMasterKeyboardNavBound) {
         Object.entries(filters.search).forEach(([col, val]) => {
             if (val) params.append(`search[${col}]`, val);
         });
+        window.getSelectedPricelistFields().forEach((field) => {
+            params.append('pricelist_code_fields[]', field);
+        });
 
         // Add sort params
         if (currentSortColumn) {
@@ -1566,7 +1569,8 @@ window.handleSelectAll = async function(checkbox) {
                         id: selectionId,
                         is_selected: isSelected,
                         search: activeSearch,
-                        tab: currentTab
+                        tab: currentTab,
+                        pricelist_code_fields: window.getSelectedPricelistFields()
                     })
                 });
                 const result = await res.json().catch(() => ({}));
@@ -1888,6 +1892,8 @@ window.viewProduct = function(product) {
     document.getElementById("view-prod-code").textContent = product.product_code;
     const viewPricelistCode = document.getElementById("view-pricelist-code");
     if (viewPricelistCode) viewPricelistCode.value = product.pricelist_code || 'N/A';
+    const viewPricelistCode2 = document.getElementById("view-pricelist-code2");
+    if (viewPricelistCode2) viewPricelistCode2.value = product.pricelist_code2 || 'N/A';
     document.getElementById("view-prod-part").textContent = product.part_number;
     document.getElementById("view-prod-cat").textContent = product.category || 'N/A';
     document.getElementById("view-prod-spec").textContent = product.specification || 'N/A';
@@ -2100,6 +2106,8 @@ window.editProduct = function(product) {
     document.getElementById("edit-product-code").value = product.product_code;
     const editPricelistCode = document.getElementById("edit-pricelist-code");
     if (editPricelistCode) editPricelistCode.value = product.pricelist_code || '';
+    const editPricelistCode2 = document.getElementById("edit-pricelist-code2");
+    if (editPricelistCode2) editPricelistCode2.value = product.pricelist_code2 || '';
     document.getElementById("edit-part-number").value = product.part_number;
     document.getElementById("edit-category").value = product.category;
     document.getElementById("edit-specification").value = product.specification || '';
@@ -2701,6 +2709,30 @@ window.parseApplicationString = function(applicationStr, mode = 'edit') {
 // W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
 // Search by Pricelist Code filters the table. The group checkboxes below use
 // the same persisted is_selected_for_report state as each Product Master row.
+window.getSelectedPricelistFields = function() {
+    const code1 = document.getElementById('search-pricelist-code1');
+    const code2 = document.getElementById('search-pricelist-code2');
+
+    if (!code1 && !code2) return ['pricelist_code', 'pricelist_code2'];
+
+    const fields = [];
+    if (!code1 || code1.checked) fields.push('pricelist_code');
+    if (!code2 || code2.checked) fields.push('pricelist_code2');
+
+    return fields.length ? fields : ['pricelist_code', 'pricelist_code2'];
+};
+
+window.handlePricelistCodeFieldToggle = function() {
+    const code1 = document.getElementById('search-pricelist-code1');
+    const code2 = document.getElementById('search-pricelist-code2');
+
+    if (code1 && code2 && !code1.checked && !code2.checked) {
+        code1.checked = true;
+    }
+
+    void window.loadPricelistCodeGroups();
+};
+
 window.openProductSearchModal = function() {
     toggleModal('search-specific-modal', true);
     void window.loadPricelistCodeGroups();
@@ -2713,7 +2745,12 @@ window.loadPricelistCodeGroups = async function() {
     container.innerHTML = '<div class="col-span-full py-5 text-center text-[10px] font-bold text-slate-400">Loading Pricelist Code groups...</div>';
 
     try {
-        const response = await fetch(window.prodRoutes.pricelistGroups, {
+        const params = new URLSearchParams();
+        window.getSelectedPricelistFields().forEach((field) => {
+            params.append('pricelist_code_fields[]', field);
+        });
+
+        const response = await fetch(`${window.prodRoutes.pricelistGroups}?${params.toString()}`, {
             headers: { 'Accept': 'application/json' }
         });
         const data = await response.json().catch(() => ({}));
@@ -2785,7 +2822,8 @@ window.togglePricelistGroupSelection = async function(checkbox) {
             body: JSON.stringify({
                 id: 'pricelist-group',
                 pricelist_code: code,
-                is_selected: targetState
+                is_selected: targetState,
+                pricelist_code_fields: window.getSelectedPricelistFields()
             })
         });
 
@@ -2886,6 +2924,7 @@ function renderCurrentViewProduct(product) {
     setViewFieldValue('view-prod-code', product.product_code || '');
     setViewFieldValue('view-prod-code2', product.product_code2 || '');
     setViewFieldValue('view-pricelist-code', product.pricelist_code || '');
+    setViewFieldValue('view-pricelist-code2', product.pricelist_code2 || '');
     setViewFieldValue('view-prod-part', product.part_number || '');
     setViewFieldValue('view-prod-cat', product.category || '');
     setViewFieldValue('view-prod-spec', product.specification || '');
@@ -3110,6 +3149,7 @@ window.saveProductViewChanges = async function() {
         product_code: get('view-prod-code').trim(),
         product_code2: get('view-prod-code2').trim(),
         pricelist_code: get('view-pricelist-code').trim(),
+        pricelist_code2: get('view-pricelist-code2').trim(),
         part_number: get('view-prod-part').trim(),
         specification: get('view-prod-spec').trim(),
         category: get('view-prod-cat').trim(),

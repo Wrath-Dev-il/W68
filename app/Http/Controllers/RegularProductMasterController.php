@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\ProductPriceCode;
+use App\Support\ProductPricelistCodeFields;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,6 @@ class RegularProductMasterController extends Controller
         $searchMap = [
             'productCode'   => 'product_code',
             'productCode2'  => 'product_code2',
-            'pricelistCode' => 'pricelist_code',
             'partNumber'    => 'part_number',
             'description'  => 'description',
             'application'  => 'application',
@@ -75,6 +75,14 @@ class RegularProductMasterController extends Controller
             ['\\\\', '\\%', '\\_'],
             (string) $value
         );
+
+        if (isset($search['pricelistCode']) && trim((string) $search['pricelistCode']) !== '') {
+            ProductPricelistCodeFields::like(
+                $query,
+                (string) $search['pricelistCode'],
+                ProductPricelistCodeFields::selected($request)
+            );
+        }
 
         foreach ($searchMap as $requestColumn => $databaseColumn) {
             if (!isset($search[$requestColumn]) || trim((string) $search[$requestColumn]) === '') {
