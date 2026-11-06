@@ -452,6 +452,32 @@ window.changeHistoryPerPage = function(val) {
     fetchHistoryPage();
 };
 
+// W68_SALES_ORDER_VAT_TOGGLE_20261106
+// The VAT toggle adds 12% on top of every item unit price. The base unit price
+// is preserved; the "VAT PRICE" column and all totals use the effective price.
+window.W68_VAT_MULTIPLIER = 1.12;
+window.w68VatMultiplier = function (isVat) {
+    return isVat ? 1.12 : 1;
+};
+window.isProceedVatOn = function () {
+    return !!document.getElementById('proceed-vat-toggle')?.checked;
+};
+window.isEditVatOn = function () {
+    return !!document.getElementById('edit-so-vat-toggle')?.checked;
+};
+// When a Sales Order carries VAT, only the Sale's Invoice receipt may be printed.
+window.applyPrintTypeVatGate = function (isVat) {
+    const orderLabel = document.getElementById('print-type-order-label');
+    const invoiceRadio = document.querySelector('input[name="receipt-print-type"][value="invoice"]');
+    const orderRadio = document.querySelector('input[name="receipt-print-type"][value="order"]');
+    if (orderLabel) orderLabel.style.display = isVat ? 'none' : '';
+    if (isVat) {
+        if (invoiceRadio) invoiceRadio.checked = true;
+    } else if (orderRadio) {
+        orderRadio.checked = true;
+    }
+};
+
 window.updateProceedStep2Totals = function() {
     let grossTotal = 0;
     let netTotal = 0;
@@ -463,8 +489,9 @@ window.updateProceedStep2Totals = function() {
 
         const actualQty = parseFloat(row.querySelector('.p-item-actual-qty')?.value) || 0;
         const unitPrice = parseFloat(row.querySelector('.p-item-price')?.value) || 0;
+        const effectivePrice = unitPrice * (window.isProceedVatOn() ? 1.12 : 1);
         const itemDisc = Math.max(0, Math.min(100, parseFloat(row.querySelector('.p-item-disc')?.value) || 0));
-        const itemGross = actualQty * unitPrice;
+        const itemGross = actualQty * effectivePrice;
         const afterItemDiscount = itemGross * (1 - itemDisc / 100);
         const afterAdditionalDiscount = afterItemDiscount * (1 - addlDisc / 100);
 
@@ -624,6 +651,12 @@ window.openProceedModal = async function(noteId) {
                 proceedOrderTypeInput.value = 'NONE';
             }
 
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106 - every new Sales Order starts without VAT.
+            const proceedVatToggle = document.getElementById('proceed-vat-toggle');
+            if (proceedVatToggle) {
+                proceedVatToggle.checked = false;
+            }
+
             refreshSalesOrderDueDate('proceed');
 
             window._processedSalesOrderDate = '';
@@ -642,6 +675,7 @@ window.openProceedModal = async function(noteId) {
                         <td class="p-2 px-3"><input type="number" value="${item.additional_qty || 0}" min="0" class="p-item-add-qty text-xs w-16 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><input type="text" value="${(item.oum||'').replace(/"/g,'&quot;')}" class="p-item-oum text-xs w-16 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center uppercase text-slate-500" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><div class="flex items-center gap-1"><input type="number" value="${item.unit_price}" step="0.01" min="0" class="p-item-price text-xs w-full px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-right" data-idx="${idx}" data-product-id="${item.product_id || 0}" />${item.has_price_change ? '<span class="p-item-price-refresh needs-update" onclick="updatePriceFromDB(this)" data-product-id="' + (item.product_id || 0) + '" data-idx="' + idx + '" title="Selling price changed - click to update">↻</span>' : ''}</div></td>
+                        <td class="p-2 px-3"><input type="text" class="p-item-vat-price text-xs w-full px-2 py-1 border border-emerald-200 rounded-lg outline-none text-right font-bold text-emerald-700 bg-emerald-50" readonly tabindex="-1"></td>
                         <td class="p-2 px-3"><input type="number" value="${item.discount}" step="0.01" min="0" max="100" class="p-item-disc text-xs w-14 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><input type="text" value="${parseFloat(item.subtotal).toFixed(2)}" class="p-item-subtotal text-xs w-full px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-right font-bold text-maroon" data-idx="${idx}" readonly></td>
                         <td class="p-2 px-3"><input type="text" class="p-item-particulars text-xs w-full px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none" placeholder="Notes..." value="${(item.particulars||'').replace(/"/g,'&quot;')}" data-idx="${idx}"></td>
@@ -653,9 +687,12 @@ window.openProceedModal = async function(noteId) {
                     const checked = row.querySelector('.p-item-checkbox')?.checked || false;
                     const actualQty = parseFloat(row.querySelector('.p-item-actual-qty').value) || 0;
                     const price = parseFloat(row.querySelector('.p-item-price').value) || 0;
+                    const effectivePrice = price * (window.isProceedVatOn() ? 1.12 : 1);
                     const disc = parseFloat(row.querySelector('.p-item-disc').value) || 0;
                     const addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
-                    const subtotal = actualQty * price * (1 - disc / 100) * (checked ? (1 - addlDisc / 100) : 1);
+                    const vatCell = row.querySelector('.p-item-vat-price');
+                    if (vatCell) vatCell.value = effectivePrice.toFixed(2);
+                    const subtotal = actualQty * effectivePrice * (1 - disc / 100) * (checked ? (1 - addlDisc / 100) : 1);
                     row.querySelector('.p-item-subtotal').value = subtotal.toFixed(2);
                     if (typeof window.updateProceedStep2Totals === 'function') window.updateProceedStep2Totals();
                 }
@@ -677,9 +714,19 @@ window.openProceedModal = async function(noteId) {
                     ptbody.querySelectorAll('.p-item-actual-qty').forEach(el => recalcItemSubtotal(el.closest('tr')));
                     if (typeof window.updateProceedStep2Totals === 'function') window.updateProceedStep2Totals();
                 });
+                // W68_SALES_ORDER_VAT_TOGGLE_20261106
+                document.getElementById('proceed-vat-toggle')?.addEventListener('change', function() {
+                    ptbody.querySelectorAll('.p-item-checkbox').forEach(cb => recalcItemSubtotal(cb.closest('tr')));
+                    if (typeof window.updateProceedStep2Totals === 'function') window.updateProceedStep2Totals();
+                });
+                // Seed the VAT PRICE column without altering the server-provided subtotal.
+                ptbody.querySelectorAll('.p-item-price').forEach(p => {
+                    const vatCell = p.closest('tr').querySelector('.p-item-vat-price');
+                    if (vatCell) vatCell.value = (parseFloat(p.value) || 0).toFixed(2);
+                });
                 if (typeof window.updateProceedStep2Totals === 'function') window.updateProceedStep2Totals();
             } else {
-                ptbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
+                ptbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
                 if (typeof window.updateProceedStep2Totals === 'function') window.updateProceedStep2Totals();
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -894,11 +941,13 @@ function populateProceedReview() {
                 const addQty = parseInt(row.querySelector('.p-item-add-qty')?.value) || 0;
                 const unit = row.querySelector('.p-item-oum')?.value || '';
                 const price = parseFloat(row.querySelector('.p-item-price')?.value) || 0;
+                const vatMult = window.isProceedVatOn() ? 1.12 : 1;
+                const effectivePrice = price * vatMult;
                 const disc = parseFloat(row.querySelector('.p-item-disc')?.value) || 0;
                 const sub = parseFloat(row.querySelector('.p-item-subtotal')?.value) || 0;
                 const particulars = row.querySelector('.p-item-particulars')?.value || '';
                 const priceCode = row.getAttribute('data-price-code') || '';
-                const itemGross = price * actualQty;
+                const itemGross = effectivePrice * actualQty;
                 const itemDiscAmt = itemGross * (disc / 100);
                 const itemBeforeAddl = itemGross - itemDiscAmt;
                 const itemAddlDisc = itemBeforeAddl * (addlDisc / 100);
@@ -906,11 +955,11 @@ function populateProceedReview() {
                 totalDiscAmt += itemDiscAmt;
                 addlDiscAmt += itemAddlDisc;
                 const badgeClass = actualQty !== qty ? 'text-amber-600 font-bold' : 'text-slate-700';
-                return `<tr><td class="p-4 text-center">✓</td><td class="p-4 font-bold text-maroon" style="min-width:150px;width:150px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;">${code}</td><td class="p-4 text-slate-500" style="min-width:150px;width:150px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;">${priceCode || 'N/A'}</td><td class="p-4 text-slate-700">${desc}</td><td class="p-4 text-center">${qty}</td><td class="p-4 text-center ${badgeClass}">${actualQty}</td><td class="p-4 text-center text-amber-600 font-bold">+${addQty}</td><td class="p-4 text-center uppercase text-slate-500">${unit}</td><td class="p-4 text-right">₱ ${price.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td class="p-4 text-center text-slate-400">${disc}%</td><td class="p-4 text-right font-bold text-maroon">₱ ${sub.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td class="p-4 text-slate-500 italic text-[10px]">${particulars || '---'}</td></tr>`;
+                return `<tr><td class="p-4 text-center">✓</td><td class="p-4 font-bold text-maroon" style="min-width:150px;width:150px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;">${code}</td><td class="p-4 text-slate-500" style="min-width:150px;width:150px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;">${priceCode || 'N/A'}</td><td class="p-4 text-slate-700">${desc}</td><td class="p-4 text-center">${qty}</td><td class="p-4 text-center ${badgeClass}">${actualQty}</td><td class="p-4 text-center text-amber-600 font-bold">+${addQty}</td><td class="p-4 text-center uppercase text-slate-500">${unit}</td><td class="p-4 text-right">₱ ${price.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td class="p-4 text-right text-emerald-700 font-bold">₱ ${effectivePrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td class="p-4 text-center text-slate-400">${disc}%</td><td class="p-4 text-right font-bold text-maroon">₱ ${sub.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td class="p-4 text-slate-500 italic text-[10px]">${particulars || '---'}</td></tr>`;
             }).join('');
         if (addlDisc > 0) {
             const addlRow = document.createElement('tr');
-            addlRow.innerHTML = `<td colspan="10" class="p-4 text-right text-amber-600 font-bold text-xs">Additional Discount (${addlDisc}%):</td><td class="p-4 text-right font-bold text-amber-600 text-xs">-₱ ${addlDiscAmt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td></td>`;
+            addlRow.innerHTML = `<td colspan="11" class="p-4 text-right text-amber-600 font-bold text-xs">Additional Discount (${addlDisc}%):</td><td class="p-4 text-right font-bold text-amber-600 text-xs">-₱ ${addlDiscAmt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td><td></td>`;
             rtbody.appendChild(addlRow);
         }
     }
@@ -1015,6 +1064,7 @@ window.finalizeSalesOrder = async function() {
                 order_date: orderDate,
                 terms: terms,
                 order_type: orderType,
+                is_vat: window.isProceedVatOn() ? 1 : 0,
                 items: items 
             }),
         });
@@ -1031,6 +1081,9 @@ window.finalizeSalesOrder = async function() {
             window._printInvoiceNumber = invoiceNumber;
             window._processedSalesOrderId = r.sales_order_id || null;
             window._processedSalesOrderDate = r.order_date || orderDate;
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106 - VAT orders can only print the Sale's Invoice.
+            window._processedIsVat = window.isProceedVatOn();
+            if (typeof window.applyPrintTypeVatGate === 'function') window.applyPrintTypeVatGate(window._processedIsVat);
             toggleModal('print-receipt-modal', true);
             loadActiveNotes();
             loadSalesOrderDashboard();
@@ -1045,18 +1098,31 @@ window.finalizeSalesOrder = async function() {
 
 window._printSource = 'proceed';
 
-window.openHistoryPrintModal = function(orderId) {
+window.openHistoryPrintModal = async function(orderId) {
     window._printSource = 'history';
     window._historyPrintOrderId = orderId;
+    // W68_SALES_ORDER_VAT_TOGGLE_20261106
+    // Resolve the order's VAT state so a VAT Sales Order can only print the Sale's Invoice.
+    let isVat = false;
+    try {
+        const url = (window.salesOrderRoutes?.detailUrl || '/admin/sales/sales-order/detail/:id').replace(':id', orderId);
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const r = await res.json();
+        isVat = !!(r && r.success && r.order && Number(r.order.is_vat) === 1);
+    } catch (e) {
+        console.error('VAT state lookup failed:', e);
+    }
+    if (typeof window.applyPrintTypeVatGate === 'function') window.applyPrintTypeVatGate(isVat);
     toggleModal('print-receipt-modal', true);
 };
 
 window.submitPrintReceipt = async function() {
-    const printType = document.querySelector('input[name="receipt-print-type"]:checked')?.value || 'order';
+    let printType = document.querySelector('input[name="receipt-print-type"]:checked')?.value || 'order';
 
     let note, addlDisc, items, addlDiscRate, totalAddlDiscAmt, grossTotal, netTotal, date;
     let printSalesOrderId = null;
     let printInvoiceNumber = '';
+    let isVat = false;
 
     if (window._printSource === 'history') {
         try {
@@ -1069,7 +1135,12 @@ window.submitPrintReceipt = async function() {
             // the server can re-read sales_orders.created_at as the authoritative date.
             printSalesOrderId = note.id || window._historyPrintOrderId || null;
             printInvoiceNumber = note.invoice_number || note.invoice_no || note.invoice_numbers || '';
-            
+
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106 - printed documents show the VAT-inclusive price.
+            isVat = Number(note.is_vat) === 1;
+            const vatMult = isVat ? 1.12 : 1;
+            if (isVat) printType = 'invoice';
+
             // Read additional discount rate from stored items
             addlDiscRate = (note.items && note.items.length > 0) ? parseFloat(note.items[0].additional_discount) || 0 : 0;
             
@@ -1090,7 +1161,7 @@ window.submitPrintReceipt = async function() {
                     actual_qty: item.actual_qty ?? item.quantity ?? 0,
                     additional_qty: item.additional_qty || 0,
                     oum: (item.oum || '').trim(),
-                    unit_price: parseFloat(item.unit_price) || 0,
+                    unit_price: (parseFloat(item.unit_price) || 0) * vatMult,
                     discount: parseFloat(item.discount) || 0,
                     additional_discount: rate,
                     subtotal: subtotalBeforeAddl,
@@ -1113,6 +1184,11 @@ window.submitPrintReceipt = async function() {
         printSalesOrderId = window._processedSalesOrderId || null;
         printInvoiceNumber = window._printInvoiceNumber || '';
 
+        // W68_SALES_ORDER_VAT_TOGGLE_20261106 - printed documents show the VAT-inclusive price.
+        isVat = window._processedIsVat === true || (window._processedIsVat === undefined && window.isProceedVatOn());
+        if (isVat) printType = 'invoice';
+        const proceedVatMult = isVat ? 1.12 : 1;
+
         addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
         // Filter to show only CHECKED items for print
         items = Array.from(document.querySelectorAll('#proceed-items-tbody tr'))
@@ -1125,8 +1201,9 @@ window.submitPrintReceipt = async function() {
                 const actualQty = parseInt(row.querySelector('.p-item-actual-qty')?.value) || 0;
                 const addQty = parseInt(row.querySelector('.p-item-add-qty')?.value) || 0;
                 const price = parseFloat(row.querySelector('.p-item-price')?.value) || 0;
+                const effectivePrice = price * proceedVatMult;
                 const disc = parseFloat(row.querySelector('.p-item-disc')?.value) || 0;
-                const printSubtotal = actualQty * price * (1 - disc / 100);
+                const printSubtotal = actualQty * effectivePrice * (1 - disc / 100);
                 const pCodeInput = row.querySelector('.p-item-code');
                 return {
                     // W68_PRINT_PROCEED_PRODUCT_ID_20260911
@@ -1140,7 +1217,7 @@ window.submitPrintReceipt = async function() {
                     actual_qty: actualQty,
                     additional_qty: addQty,
                     oum: (row.querySelector('.p-item-oum')?.value || '').trim(),
-                    unit_price: price,
+                    unit_price: effectivePrice,
                     discount: disc,
                     additional_discount: 0,
                     subtotal: printSubtotal,
@@ -1187,6 +1264,7 @@ window.submitPrintReceipt = async function() {
                 rush_text: note.is_rush ? 'RUSH' : '',
                 total_addl_discount: totalAddlDiscAmt.toString(),
                 addl_discount_rate: addlDiscRate.toString(),
+                is_vat: isVat ? 1 : 0,
                 vat_rate: '12',
                 vat_amount: printType === 'invoice' ? (netTotal / 1.12 * 0.12).toFixed(2) : '0',
                 grand_total: printType === 'invoice' ? (netTotal / 1.12).toFixed(2) : netTotal.toFixed(2),
@@ -1265,7 +1343,7 @@ window.viewSalesOrderDetail = async function(id) {
     switchSalesOrderDetailTab('items', document.getElementById('view-order-items-tab'));
     document.querySelectorAll('#view-order-movement-panel .movement-column-search').forEach(input => input.value = '');
 
-    tbody.innerHTML = '<tr><td colspan="11" class="p-4 text-center text-slate-400">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-slate-400">Loading...</td></tr>';
     if (movementTbody) {
         movementTbody.innerHTML = '<tr><td colspan="6" class="p-5 text-center text-slate-400">Loading movement...</td></tr>';
     }
@@ -1299,6 +1377,8 @@ window.viewSalesOrderDetail = async function(id) {
         document.getElementById('view-i-status').textContent = order.status || '---';
 
         if (Array.isArray(order.items) && order.items.length > 0) {
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106
+            const detailVatMult = Number(order.is_vat) === 1 ? 1.12 : 1;
             tbody.innerHTML = order.items.map(item => `
                 <tr class="hover:bg-slate-50 transition-colors">
                     <td class="p-4 font-bold text-maroon" style="min-width:150px;width:150px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(item.product_code || '')}</td>
@@ -1309,6 +1389,7 @@ window.viewSalesOrderDetail = async function(id) {
                     <td class="p-4 text-center text-amber-600 font-bold">${Number(item.additional_qty || 0).toLocaleString()}</td>
                     <td class="p-4 text-center uppercase text-slate-500">${escapeHtml(item.oum || '')}</td>
                     <td class="p-4 text-right">₱ ${parseFloat(item.unit_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td class="p-4 text-right text-emerald-700 font-bold">₱ ${(parseFloat(item.unit_price || 0) * detailVatMult).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                     <td class="p-4 text-center text-slate-400">${parseFloat(item.discount || 0).toLocaleString()}%</td>
                     <td class="p-4 text-right font-bold text-maroon">₱ ${parseFloat(item.subtotal || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                     <td class="p-4 text-slate-500 italic text-[10px]">${escapeHtml(item.particulars || '---')}</td>
@@ -1317,7 +1398,7 @@ window.viewSalesOrderDetail = async function(id) {
             document.getElementById('view-order-count').textContent = order.items.length + (order.items.length === 1 ? ' item' : ' items');
             document.getElementById('view-order-total').textContent = '₱ ' + parseFloat(order.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
         } else {
-            tbody.innerHTML = '<tr><td colspan="11" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
             document.getElementById('view-order-count').textContent = '0 items';
             document.getElementById('view-order-total').textContent = '₱ 0.00';
         }
@@ -1350,7 +1431,7 @@ window.viewSalesOrderDetail = async function(id) {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
         console.error('Error loading order detail:', e);
-        tbody.innerHTML = '<tr><td colspan="11" class="p-4 text-center text-red-400 italic">Error loading details.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-red-400 italic">Error loading details.</td></tr>';
         if (movementTbody) movementTbody.innerHTML = '<tr><td colspan="6" class="p-5 text-center text-red-400 italic">Error loading ledger.</td></tr>';
     }
 };
@@ -3625,6 +3706,10 @@ window.editSalesOrder = async function(salesOrderId) {
             const addlDiscInput = document.getElementById('edit-so-addl-discount');
             if (addlDiscInput) addlDiscInput.value = firstItemAddlDisc;
 
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106 - restore the saved VAT state.
+            const editVatToggle = document.getElementById('edit-so-vat-toggle');
+            if (editVatToggle) editVatToggle.checked = Number(so.is_vat) === 1;
+
             // Items
             const tbody = document.getElementById('edit-so-items-tbody');
             if (so.items && so.items.length > 0) {
@@ -3662,6 +3747,7 @@ window.editSalesOrder = async function(salesOrderId) {
                         <td class="p-2 px-3"><input type="number" value="${item.additional_qty || 0}" min="0" class="e-item-add-qty text-xs w-16 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><input type="text" value="${escapeHtml(item.oum || '')}" class="e-item-oum text-xs w-16 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center uppercase text-slate-500" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><input type="number" value="${item.unit_price}" step="0.01" min="0" class="e-item-price text-xs w-20 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-right" data-idx="${idx}"></td>
+                        <td class="p-2 px-3"><input type="text" class="e-item-vat-price text-xs w-24 px-2 py-1 border border-emerald-200 rounded-lg outline-none text-right font-bold text-emerald-700 bg-emerald-50" readonly tabindex="-1"></td>
                         <td class="p-2 px-3"><input type="number" value="${item.discount}" step="0.01" min="0" max="100" class="e-item-disc text-xs w-14 px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-center" data-idx="${idx}"></td>
                         <td class="p-2 px-3"><input type="text" value="${parseFloat(item.subtotal || 0).toFixed(2)}" class="e-item-subtotal text-xs w-full px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none text-right font-bold text-maroon" data-idx="${idx}" readonly></td>
                         <td class="p-2 px-3"><input type="text" value="${escapeHtml(item.particulars || '')}" class="e-item-particulars text-xs w-full px-2 py-1 border border-slate-200 rounded-lg focus:ring-2 focus:ring-maroon/20 outline-none" placeholder="Notes..." data-idx="${idx}"></td>
@@ -3688,13 +3774,23 @@ window.editSalesOrder = async function(salesOrderId) {
                 document.getElementById('edit-so-addl-discount')?.addEventListener('input', function() {
                     tbody.querySelectorAll('.e-item-actual-qty').forEach(el => editRecalcItemSubtotal(el.closest('tr')));
                 });
+                // W68_SALES_ORDER_VAT_TOGGLE_20261106
+                document.getElementById('edit-so-vat-toggle')?.addEventListener('change', function() {
+                    tbody.querySelectorAll('.e-item-actual-qty').forEach(el => editRecalcItemSubtotal(el.closest('tr')));
+                });
+                // Seed the VAT PRICE column without altering the stored subtotal.
+                const editVatMult = window.isEditVatOn() ? 1.12 : 1;
+                tbody.querySelectorAll('.e-item-price').forEach(p => {
+                    const vatCell = p.closest('tr').querySelector('.e-item-vat-price');
+                    if (vatCell) vatCell.value = ((parseFloat(p.value) || 0) * editVatMult).toFixed(2);
+                });
                 // Price code dropdown: lazy load on focus, update price on change
                 tbody.querySelectorAll('.e-item-price-code').forEach(el => {
                     el.addEventListener('focusin', function() { populatePriceCodeSelect(this); });
                     el.addEventListener('change', function() { handlePriceCodeChange(this, true); });
                 });
             } else {
-                tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-slate-300 italic">No items found.</td></tr>';
             }
             if (storedChanges && deletedChangeItems.length + addedChangeItems.length + updatedChangeItems.length > 0) {
                 sessionStorage.removeItem('so_edit_changes');
@@ -3722,9 +3818,12 @@ function editRecalcItemSubtotal(row) {
         qtyEl.value = actualQty;
     }
     const price = parseFloat(row.querySelector('.e-item-price').value) || 0;
+    const effectivePrice = price * (window.isEditVatOn() ? 1.12 : 1);
     const disc = parseFloat(row.querySelector('.e-item-disc').value) || 0;
     const addlDisc = parseFloat(document.getElementById('edit-so-addl-discount')?.value) || 0;
-    const subtotal = actualQty * price * (1 - disc / 100) * (checked ? (1 - addlDisc / 100) : 1);
+    const vatCell = row.querySelector('.e-item-vat-price');
+    if (vatCell) vatCell.value = effectivePrice.toFixed(2);
+    const subtotal = actualQty * effectivePrice * (1 - disc / 100) * (checked ? (1 - addlDisc / 100) : 1);
     row.querySelector('.e-item-subtotal').value = subtotal.toFixed(2);
     updateEditTotal();
 }
@@ -3836,6 +3935,7 @@ window.finalizeEditSalesOrder = async function() {
                 order_date: orderDate,
                 terms: terms,
                 order_type: orderType,
+                is_vat: window.isEditVatOn() ? 1 : 0,
                 waybill_no: waybillNo,
                 waybill_date: waybillDate,
                 remarks: remarks,

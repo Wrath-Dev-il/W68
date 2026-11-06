@@ -17137,6 +17137,7 @@ Route::get('/admin/sales/sales-order/detail/{id}', function (Request $request, $
                     'waybill_no' => $salesOrder->waybill_no,
                     'waybill_date' => $salesOrder->waybill_date,
                     'status' => $salesOrder->status,
+                    'is_vat' => (int) ($salesOrder->is_vat ?? 0),
                     'is_rush' => $salesOrder->salesNote
                         ? (bool) $salesOrder->salesNote->is_rush
                         : false,
@@ -17735,6 +17736,9 @@ Route::post('/admin/sales/sales-order/proceed', function (Request $request) {
                 'invoice_numbers' => trim($invoiceNumber), // Store as single invoice (not comma-separated)
                 'terms' => $terms,
                 'order_type' => $orderType,
+                // W68_SALES_ORDER_VAT_TOGGLE_20261106
+                // 1 = +12% VAT applied to every item unit price, NULL = no VAT.
+                'is_vat' => $request->boolean('is_vat') ? 1 : null,
                 'total_amount' => 0, // Will be calculated from items
                 'status' => 'Confirmed',
                 // created_at is the Sales Order issue date used throughout History/Edit/Print.
@@ -17958,6 +17962,7 @@ Route::get('/admin/sales/sales-order/edit-detail/{salesOrderId}', function ($sal
                 'order_date' => $so->created_at ? date('Y-m-d', strtotime($so->created_at)) : '',
                 'terms' => $so->terms,
                 'order_type' => $so->order_type ?? 'NONE',
+                'is_vat' => (int) ($so->is_vat ?? 0),
                 'items' => $so->items->map(function ($item) use ($so) {
                     $product = \App\Models\Product::on('masterlist')->find($item->product_id);
 
@@ -18039,6 +18044,7 @@ Route::post('/admin/sales/sales-order/update/{salesOrderId}', function (Request 
             'order_date' => 'required|date_format:Y-m-d',
             'terms' => 'nullable|integer|min:0',
             'order_type' => 'nullable|in:NONE,COD,COD 30 DAYS',
+            'is_vat' => 'nullable|boolean',
             'waybill_no' => 'nullable|string',
             'waybill_date' => 'nullable|date',
             'remarks' => 'nullable|string',
@@ -18190,6 +18196,9 @@ Route::post('/admin/sales/sales-order/update/{salesOrderId}', function (Request 
             }
 
             $so->order_type = $data['order_type'] ?? ($so->order_type ?: 'NONE');
+            // W68_SALES_ORDER_VAT_TOGGLE_20261106
+            // 1 = +12% VAT applied to every item unit price, NULL = no VAT.
+            $so->is_vat = $request->boolean('is_vat') ? 1 : null;
             $so->save();
 
             // The saved invoice snapshot is authoritative for product_ledgers.

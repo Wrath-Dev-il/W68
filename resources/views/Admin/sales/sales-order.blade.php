@@ -537,6 +537,7 @@
                                     <th class="p-4 text-center">Additional QTY</th>
                                     <th class="p-4 text-center">UNIT</th>
                                     <th class="p-4 text-right">Unit Price</th>
+                                    <th class="p-4 text-center">VAT PRICE</th>
                                     <th class="p-4 text-center">%Disc</th>
                                     <th class="p-4 text-right">Sub Total</th>
                                     <th class="p-4">Particulars</th>
@@ -551,22 +552,34 @@
                                 <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 6, this.value)" placeholder="Add..." class="column-search-input text-center"></th>
                                 <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 7, this.value)" placeholder="Unit..." class="column-search-input text-center"></th>
                                 <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 8, this.value)" placeholder="Price..." class="column-search-input text-right"></th>
-                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 9, this.value)" placeholder="Disc..." class="column-search-input text-center"></th>
-                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 10, this.value)" placeholder="SubTotal..." class="column-search-input text-right"></th>
-                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 11, this.value)" placeholder="Notes..." class="column-search-input"></th>
+                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 9, this.value)" placeholder="VAT..." class="column-search-input text-right"></th>
+                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 10, this.value)" placeholder="Disc..." class="column-search-input text-center"></th>
+                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 11, this.value)" placeholder="SubTotal..." class="column-search-input text-right"></th>
+                                <th class="p-2 px-3"><input type="text" onkeyup="filterTable('proceed-items-tbody', 12, this.value)" placeholder="Notes..." class="column-search-input"></th>
                             </tr>
                         </thead>
                         <tbody id="proceed-items-tbody" class="text-xs divide-y divide-slate-50">
-                            <tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items loaded.</td></tr>
+                            <tr><td colspan="13" class="p-4 text-center text-slate-300 italic">No items loaded.</td></tr>
                         </tbody>
                     </table>
                     </div>
             </div>
             <div class="flex justify-end px-4">
-                <div class="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
-                    <i data-lucide="percent" class="w-5 h-5 text-amber-600"></i>
-                    <label class="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Additional Discount (%)</label>
-                    <input type="number" id="proceed-addl-discount" value="0" step="any" class="w-20 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                <div class="flex items-center gap-3">
+                    <!-- W68_SALES_ORDER_VAT_TOGGLE_20261106 -->
+                    <div class="flex items-center space-x-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3">
+                        <i data-lucide="receipt-text" class="w-5 h-5 text-emerald-600"></i>
+                        <label for="proceed-vat-toggle" class="text-[10px] font-bold text-emerald-700 uppercase tracking-widest cursor-pointer">VAT 12%</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="proceed-vat-toggle" class="sr-only peer">
+                            <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
+                        <i data-lucide="percent" class="w-5 h-5 text-amber-600"></i>
+                        <label class="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Additional Discount (%)</label>
+                        <input type="number" id="proceed-addl-discount" value="0" step="any" class="w-20 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-bold outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                    </div>
                 </div>
             </div>
         </div>
@@ -632,13 +645,14 @@
                                     <th class="p-4 text-center">Add QTY</th>
                                     <th class="p-4 text-center">UNIT</th>
                                     <th class="p-4 text-right">Unit Price</th>
+                                    <th class="p-4 text-center">VAT PRICE</th>
                                     <th class="p-4 text-center">%Disc</th>
                                     <th class="p-4 text-right">Subtotal</th>
                                     <th class="p-4">Particulars</th>
                                 </tr>
                             </thead>
                             <tbody id="review-proceed-tbody" class="text-xs divide-y divide-slate-50">
-                                <tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items.</td></tr>
+                                <tr><td colspan="13" class="p-4 text-center text-slate-300 italic">No items.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -708,7 +722,7 @@
                     <p class="text-[10px] text-slate-400">With VAT</p>
                 </div>
             </label>
-            <label class="flex items-center space-x-3 p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-maroon transition-all">
+            <label id="print-type-order-label" class="flex items-center space-x-3 p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-maroon transition-all">
                 <input type="radio" name="receipt-print-type" value="order" checked class="accent-maroon">
                 <div>
                     <span class="text-sm font-bold text-slate-700">Sale's Order</span>
@@ -928,6 +942,7 @@
                                     <th class="p-4 text-center">Add QTY</th>
                                     <th class="p-4 text-center">UNIT</th>
                                     <th class="p-4 text-right">Unit Price</th>
+                                    <th class="p-4 text-center">VAT PRICE</th>
                                     <th class="p-4 text-center">%Disc</th>
                                     <th class="p-4 text-right">Subtotal</th>
                                     <th class="p-4">Particulars</th>
@@ -940,13 +955,14 @@
                                     <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 4, this.value)" placeholder="Add..." class="column-search-input text-center"></th>
                                     <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 5, this.value)" placeholder="Unit..." class="column-search-input text-center"></th>
                                     <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 6, this.value)" placeholder="Price..." class="column-search-input text-right"></th>
-                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 7, this.value)" placeholder="Disc..." class="column-search-input text-center"></th>
-                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 8, this.value)" placeholder="SubTotal..." class="column-search-input text-right"></th>
-                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 9, this.value)" placeholder="Notes..." class="column-search-input"></th>
+                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 8, this.value)" placeholder="VAT..." class="column-search-input text-right"></th>
+                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 9, this.value)" placeholder="Disc..." class="column-search-input text-center"></th>
+                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 10, this.value)" placeholder="SubTotal..." class="column-search-input text-right"></th>
+                                    <th class="p-2 px-3"><input type="text" onkeyup="filterTable('view-order-tbody', 11, this.value)" placeholder="Notes..." class="column-search-input"></th>
                                 </tr>
                             </thead>
                             <tbody id="view-order-tbody" class="text-xs divide-y divide-slate-50">
-                                <tr><td colspan="11" class="p-4 text-center text-slate-300 italic">No items.</td></tr>
+                                <tr><td colspan="12" class="p-4 text-center text-slate-300 italic">No items.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1164,19 +1180,29 @@
                                     <th class="p-4 text-center">Addl QTY</th>
                                     <th class="p-4 text-center">UNIT</th>
                                     <th class="p-4 text-right">Unit Price</th>
+                                    <th class="p-4 text-center">VAT PRICE</th>
                                     <th class="p-4 text-center">%Disc</th>
                                     <th class="p-4 text-right">Sub Total</th>
                                     <th class="p-4">Particulars</th>
                                 </tr>
                             </thead>
                             <tbody id="edit-so-items-tbody" class="text-xs divide-y divide-slate-50">
-                                <tr><td colspan="12" class="p-4 text-center text-slate-300 italic">Loading items...</td></tr>
+                                <tr><td colspan="13" class="p-4 text-center text-slate-300 italic">Loading items...</td></tr>
                             </tbody>
                         </table>
                     </div>
                     <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
                         <span class="text-[10px] text-slate-400 font-bold uppercase">Edit the items as needed</span>
                         <div class="flex items-center space-x-4">
+                            <!-- W68_SALES_ORDER_VAT_TOGGLE_20261106 -->
+                            <div class="flex items-center space-x-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+                                <i data-lucide="receipt-text" class="w-4 h-4 text-emerald-600"></i>
+                                <label for="edit-so-vat-toggle" class="text-[9px] font-bold text-emerald-700 uppercase tracking-widest cursor-pointer">VAT 12%</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="edit-so-vat-toggle" class="sr-only peer">
+                                    <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
                             <div class="flex items-center space-x-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                                 <i data-lucide="percent" class="w-4 h-4 text-amber-600"></i>
                                 <label class="text-[9px] font-bold text-amber-700 uppercase tracking-widest">Addl Disc (%)</label>

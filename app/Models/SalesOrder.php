@@ -20,6 +20,7 @@ class SalesOrder extends Model
         'waybill_date',
         'terms',
         'order_type',
+        'is_vat',
         'total_amount',
         'status',
         'remarks',
