@@ -465,11 +465,16 @@ window.isProceedVatOn = function () {
 window.isEditVatOn = function () {
     return !!document.getElementById('edit-so-vat-toggle')?.checked;
 };
-// When a Sales Order carries VAT, only the Sale's Invoice receipt may be printed.
+// W68_SALES_ORDER_VAT_TOGGLE_20261106
+// The Print Receipt options follow the VAT state:
+//   VAT off -> only the Sale's Order receipt can be printed.
+//   VAT on  -> only the Sale's Invoice receipt can be printed.
 window.applyPrintTypeVatGate = function (isVat) {
+    const invoiceLabel = document.getElementById('print-type-invoice-label');
     const orderLabel = document.getElementById('print-type-order-label');
     const invoiceRadio = document.querySelector('input[name="receipt-print-type"][value="invoice"]');
     const orderRadio = document.querySelector('input[name="receipt-print-type"][value="order"]');
+    if (invoiceLabel) invoiceLabel.style.display = isVat ? '' : 'none';
     if (orderLabel) orderLabel.style.display = isVat ? 'none' : '';
     if (isVat) {
         if (invoiceRadio) invoiceRadio.checked = true;

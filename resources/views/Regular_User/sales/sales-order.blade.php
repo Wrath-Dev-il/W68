@@ -717,7 +717,7 @@
         </div>
         <div class="p-6 space-y-4">
             <p class="text-xs text-slate-500">Select receipt type:</p>
-            <label class="flex items-center space-x-3 p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-maroon transition-all">
+            <label id="print-type-invoice-label" class="flex items-center space-x-3 p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-maroon transition-all">
                 <input type="radio" name="receipt-print-type" value="invoice" class="accent-maroon">
                 <div>
                     <span class="text-sm font-bold text-slate-700">Sale's Invoice</span>
