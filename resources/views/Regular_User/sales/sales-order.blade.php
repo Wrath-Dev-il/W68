@@ -135,6 +135,14 @@
             <div class="overflow-x-auto custom-scrollbar">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-50/80 border-b border-slate-100">
+                        <!-- W68_SO_HISTORY_PAGE_TOTAL_20261106 -->
+                        <tr class="bg-maroon/5">
+                            <th colspan="7"></th>
+                            <th colspan="2" class="p-2 px-6 text-right text-[10px] font-bold text-maroon uppercase tracking-widest">
+                                Total Amount <span class="text-slate-400 normal-case">(this page only)</span>:
+                                <span id="history-page-total" class="text-maroon font-extrabold">₱ 0.00</span>
+                            </th>
+                        </tr>
                         <tr>
                             <th class="p-4 px-6 w-12"><input type="checkbox" id="select-all-history" class="rounded border-slate-300 text-maroon focus:ring-maroon"></th>
                             <th class="p-4 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date Issue</th>

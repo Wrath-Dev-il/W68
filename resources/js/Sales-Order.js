@@ -402,6 +402,13 @@ window.searchHistoryField = function(colIndex, value) {
 function renderHistoryPage(orders, total) {
     const tbody = document.getElementById('history-orders-tbody');
     if (!tbody) return;
+    // W68_SO_HISTORY_PAGE_TOTAL_20261106
+    // Sum only the rows currently shown (this pagination page), not the whole result set.
+    const pageTotal = (orders || []).reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+    const pageTotalEl = document.getElementById('history-page-total');
+    if (pageTotalEl) {
+        pageTotalEl.textContent = '₱ ' + pageTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
     if (orders.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-300 italic">No matching records.</td></tr>';
     } else {

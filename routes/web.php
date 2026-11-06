@@ -16565,7 +16565,12 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
                   ->orWhere('customer_name', 'like', "%{$search}%")
                   ->orWhere('invoice_numbers', 'like', "%{$search}%")
                   ->orWhere('waybill_no', 'like', "%{$search}%")
-                  ->orWhere('remarks', 'like', "%{$search}%");
+                  ->orWhere('remarks', 'like', "%{$search}%")
+                  // W68_SO_HISTORY_DATE_SEARCH_20261106
+                  // Match the Date Issue (created_at) and Waybill Date shown in the
+                  // History table so a full date like 2026-10-08 returns records.
+                  ->orWhere('created_at', 'like', "%{$search}%")
+                  ->orWhere('waybill_date', 'like', "%{$search}%");
 
                 if ($onlineAddressOrderNumbers->isNotEmpty()) {
                     $q->orWhereIn('order_number', $onlineAddressOrderNumbers->all());
