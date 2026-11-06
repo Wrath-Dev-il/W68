@@ -157,7 +157,7 @@ unset($item);
     <tbody>
         @foreach($note['items'] as $item)
         <tr>
-            <td class="c">{{ $item['quantity'] + ($item['additional_qty'] ?? 0) }}</td>
+            <td class="c">{{ $item['quantity'] }}{{ ($item['additional_qty'] ?? 0) > 0 ? '(+'.$item['additional_qty'].')' : '' }}</td>
             <td class="c">{{ $item['oum'] }}</td>
             <td>{{ $item['product_code'] }}</td>
             <td>{{ $item['description'] }}</td>

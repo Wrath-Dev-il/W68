@@ -19652,7 +19652,7 @@ Route::get('/admin/sales/sales-order/report/online-print/{id}', function ($id) {
                     'application' => $product ? $product->application : '',
                     'category' => $product ? $product->category : '',
                     'quantity' => $_itemQty,
-                    'additional_qty' => 0,
+                    'additional_qty' => $item['additional_qty'] ?? 0,
                     'oum' => $item['oum'] ?? '',
                     'unit_price' => $item['unit_price'] ?? 0,
                     'subtotal' => $item['subtotal'] ?? 0,

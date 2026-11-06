@@ -1420,14 +1420,22 @@ window.updateOnlineReport = async function() {
             if (addrInput && addrInput.value.trim()) addresses[idx] = addrInput.value.trim();
         });
 
-        // Collect items qty and unit
+        // Collect items qty, additional qty, and unit
         const itemsQty = {};
+        const itemsAdditionalQty = {};
         const itemsUnit = {};
         document.querySelectorAll('.or-qty-input').forEach(function(input) {
             const noteIdx = input.getAttribute('data-or-note-idx');
             const itemIdx = input.getAttribute('data-or-item-idx');
             if (noteIdx !== null && itemIdx !== null) {
                 itemsQty[noteIdx + '-' + itemIdx] = parseInt(input.value) || 1;
+            }
+        });
+        document.querySelectorAll('.or-add-qty-input').forEach(function(input) {
+            const noteIdx = input.getAttribute('data-or-note-idx');
+            const itemIdx = input.getAttribute('data-or-item-idx');
+            if (noteIdx !== null && itemIdx !== null) {
+                itemsAdditionalQty[noteIdx + '-' + itemIdx] = Math.max(0, parseInt(input.value) || 0);
             }
         });
         document.querySelectorAll('.or-unit-input').forEach(function(input) {
@@ -1444,15 +1452,17 @@ window.updateOnlineReport = async function() {
             const origItems = (note.items || []).map(function(item, origIdx) {
                 const qtyKey = noteIdx + '-' + origIdx;
                 const qty = itemsQty[qtyKey] || item.quantity || 0;
+                const additionalQty = itemsAdditionalQty[qtyKey] ?? item.additional_qty ?? 0;
                 const unit = itemsUnit[qtyKey] || item.oum || '';
-                return Object.assign({}, item, { quantity: qty, oum: unit });
+                return Object.assign({}, item, { quantity: qty, additional_qty: additionalQty, oum: unit });
             });
             const merged = origItems.concat(addedItems.map(function(item, addIdx) {
                 const flatIdx = origItems.length + addIdx;
                 const qtyKey = noteIdx + '-' + flatIdx;
                 const qty = itemsQty[qtyKey] || item.quantity || 1;
+                const additionalQty = itemsAdditionalQty[qtyKey] ?? item.additional_qty ?? 0;
                 const unit = itemsUnit[qtyKey] || item.oum || '';
-                return Object.assign({}, item, { quantity: qty, oum: unit, is_added: true });
+                return Object.assign({}, item, { quantity: qty, additional_qty: additionalQty, oum: unit, is_added: true });
             }));
             return Object.assign({}, note, { items: merged });
         });
@@ -1468,6 +1478,7 @@ window.updateOnlineReport = async function() {
                 note_ids: notes.map(function(n) { return n.id; }),
                 added_items: window._onlineReportAddedItems || {},
                 items_qty: itemsQty,
+                items_additional_qty: itemsAdditionalQty,
                 items_unit: itemsUnit,
             }
         };
@@ -2133,8 +2144,49 @@ function syncOnlineQty() {
         }
     });
 }
+
+function syncOnlineAdditionalQty() {
+    document.querySelectorAll('.or-add-qty-input').forEach(input => {
+        const noteIdx = parseInt(input.getAttribute('data-or-note-idx'));
+        const itemIdx = parseInt(input.getAttribute('data-or-item-idx'));
+        if (!isNaN(noteIdx) && !isNaN(itemIdx)) {
+            const additionalQty = Math.max(0, parseInt(input.value) || 0);
+            if (_onlineReportNotes[noteIdx]) {
+                if (_onlineReportNotes[noteIdx].items[itemIdx]) {
+                    _onlineReportNotes[noteIdx].items[itemIdx].additional_qty = additionalQty;
+                }
+                const addedItems = (window._onlineReportAddedItems && window._onlineReportAddedItems[noteIdx]) || [];
+                const origCount = _onlineReportNotes[noteIdx].items && _onlineReportNotes[noteIdx].net_total != 0 ? _onlineReportNotes[noteIdx].items.length : 0;
+                const addedIdx = itemIdx - origCount;
+                if (addedIdx >= 0 && addedItems[addedIdx]) {
+                    addedItems[addedIdx].additional_qty = additionalQty;
+                }
+            }
+        }
+    });
+}
+
+window.updateOnlineReportTotalAmount = function() {
+    let total = 0;
+    document.querySelectorAll('#or-items-container .or-qty-input').forEach(qtyInput => {
+        const row = qtyInput.closest('tr');
+        const priceInput = row?.querySelector('.or-price-input');
+        if (!priceInput) return;
+
+        const qty = parseFloat(qtyInput.value) || 0;
+        const price = parseFloat(priceInput.value);
+        total += qty * (Number.isFinite(price) ? price : 0);
+    });
+
+    const totalEl = document.getElementById('or-total-amount');
+    if (totalEl) {
+        totalEl.textContent = '₱ ' + total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+};
+
 function renderOnlineReportItems() {
     syncOnlineQty();
+    syncOnlineAdditionalQty();
     syncOnlinePrices(); // Save current input values before re-rendering
     const container = document.getElementById('or-items-container');
     document.getElementById('or-items-loading').classList.add('hidden');
@@ -2171,6 +2223,7 @@ function renderOnlineReportItems() {
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Item Code</th>' +
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</th>' +
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">QTY</th>' +
+                            '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">ADD QTY</th>' +
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">UNIT</th>' +
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Price Online</th>' +
                             '<th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Counter Part</th>' +
@@ -2196,6 +2249,7 @@ function renderOnlineReportItems() {
                                 '<td class="p-3 px-4 font-bold text-slate-800">' + (item.product_code || '---') + '</td>' +
                                 '<td class="p-3 px-4 text-slate-600 max-w-xs truncate">' + (item.description || item.product_code || '---') + '</td>' +
                                 '<td class="p-3 px-4 text-center"><input type="number" class="or-qty-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-slate-800 focus:ring-2 focus:ring-maroon/20 outline-none" data-or-item-idx="' + itemIdx + '" data-or-note-idx="' + noteIdx + '" value="' + qty + '" min="1"></td>' +
+                                '<td class="p-3 px-4 text-center"><input type="number" class="or-add-qty-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-amber-700 bg-amber-50/50 focus:ring-2 focus:ring-amber-200 outline-none" data-or-item-idx="' + itemIdx + '" data-or-note-idx="' + noteIdx + '" value="' + (item.additional_qty || 0) + '" min="0"></td>' +
                                 '<td class="p-3 px-4 text-center"><input type="text" class="or-unit-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center text-slate-600 focus:ring-2 focus:ring-maroon/20 outline-none" data-or-item-idx="' + itemIdx + '" data-or-note-idx="' + noteIdx + '" value="' + oum + '"></td>' +
                                 '<td class="p-3 px-4 text-center"><input type="number" step="0.01" class="or-price-input w-28 px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-right outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" data-product-id="' + productId + '" data-note-idx="' + noteIdx + '" data-item-idx="' + itemIdx + '" value="' + parseFloat(priceOnline).toFixed(2) + '"></td>' +
                                 '<td class="p-3 px-4 text-center">' + cpHtml + '</td>' +
@@ -2221,6 +2275,7 @@ function renderOnlineReportItems() {
                                 '<td class="p-3 px-4 font-bold text-maroon">' + item.product_code + '</td>' +
                                 '<td class="p-3 px-4 text-slate-600 max-w-xs truncate">' + item.description + '</td>' +
                                 '<td class="p-3 px-4 text-center"><input type="number" class="or-qty-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-slate-800 focus:ring-2 focus:ring-maroon/20 outline-none" data-or-item-idx="' + flatIdx + '" data-or-note-idx="' + noteIdx + '" value="' + qty + '" min="1"></td>' +
+                                '<td class="p-3 px-4 text-center"><input type="number" class="or-add-qty-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-amber-700 bg-amber-50/50 focus:ring-2 focus:ring-amber-200 outline-none" data-or-item-idx="' + flatIdx + '" data-or-note-idx="' + noteIdx + '" value="' + (item.additional_qty || 0) + '" min="0"></td>' +
                                 '<td class="p-3 px-4 text-center"><input type="text" class="or-unit-input w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-center text-slate-600 focus:ring-2 focus:ring-maroon/20 outline-none" data-or-item-idx="' + flatIdx + '" data-or-note-idx="' + noteIdx + '" value="' + oum + '"></td>' +
                                 '<td class="p-3 px-4 text-center"><input type="number" step="0.01" class="or-price-input w-28 px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-right outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon" data-product-id="' + productId + '" data-note-idx="' + noteIdx + '" data-item-idx="' + flatIdx + '" value="' + parseFloat(priceOnline).toFixed(2) + '"></td>' +
                                 '<td class="p-3 px-4 text-center">' + cpHtml + '</td>' +
@@ -2267,6 +2322,18 @@ function renderOnlineReportItems() {
             }
         });
     });
+    document.querySelectorAll('.or-add-qty-input').forEach(input => {
+        input.addEventListener('input', function() {
+            syncOnlineAdditionalQty();
+        });
+    });
+    document.querySelectorAll('.or-price-input').forEach(input => {
+        input.addEventListener('input', function() {
+            syncOnlinePrices();
+            if (typeof window.updateOnlineReportTotalAmount === 'function') window.updateOnlineReportTotalAmount();
+        });
+    });
+    if (typeof window.updateOnlineReportTotalAmount === 'function') window.updateOnlineReportTotalAmount();
 }
 
 function getPlatformForNote(noteIdx) {
@@ -2377,14 +2444,21 @@ window.generateOnlineReceipt = async function() {
         }
     });
     
-    // Collect qty and unit from DOM for added items
+    // Collect qty, additional qty, and unit from DOM for added items
     const itemsQty = {};
+    const itemsAdditionalQty = {};
     const itemsUnit = {};
     document.querySelectorAll('.or-qty-input').forEach(inp => {
         const noteIdx = inp.getAttribute('data-or-note-idx');
         const itemIdx = inp.getAttribute('data-or-item-idx');
         const key = noteIdx + '-' + itemIdx;
         itemsQty[key] = parseInt(inp.value) || 1;
+    });
+    document.querySelectorAll('.or-add-qty-input').forEach(inp => {
+        const noteIdx = inp.getAttribute('data-or-note-idx');
+        const itemIdx = inp.getAttribute('data-or-item-idx');
+        const key = noteIdx + '-' + itemIdx;
+        itemsAdditionalQty[key] = Math.max(0, parseInt(inp.value) || 0);
     });
     document.querySelectorAll('.or-unit-input').forEach(inp => {
         const noteIdx = inp.getAttribute('data-or-note-idx');
@@ -2394,26 +2468,29 @@ window.generateOnlineReceipt = async function() {
     });
 
     // Merge added items into notes data for the report/print view
-    // Apply user-edited qty and unit from DOM to ALL items
+    // Apply user-edited qty, additional qty, and unit from DOM to ALL items
     const mergedNotes = _onlineReportNotes.map((note, noteIdx) => {
         const added = (window._onlineReportAddedItems && window._onlineReportAddedItems[noteIdx]) || [];
         const origItems = ((note.net_total == 0) ? [] : (note.items || [])).map((item, idx) => {
             const key = noteIdx + '-' + idx;
             const qty = itemsQty[key] || item.quantity || 0;
+            const additionalQty = itemsAdditionalQty[key] ?? item.additional_qty ?? 0;
             const oum = itemsUnit[key] || item.oum || '';
-            return { ...item, quantity: qty, oum: oum };
+            return { ...item, quantity: qty, additional_qty: additionalQty, oum: oum };
         });
         if (added.length === 0) return { ...note, items: origItems };
         const mergedItems = origItems.concat(added.map((item, addIdx) => {
             const flatIdx = origItems.length + addIdx;
             const key = noteIdx + '-' + flatIdx;
             const qty = itemsQty[key] || item.quantity || 1;
+            const additionalQty = itemsAdditionalQty[key] ?? item.additional_qty ?? 0;
             const oum = itemsUnit[key] || item.oum || '';
             return {
                 product_id: item.product_id,
                 product_code: item.product_code,
                 description: item.description,
                 quantity: qty,
+                additional_qty: additionalQty,
                 oum: oum,
                 unit_price: item.unit_price || 0,
                 subtotal: qty * (item.unit_price || 0),
@@ -2433,6 +2510,7 @@ window.generateOnlineReceipt = async function() {
         note_ids: _onlineReportNotes.map(n => n.id),
         added_items: window._onlineReportAddedItems || {},
         items_qty: itemsQty,
+        items_additional_qty: itemsAdditionalQty,
         items_unit: itemsUnit,
     };
     
