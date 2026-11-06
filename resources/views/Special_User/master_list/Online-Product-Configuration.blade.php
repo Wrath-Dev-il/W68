@@ -354,7 +354,7 @@ function formatShopeeSyncStatus(status, fallback = 'Shopee stock sync: waiting..
     const latestErrors = (latest?.summary?.errors || []).length;
     const errors = webhookErrors + fallbackErrors || latestErrors;
 
-    return `Shopee stock sync: active | Last sync: ${lastFallback || lastWebhook} | Errors: ${errors}`;
+    return `Shopee stock sync: ${(fallbackStatus?.message || latest?.message || 'active')} | Last sync: ${lastFallback || lastWebhook} | Errors: ${errors}`;
 }
 
 function normalizeShopeeSyncStatusPayload(data, latestOverride = null) {

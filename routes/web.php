@@ -7076,30 +7076,149 @@ Route::get('/admin/masterlist/online-product-config/shopee-sync-status', functio
 Route::post('/admin/masterlist/online-product-config/shopee-sync-auto', function () {
     $user = session('user');
     if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+    @set_time_limit(0);
 
     // W68_ONLINE_CONFIG_STOCK_SYNC_20261106
-    // Price synchronization was replaced by stock synchronization: On Hand is
-    // pushed to Shopee automatically whenever inventory changes (see
-    // ProductLedgerObserver -> SyncShopeeProductInventory). This endpoint no
-    // longer pulls Shopee prices; it only refreshes the status heartbeat shown
-    // on the Online Product Configuration page.
+    // Price synchronization was replaced by stock synchronization. On Hand is
+    // pushed to Shopee for every connected product. This runs synchronously so
+    // it works even when no queue worker is processing the "shopee-stock" queue.
+    //
+    // It first bulk-reads the current Shopee stock (50 items per API call) and
+    // only pushes the items whose Shopee stock differs from the system On Hand,
+    // so repeat runs are cheap.
     $syncService = app(\App\Services\ShopeePriceSyncService::class);
-    $status = [
-        'success' => true,
-        'message' => 'Shopee stock sync is active. On Hand is pushed to Shopee automatically when inventory changes.',
-        'summary' => ['errors' => []],
-        'mode' => 'stock',
-        'finished_at' => now('Asia/Manila')->toDateTimeString(),
-        'timezone' => 'Asia/Manila',
-    ];
-    $syncService->storeStatus($status, 'fallback');
 
-    return response()->json([
-        'success' => true,
-        'message' => $status['message'],
-        'status' => $status,
-        'ran' => true,
-    ]);
+    $lock = Cache::lock('shopee-stock-sync', 600);
+    if (!$lock->get()) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Shopee stock sync is already running.',
+            'status' => $syncService->latestStatus(),
+            'ran' => false,
+            'locked' => true,
+        ]);
+    }
+
+    try {
+        $service = new \App\Services\ShopeeService();
+        if (!$service->isReady()) {
+            throw new \RuntimeException('Shopee API is not configured. Missing: ' . implode(', ', $service->getMissingCredentials()));
+        }
+
+        $connections = \App\Models\OnlineProduct::on('masterlist')
+            ->whereNotNull('product_id')
+            ->get(['id', 'product_id', 'product_code', 'sku']);
+
+        $balances = \App\Services\ProductStockSyncService::latestBalances($connections->pluck('product_id')->all());
+
+        // Map Shopee item_id => connection using the SHOPEE-{item_id} code.
+        $byItemId = [];
+        foreach ($connections as $connection) {
+            if (preg_match('/^SHOPEE-(\d+)$/i', trim((string) $connection->product_code), $match)) {
+                $byItemId[(string) ((int) $match[1])] = $connection;
+            }
+        }
+
+        // Bulk-read the current Shopee stock (50 items per Shopee call).
+        $shopeeStock = [];
+        foreach (array_chunk(array_keys($byItemId), 50) as $chunk) {
+            $fetched = $service->getProductsByItemIds($chunk);
+            foreach (($fetched['products'] ?? []) as $shopeeProduct) {
+                if (isset($shopeeProduct['id'])) {
+                    $shopeeStock[(string) $shopeeProduct['id']] = (int) ($shopeeProduct['stock'] ?? 0);
+                }
+            }
+        }
+
+        $maxUpdatesPerRun = 100;
+        $checked = 0;
+        $updated = 0;
+        $inSync = 0;
+        $pending = 0;
+        $errors = [];
+
+        foreach ($byItemId as $itemId => $connection) {
+            $checked++;
+            $target = max(0, (int) ($balances[(int) $connection->product_id] ?? 0));
+            $current = $shopeeStock[$itemId] ?? null;
+
+            if ($current !== null && $current === $target) {
+                $inSync++;
+                continue;
+            }
+
+            if ($updated >= $maxUpdatesPerRun) {
+                $pending++;
+                continue;
+            }
+
+            $modelId = null;
+            try {
+                if (!empty($connection->shopee_model_id)) {
+                    $modelId = (int) $connection->shopee_model_id;
+                }
+            } catch (\Throwable $e) {
+                $modelId = null;
+            }
+
+            $result = $service->updateItemStock((int) $itemId, $target, $modelId);
+            if (($result['success'] ?? false) === true) {
+                $updated++;
+            } else {
+                $errors[] = 'SHOPEE-' . $itemId . ': ' . ($result['error'] ?? 'update failed');
+            }
+        }
+
+        $message = "checked {$checked}, updated {$updated}, in sync {$inSync}";
+        if ($pending > 0) {
+            $message .= ", {$pending} pending";
+        }
+
+        $status = [
+            'success' => empty($errors),
+            'message' => $message,
+            'summary' => [
+                'linked_items_checked' => $checked,
+                'updated_shopee_items' => $updated,
+                'in_sync_items' => $inSync,
+                'pending_items' => $pending,
+                'errors' => array_slice($errors, 0, 10),
+            ],
+            'mode' => 'stock',
+            'finished_at' => now('Asia/Manila')->toDateTimeString(),
+            'timezone' => 'Asia/Manila',
+        ];
+        $syncService->storeStatus($status, 'fallback');
+
+        Log::info('[SHOPEE STOCK SYNC] Online Product Configuration sync finished.', $status['summary']);
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'status' => $status,
+            'ran' => true,
+        ]);
+    } catch (\Throwable $e) {
+        $status = [
+            'success' => false,
+            'message' => 'sync failed: ' . $e->getMessage(),
+            'summary' => ['errors' => [$e->getMessage()]],
+            'mode' => 'stock',
+            'finished_at' => now('Asia/Manila')->toDateTimeString(),
+            'timezone' => 'Asia/Manila',
+        ];
+        $syncService->storeStatus($status, 'fallback');
+        Log::error('[SHOPEE STOCK SYNC] Online Product Configuration sync failed.', ['error' => $e->getMessage()]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $status['message'],
+            'status' => $status,
+            'ran' => true,
+        ], 502);
+    } finally {
+        optional($lock)->release();
+    }
 })->name('admin.prod-online-config.shopee-sync-auto');
 
 Route::get('/admin/masterlist/online-product-config/fetch-online', function (Request $request) {
