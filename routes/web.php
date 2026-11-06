@@ -6631,6 +6631,7 @@ if (!function_exists('hatdogOnlineProductConvertedResponse')) {
                 'p.description as system_product_name',
                 'p.part_number as system_part_number',
                 'p.price_online as system_price',
+                'p.on_hand as system_on_hand',
                 'op.id as online_product_id',
                 'op.name as online_product_name',
                 'op.category as online_category',
@@ -6645,7 +6646,7 @@ if (!function_exists('hatdogOnlineProductConvertedResponse')) {
                 $q->where('p.description', 'like', "%{$search}%")
                     ->orWhere('p.product_code', 'like', "%{$search}%")
                     ->orWhere('p.part_number', 'like', "%{$search}%")
-                    ->orWhere('p.price_online', 'like', "%{$search}%")
+                    ->orWhere('p.on_hand', 'like', "%{$search}%")
                     ->orWhere('op.name', 'like', "%{$search}%")
                     ->orWhere('op.category', 'like', "%{$search}%");
             });
@@ -6654,10 +6655,9 @@ if (!function_exists('hatdogOnlineProductConvertedResponse')) {
         $filterColumns = [
             'system_name' => ['p.description', 'p.product_code'],
             'system_part_number' => ['p.part_number'],
-            'system_price' => ['p.price_online'],
+            'system_on_hand' => ['p.on_hand'],
             'online_name' => ['op.name'],
             'online_category' => ['op.category'],
-            'online_price' => ['op.price'],
         ];
         foreach ($filterColumns as $filterKey => $columns) {
             $value = trim((string) ($filters[$filterKey] ?? ''));
@@ -6671,15 +6671,39 @@ if (!function_exists('hatdogOnlineProductConvertedResponse')) {
 
         $total = (clone $query)->count();
         $rows = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
-        $converted = $rows->map(function ($row) {
+
+        // W68_ONLINE_CONFIG_STOCK_SYNC_20261106
+        // Resolve the online (Shopee) stock for each converted row with a single
+        // Shopee API call per page so the Converted tab can show On Hand.
+        $shopeeStockByItemId = [];
+        try {
+            $itemIds = $rows->map(function ($row) {
+                return preg_match('/^SHOPEE-(\d+)$/i', trim((string) $row->online_product_code), $match) ? (int) $match[1] : null;
+            })->filter()->unique()->values()->all();
+
+            $service = new \App\Services\ShopeeService();
+            if ($itemIds !== [] && $service->isReady()) {
+                $fetched = $service->getProductsByItemIds($itemIds);
+                foreach (($fetched['products'] ?? []) as $shopeeProduct) {
+                    if (isset($shopeeProduct['id'])) {
+                        $shopeeStockByItemId[(string) $shopeeProduct['id']] = (int) ($shopeeProduct['stock'] ?? 0);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Unable to resolve Shopee stock for converted products.', ['error' => $e->getMessage()]);
+        }
+
+        $converted = $rows->map(function ($row) use ($shopeeStockByItemId) {
             $systemName = trim((string) ($row->system_product_name ?? ''));
+            $itemId = preg_match('/^SHOPEE-(\d+)$/i', trim((string) $row->online_product_code), $match) ? (int) $match[1] : null;
 
             return [
                 'system' => [
                     'id' => $row->product_id,
                     'name' => $systemName !== '' ? $systemName : ($row->system_product_code ?? '-'),
                     'part_number' => $row->system_part_number ?? '-',
-                    'price' => $row->system_price ?? 0,
+                    'on_hand' => (int) ($row->system_on_hand ?? 0),
                     'product_code' => $row->system_product_code ?? '',
                 ],
                 'online' => [
@@ -6688,7 +6712,7 @@ if (!function_exists('hatdogOnlineProductConvertedResponse')) {
                     'name' => $row->online_product_name ?? '-',
                     'category' => $row->online_category ?? '-',
                     'product_code' => $row->online_product_code ?? '-',
-                    'price' => $row->online_price ?? 0,
+                    'on_hand' => $itemId !== null ? ($shopeeStockByItemId[(string) $itemId] ?? null) : null,
                 ],
             ];
         })->values();
@@ -6773,6 +6797,56 @@ if (!function_exists('hatdogSyncLinkedOnlineProductPrice')) {
         $product->save();
 
         return $product->fresh();
+    }
+}
+
+if (!function_exists('hatdogPushLinkedOnlineProductStock')) {
+    /**
+     * W68_ONLINE_CONFIG_STOCK_SYNC_20261106
+     * Push a connected product's current On Hand (latest Product Ledger balance)
+     * into Shopee inventory so Shopee mirrors the system stock.
+     *
+     * @return array{success:bool,message?:string,item_id?:int,stock?:int,model_id?:?int,skipped?:bool}
+     */
+    function hatdogPushLinkedOnlineProductStock(\App\Models\OnlineProduct $onlineProduct): array
+    {
+        if (empty($onlineProduct->product_id)) {
+            return ['success' => false, 'skipped' => true, 'message' => 'Online product is not linked to a system product.'];
+        }
+
+        $itemId = null;
+        foreach ([$onlineProduct->product_code, $onlineProduct->sku] as $value) {
+            if (preg_match('/^SHOPEE-(\d+)$/i', trim((string) $value), $match)) {
+                $itemId = (int) $match[1];
+                break;
+            }
+        }
+        if (!$itemId) {
+            return ['success' => false, 'message' => 'Linked online product has no SHOPEE-{item_id} code.'];
+        }
+
+        $productId = (int) $onlineProduct->product_id;
+        $balances = \App\Services\ProductStockSyncService::latestBalances([$productId]);
+        $stock = max(0, (int) ($balances[$productId] ?? 0));
+        $modelId = !empty($onlineProduct->shopee_model_id) ? (int) $onlineProduct->shopee_model_id : null;
+
+        $service = new \App\Services\ShopeeService();
+        if (!$service->isReady()) {
+            return [
+                'success' => false,
+                'message' => 'Shopee API is not configured. Missing: ' . implode(', ', $service->getMissingCredentials()),
+                'item_id' => $itemId,
+                'stock' => $stock,
+            ];
+        }
+
+        $result = $service->updateItemStock($itemId, $stock, $modelId);
+
+        return array_merge($result, [
+            'item_id' => $itemId,
+            'stock' => $stock,
+            'model_id' => $modelId,
+        ]);
     }
 }
 
@@ -7002,42 +7076,30 @@ Route::get('/admin/masterlist/online-product-config/shopee-sync-status', functio
 Route::post('/admin/masterlist/online-product-config/shopee-sync-auto', function () {
     $user = session('user');
     if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-    @set_time_limit(0);
 
+    // W68_ONLINE_CONFIG_STOCK_SYNC_20261106
+    // Price synchronization was replaced by stock synchronization: On Hand is
+    // pushed to Shopee automatically whenever inventory changes (see
+    // ProductLedgerObserver -> SyncShopeeProductInventory). This endpoint no
+    // longer pulls Shopee prices; it only refreshes the status heartbeat shown
+    // on the Online Product Configuration page.
     $syncService = app(\App\Services\ShopeePriceSyncService::class);
-    $intervalMinutes = \App\Services\ShopeePriceSyncService::FALLBACK_INTERVAL_MINUTES;
-    if (!$syncService->isStatusOlderThanMinutes($intervalMinutes, 'fallback')) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Shopee price sync is fresh.',
-            'status' => $syncService->latestStatus(),
-            'ran' => false,
-        ]);
-    }
+    $status = [
+        'success' => true,
+        'message' => 'Shopee stock sync is active. On Hand is pushed to Shopee automatically when inventory changes.',
+        'summary' => ['errors' => []],
+        'mode' => 'stock',
+        'finished_at' => now('Asia/Manila')->toDateTimeString(),
+        'timezone' => 'Asia/Manila',
+    ];
+    $syncService->storeStatus($status, 'fallback');
 
-    $lock = Cache::lock('shopee-price-sync', 600);
-    if (!$lock->get()) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Shopee price sync is already running.',
-            'status' => $syncService->latestStatus(),
-            'ran' => false,
-            'locked' => true,
-        ]);
-    }
-
-    try {
-        $result = $syncService->syncFromShopee(50);
-
-        return response()->json([
-            'success' => (bool) ($result['success'] ?? false),
-            'message' => $result['message'] ?? 'Shopee price sync finished.',
-            'status' => $result,
-            'ran' => true,
-        ], ($result['success'] ?? false) ? 200 : 502);
-    } finally {
-        optional($lock)->release();
-    }
+    return response()->json([
+        'success' => true,
+        'message' => $status['message'],
+        'status' => $status,
+        'ran' => true,
+    ]);
 })->name('admin.prod-online-config.shopee-sync-auto');
 
 Route::get('/admin/masterlist/online-product-config/fetch-online', function (Request $request) {
@@ -7110,9 +7172,9 @@ Route::get('/admin/masterlist/online-product-config/fetch-online', function (Req
         $products = $products->filter(fn ($product) => stripos((string) ($product['category'] ?? ''), $categoryFilter) !== false);
     }
 
-    $priceFilter = trim((string) ($filters['price'] ?? ''));
+    $priceFilter = trim((string) ($filters['stock'] ?? ''));
     if ($priceFilter !== '') {
-        $products = $products->filter(fn ($product) => stripos((string) ($product['price'] ?? ''), $priceFilter) !== false);
+        $products = $products->filter(fn ($product) => stripos((string) ($product['stock'] ?? ''), $priceFilter) !== false);
     }
 
     $total = max(0, (int) ($result['total'] ?? 0) - $linkedCount);
@@ -7140,13 +7202,28 @@ Route::get('/admin/masterlist/online-product-config/fetch-system', function (Req
     $query = \App\Models\Product::query()
         ->select('products.*')
         ->orderBy('created_at', 'desc');
+
+    // W68_ONLINE_CONFIG_HIDE_CONVERTED_20261106
+    // Products already connected/converted to an online product must not appear
+    // in the System Product tab; they live in the Converted Product tab instead.
+    $convertedProductIds = DB::connection('masterlist')
+        ->table('online_products')
+        ->whereNotNull('product_id')
+        ->pluck('product_id')
+        ->map(fn ($id) => (int) $id)
+        ->filter()
+        ->unique()
+        ->values();
+    if ($convertedProductIds->isNotEmpty()) {
+        $query->whereNotIn('products.id', $convertedProductIds->all());
+    }
     if ($search) {
         $query->where(function ($q) use ($search) {
             $q->where('product_code', 'like', "%{$search}%")
               ->orWhere('part_number', 'like', "%{$search}%")
               ->orWhere('description', 'like', "%{$search}%")
               ->orWhere('application', 'like', "%{$search}%")
-              ->orWhere('price_online', 'like', "%{$search}%");
+              ->orWhere('on_hand', 'like', "%{$search}%");
         });
     }
     $filterColumns = [
@@ -7154,7 +7231,7 @@ Route::get('/admin/masterlist/online-product-config/fetch-system', function (Req
         'part_number' => 'part_number',
         'description' => 'description',
         'application' => 'application',
-        'price_online' => 'price_online',
+        'on_hand' => 'on_hand',
     ];
     foreach ($filterColumns as $filterKey => $column) {
         $value = trim((string) ($filters[$filterKey] ?? ''));
@@ -7245,23 +7322,27 @@ Route::post('/admin/masterlist/online-product-config/confirm-convert', function 
                 throw new \RuntimeException('Selected online product price is not numeric.');
             }
 
-            $onlinePrice = (float) $onlineProduct->price;
             $onlineProduct->product_id = $product->id;
             $onlineProduct->is_converted = true;
             $onlineProduct->save();
 
-            $product = hatdogSyncLinkedOnlineProductPrice($onlineProduct);
+            // W68_ONLINE_CONFIG_STOCK_SYNC_20261106
+            // Connecting a product mirrors the system On Hand into Shopee stock
+            // instead of pushing the online price.
+            $stockPush = hatdogPushLinkedOnlineProductStock($onlineProduct);
 
             return [
                 'product' => $product,
                 'online_product' => $onlineProduct->fresh(),
-                'online_price' => $onlinePrice,
+                'stock_push' => $stockPush,
             ];
         });
 
         return response()->json([
             'success' => true,
-            'message' => 'Products linked and online price synced successfully.',
+            'message' => ($result['stock_push']['success'] ?? false)
+                ? 'Products linked and On Hand pushed to Shopee.'
+                : 'Products linked. ' . ($result['stock_push']['message'] ?? 'Shopee stock sync was skipped.'),
             'data' => $result,
         ]);
     } catch (\RuntimeException $e) {

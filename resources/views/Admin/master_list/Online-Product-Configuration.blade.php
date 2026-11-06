@@ -34,7 +34,7 @@
         <button onclick="switchTab('system')" id="tab-system" class="tab-btn px-4 py-2 rounded-lg bg-maroon-900 text-white text-[10px] font-black uppercase tracking-widest">System Product</button>
         <button onclick="switchTab('online')" id="tab-online" class="tab-btn px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest">Online Product</button>
         <button onclick="switchTab('converted')" id="tab-converted" class="tab-btn px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest">Converted Product</button>
-        <p id="sync-shopee-prices-status" class="ml-auto basis-full text-[10px] font-black uppercase tracking-widest text-slate-400 sm:basis-auto">Shopee auto sync: checking...</p>
+        <p id="sync-shopee-prices-status" class="ml-auto basis-full text-[10px] font-black uppercase tracking-widest text-slate-400 sm:basis-auto">Shopee stock sync: checking...</p>
     </div>
 
     <div id="tab-system-content" class="tab-content">
@@ -53,7 +53,7 @@
                             <th class="px-4 py-4">Part No#</th>
                             <th class="px-4 py-4">Description</th>
                             <th class="px-4 py-4">Application</th>
-                            <th class="px-4 py-4">Price Online</th>
+                            <th class="px-4 py-4">On Hand</th>
                             <th class="px-4 py-4">Action</th>
                         </tr>
                         <tr class="bg-white border-b border-slate-200">
@@ -61,7 +61,7 @@
                             <th class="px-4 py-2"><input type="text" data-table="system" data-filter="part_number" placeholder="Search part..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"><input type="text" data-table="system" data-filter="description" placeholder="Search desc..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"><input type="text" data-table="system" data-filter="application" placeholder="Search app..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
-                            <th class="px-4 py-2"><input type="text" data-table="system" data-filter="price_online" placeholder="Search price..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
+                            <th class="px-4 py-2"><input type="text" data-table="system" data-filter="on_hand" placeholder="Search qty..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
@@ -99,13 +99,13 @@
                         <tr class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-200">
                             <th class="px-4 py-4">Product Name</th>
                             <th class="px-4 py-4">Category</th>
-                            <th class="px-4 py-4">Price Online</th>
+                            <th class="px-4 py-4">On Hand</th>
                             <th class="px-4 py-4">Action</th>
                         </tr>
                         <tr class="bg-white border-b border-slate-200">
                             <th class="px-4 py-2"><input type="text" data-table="online" data-filter="name" placeholder="Search name..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"><input type="text" data-table="online" data-filter="category" placeholder="Search category..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
-                            <th class="px-4 py-2"><input type="text" data-table="online" data-filter="price" placeholder="Search price..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
+                            <th class="px-4 py-2"><input type="text" data-table="online" data-filter="stock" placeholder="Search qty..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
@@ -148,20 +148,20 @@
                         <tr class="bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200">
                             <th class="px-4 py-2">Product Name</th>
                             <th class="px-4 py-2">Part No#</th>
-                            <th class="px-4 py-2">Price</th>
+                            <th class="px-4 py-2">On Hand</th>
                             <th class="px-4 py-2 text-center">-&gt;</th>
                             <th class="px-4 py-2">Product Name</th>
                             <th class="px-4 py-2">Category</th>
-                            <th class="px-4 py-2">Price Online</th>
+                            <th class="px-4 py-2">On Hand</th>
                         </tr>
                         <tr class="bg-white border-b border-slate-200">
                             <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="system_name" placeholder="Search system..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="system_part_number" placeholder="Search part..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
-                            <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="system_price" placeholder="Search price..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
+                            <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="system_on_hand" placeholder="Search qty..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"></th>
                             <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="online_name" placeholder="Search online..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
                             <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="online_category" placeholder="Search category..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
-                            <th class="px-4 py-2"><input type="text" data-table="converted" data-filter="online_price" placeholder="Search price..." class="column-filter w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-bold normal-case tracking-normal outline-none focus:border-maroon-700"></th>
+                            <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
                     <tbody id="converted-tbody" class="divide-y divide-slate-100 text-xs">
@@ -337,7 +337,7 @@ function loadDashboardCounts() {
         });
 }
 
-function formatShopeeSyncStatus(status, fallback = 'Shopee auto sync: waiting...') {
+function formatShopeeSyncStatus(status, fallback = 'Shopee stock sync: waiting...') {
     if (!status) return fallback;
     const latest = status.latest || status;
     const webhook = status.webhook || (latest.mode === 'webhook' ? latest : null);
@@ -352,7 +352,7 @@ function formatShopeeSyncStatus(status, fallback = 'Shopee auto sync: waiting...
     const latestErrors = (latest?.summary?.errors || []).length;
     const errors = webhookErrors + fallbackErrors || latestErrors;
 
-    return `Shopee webhook sync active | Last webhook sync: ${lastWebhook} | Last fallback sync: ${lastFallback} | Last updated item: ${lastItem} | Errors: ${errors}`;
+    return `Shopee stock sync: active | Last sync: ${lastFallback || lastWebhook} | Errors: ${errors}`;
 }
 
 function normalizeShopeeSyncStatusPayload(data, latestOverride = null) {
@@ -463,7 +463,7 @@ function refreshShopeeSyncStatus() {
         .then(data => {
             if (!data.success) throw new Error(data.message || 'Unable to load Shopee sync status.');
             if (data.is_stale) {
-                setShopeeSyncStatus('Shopee auto sync: syncing latest prices...', null);
+                setShopeeSyncStatus('Shopee stock sync: syncing...', null);
                 return fetch(routeBase + '/shopee-sync-auto', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
@@ -477,13 +477,13 @@ function refreshShopeeSyncStatus() {
                         }, syncData.status || data.status);
 
                         if (syncData.locked) {
-                            setShopeeSyncStatus('Shopee auto sync: already running in the background. Checking again in 15s...', null);
+                            setShopeeSyncStatus('Shopee stock sync: already running in the background. Checking again in 15s...', null);
                             scheduleShopeeSyncRetry(15);
                             return;
                         }
 
                         const syncCountdownSeconds = resolveShopeeCountdownSeconds(syncData, status.fallback || status.latest);
-                        setShopeeSyncStatus(formatShopeeSyncStatus(status, syncData.message || 'Shopee auto sync finished.'), syncCountdownSeconds);
+                        setShopeeSyncStatus(formatShopeeSyncStatus(status, syncData.message || 'Shopee stock sync finished.'), syncCountdownSeconds);
                         if (syncData.ran) {
                             loadDashboardCounts();
                             loadSystem();
@@ -499,7 +499,7 @@ function refreshShopeeSyncStatus() {
             return null;
         })
         .catch(error => {
-            setShopeeSyncStatus('Shopee auto sync: ' + (error.message || 'status unavailable'), null);
+            setShopeeSyncStatus('Shopee stock sync: ' + (error.message || 'status unavailable'), null);
         })
         .finally(() => {
             shopeeSyncRefreshInFlight = false;
@@ -522,7 +522,7 @@ let systemSearchTimeout, onlineSearchTimeout, convertedSearchTimeout;
 let shopeeSyncCountdownTimer = null;
 let shopeeSyncRetryTimer = null;
 let shopeeSyncCountdownSeconds = null;
-let shopeeSyncBaseStatusText = 'Shopee auto sync: checking...';
+let shopeeSyncBaseStatusText = 'Shopee stock sync: checking...';
 let shopeeSyncRefreshInFlight = false;
 document.addEventListener('DOMContentLoaded', function () {
     loadDashboardCounts();
@@ -587,7 +587,7 @@ function renderSystem() {
             <td class="px-4 py-4 text-slate-600">${esc(p.part_number || '-')}</td>
             <td class="px-4 py-4 text-slate-600">${esc(p.description || '-')}</td>
             <td class="px-4 py-4 text-slate-600">${esc(p.application || '-')}</td>
-            <td class="px-4 py-4 text-slate-600">${p.price_online ? '₱' + parseFloat(p.price_online).toFixed(2) : '-'}</td>
+            <td class="px-4 py-4 text-slate-600">${Number(p.latest_on_hand ?? p.on_hand ?? 0).toLocaleString()}</td>
                 <td class="px-4 py-4">
                     <div class="flex items-center gap-1.5">
                         <button onclick='openConvertModal("system", ${JSON.stringify(p).replace(/'/g, "&#39;")})' class="px-3 py-1.5 rounded-lg bg-maroon-900 text-white text-[9px] font-black uppercase tracking-widest hover:bg-maroon-800">Convert</button>
@@ -661,7 +661,7 @@ function renderOnline() {
         <tr class="hover:bg-slate-50/50">
             <td class="px-4 py-4 font-bold text-slate-800">${esc(p.name || '-')}</td>
             <td class="px-4 py-4 text-slate-600">${esc(p.category || '-')}</td>
-            <td class="px-4 py-4 text-slate-600">${p.price ? '₱' + parseFloat(p.price).toFixed(2) : '-'}</td>
+            <td class="px-4 py-4 text-slate-600">${Number(p.stock ?? 0).toLocaleString()}</td>
                 <td class="px-4 py-4">
                     <div class="flex items-center gap-1.5">
                         <button onclick='openConvertModal("online", ${data})' class="px-3 py-1.5 rounded-lg bg-maroon-900 text-white text-[9px] font-black uppercase tracking-widest hover:bg-maroon-800">Convert</button>
@@ -711,11 +711,11 @@ function renderConverted() {
         <tr class="hover:bg-slate-50/50">
             <td class="px-4 py-4 font-bold text-slate-800">${esc(c.system.name || '-')}</td>
             <td class="px-4 py-4 text-slate-600">${esc(c.system.part_number || '-')}</td>
-            <td class="px-4 py-4 text-slate-600">${formatMoney(c.system.price)}</td>
+            <td class="px-4 py-4 text-slate-600">${Number(c.system.on_hand ?? 0).toLocaleString()}</td>
             <td class="px-4 py-4 text-center text-slate-500 text-sm font-black">-&gt;</td>
             <td class="px-4 py-4 font-bold text-slate-800">${esc(c.online.name || '-')}</td>
             <td class="px-4 py-4 text-slate-600">${esc(c.online.category || '-')}</td>
-            <td class="px-4 py-4 text-slate-600">${formatMoney(c.online.price)}</td>
+            <td class="px-4 py-4 text-slate-600">${c.online.on_hand === null || c.online.on_hand === undefined ? '-' : Number(c.online.on_hand).toLocaleString()}</td>
         </tr>
     `;
     }).join('');
@@ -798,7 +798,7 @@ function openConvertModal(type, product) {
         leftFields.innerHTML = `
             <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Product Name</label><input type="text" readonly value="${esc(product.name || '-')}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
             <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Category</label><input type="text" readonly value="${esc(product.category || '-')}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
-            <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Price</label><input type="text" readonly value="${product.price ? '₱' + parseFloat(product.price).toFixed(2) : '-'}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
+            <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">On Hand</label><input type="text" readonly value="${Number(product.latest_on_hand ?? product.on_hand ?? 0).toLocaleString()}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
         `;
         rightFields.innerHTML = '<p class="text-xs text-slate-400 italic">Click "Search & Select" to choose a system product</p>';
     }
@@ -999,7 +999,7 @@ function selectProduct(item) {
         fields.innerHTML = `
             <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Product Name</label><input type="text" readonly value="${esc(item.name || '-')}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
             <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Category</label><input type="text" readonly value="${esc(item.category || '-')}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
-            <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Price</label><input type="text" readonly value="${item.price ? '₱' + parseFloat(item.price).toFixed(2) : '-'}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
+            <div><label class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">On Hand</label><input type="text" readonly value="${Number(item.stock ?? 0).toLocaleString()}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 outline-none"></div>
         `;
     } else {
         fields.innerHTML = `
