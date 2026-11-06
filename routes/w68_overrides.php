@@ -1299,23 +1299,49 @@ $w68OnlineInvoiceUpdate = function (Request $request, $id) use ($w68OnlineInvoic
             ], 422);
         }
 
-        $eligibleNotes = $w68OnlineNoteQuery()
-            ->whereIn('sn.id', $noteIds->all())
+        $currentNoteIds = collect(explode(',', (string) $report->sales_note_ids))
+            ->map(fn ($value) => (int) trim((string) $value))
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values();
+
+        // Notes already attached to this invoice may remain unchanged even if they
+        // no longer match the stricter ONLINE Sales Note query. Only newly
+        // selected notes are validated against that query.
+        $newNoteIds = $noteIds->diff($currentNoteIds)->values();
+
+        $submittedNotes = DB::connection('sales')
+            ->table('sales_notes')
+            ->whereIn('id', $noteIds->all())
             ->get([
-                'sn.id',
-                'sn.sales_number',
-                'sn.customer_id',
-                'sn.customer_name',
-                'sn.order_date',
-                'sn.net_total',
+                'id',
+                'sales_number',
+                'customer_id',
+                'customer_name',
+                'order_date',
+                'net_total',
             ])
             ->keyBy(fn ($row) => (int) $row->id);
 
-        if ($eligibleNotes->count() !== $noteIds->count()) {
+        if ($submittedNotes->count() !== $noteIds->count()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only ONLINE Sales Notes can be assigned to an Online Invoice.',
+                'message' => 'One or more selected Sales Notes could not be found.',
             ], 422);
+        }
+
+        if ($newNoteIds->isNotEmpty()) {
+            $eligibleNewNoteIds = $w68OnlineNoteQuery()
+                ->whereIn('sn.id', $newNoteIds->all())
+                ->pluck('sn.id')
+                ->map(fn ($value) => (int) $value);
+
+            if ($eligibleNewNoteIds->count() !== $newNoteIds->count()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only ONLINE Sales Notes can be assigned to an Online Invoice.',
+                ], 422);
+            }
         }
 
         $invoiceDate = trim((string) ($data['invoice_date'] ?? ''));
@@ -1331,7 +1357,7 @@ $w68OnlineInvoiceUpdate = function (Request $request, $id) use ($w68OnlineInvoic
         if (!is_array($notesData)) $notesData = [];
 
         foreach ($noteIds as $index => $noteId) {
-            $note = $eligibleNotes->get((int) $noteId);
+            $note = $submittedNotes->get((int) $noteId);
             $row = is_array($notesData[$index] ?? null) ? $notesData[$index] : [];
             $row['id'] = (int) $note->id;
             $row['sales_number'] = (string) $note->sales_number;
