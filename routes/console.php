@@ -729,10 +729,16 @@ Schedule::command('data-ups:run')
     ->timezone('Asia/Manila')
     ->withoutOverlapping();
 
-Schedule::command('shopee:sync-prices')
-    ->everyMinute()
-    ->timezone('Asia/Manila')
-    ->withoutOverlapping();
+// W68_SHOPEE_STOCK_ONLY_SYNC_20261106
+// The scheduled Shopee PRICE pull was replaced by stock synchronization. On Hand
+// is now the value synced to Shopee inventory (see the Online Product
+// Configuration sync and shopee:sync-inventory-reconciliation). The
+// shopee:sync-prices command remains available for manual use only.
+
+// Schedule::command('shopee:sync-prices')
+//     ->everyMinute()
+//     ->timezone('Asia/Manila')
+//     ->withoutOverlapping();
 
 // Product stock synchronization is event-driven and runs immediately after
 // Product Ledger transactions commit. The Artisan command remains available

@@ -23,6 +23,28 @@ class ShopeePriceSyncService
     {
         $startedAt = now('Asia/Manila');
         $mode = $source;
+
+        // W68_SHOPEE_STOCK_ONLY_SYNC_20261106
+        // Pushing the system online price to Shopee was replaced by stock
+        // synchronization: On Hand is the single value pushed to Shopee
+        // inventory. Online price edits now stay local to the system.
+        // The original price-push implementation is kept below for reference in
+        // case price syncing needs to be re-enabled.
+        return $this->buildResult(
+            true,
+            'Online price saved locally. Shopee price push is disabled; only On Hand (stock) is synced to Shopee.',
+            $this->emptySummary([], 0),
+            $startedAt,
+            $mode,
+            [
+                'sync_status' => 'disabled',
+                'skip_reason' => 'price_sync_replaced_by_stock',
+                'source' => $source,
+                'product_id' => $product->id,
+                'system_price_online' => (float) ($product->price_online ?? 0),
+            ]
+        );
+
         $product->refresh();
 
         $linkedProducts = OnlineProduct::query()
