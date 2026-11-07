@@ -220,9 +220,7 @@ unset($item);
     $_lCode = $leftItem['product_code'] ?? '';
     $_lPn = $leftItem['part_number'] ?: ($_lCode ?: ($leftItem['description'] ?: 'N/A'));
     $_lCost = ($leftItem['cost'] ?? 0) > 0 ? number_format($leftItem['cost'], 2) : '0.00';
-    $_lPrice = ($leftItem['selling_price'] ?? 0) > 0 ? number_format($leftItem['selling_price'], 2)
-        : (($leftItem['price_online'] ?? 0) > 0 ? number_format($leftItem['price_online'], 2)
-        : (($leftItem['unit_price'] ?? 0) > 0 ? number_format($leftItem['unit_price'], 2) : '0.00'));
+    $_lPrice = number_format((float) ($leftItem['selling_price'] ?? 0), 2);
     $_lUnit = $_unitVal($_lPid, $leftItem['oum'] ?? '');
     $_lComp = $localBalanceStocks[$_lPid] ?? 0;
     $_lOnline = $onlineBalanceStocks[$_lPid] ?? null;
@@ -311,9 +309,7 @@ unset($item);
         $_rPid = (int)($rightItem['product_id'] ?? 0);
         $_rCode = $rightItem['product_code'] ?? '';
         $_rPn = $rightItem['part_number'] ?: ($_rCode ?: ($rightItem['description'] ?: 'N/A'));
-        $_rPrice = ($rightItem['selling_price'] ?? 0) > 0 ? number_format($rightItem['selling_price'], 2)
-            : (($rightItem['price_online'] ?? 0) > 0 ? number_format($rightItem['price_online'], 2)
-            : (($rightItem['unit_price'] ?? 0) > 0 ? number_format($rightItem['unit_price'], 2) : '0.00'));
+        $_rPrice = number_format((float) ($rightItem['selling_price'] ?? 0), 2);
         $_rUnit = $_unitVal($_rPid, $rightItem['oum'] ?? '');
         $_rComp = $localBalanceStocks[$_rPid] ?? 0;
         $_rOnline = $onlineBalanceStocks[$_rPid] ?? null;
