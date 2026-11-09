@@ -596,6 +596,9 @@ if (!window.__productMasterKeyboardNavBound) {
         Object.entries(filters.search).forEach(([col, val]) => {
             if (val) params.append(`search[${col}]`, val);
         });
+        window.getSelectedPricelistFields().forEach((field) => {
+            params.append('pricelist_code_fields[]', field);
+        });
 
         // Add sort params
         if (currentSortColumn) {
@@ -1053,7 +1056,7 @@ function renderProductTable() {
     if (!tbody) return;
 
     if (products.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="py-12 text-center text-slate-400 italic">No products found matching your criteria.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="py-12 text-center text-slate-400 italic">No products found matching your criteria.</td></tr>`;
         return;
     }
 
@@ -1077,11 +1080,11 @@ function renderProductTable() {
         return `
             <tr class="${lowStockRowClass} hover:bg-slate-50/60 table-row-animate transition-colors cursor-pointer group" onclick="if(!event.target.closest('button') && !event.target.closest('input')) viewProduct(${index})">
                 ${window.productMasterWarehouseReadOnly ? '' : `
-                <td class="py-3 px-4 text-center align-middle">
+                <td class="py-3 px-4 text-center align-middle pm-sticky-checkbox">
                     <input type="checkbox" class="rounded border-slate-300 product-checkbox" value="${product.id}" ${isSelected ? 'checked' : ''} onchange="window.handleRowSelect(this, ${product.id})">
                 </td>
                 `}
-                <td class="py-3 px-4 text-center align-middle relative">
+                <td class="py-3 px-4 text-center align-middle relative pm-sticky-pic">
                     <div class="w-10 h-10 flex-shrink-0 mx-auto relative">
                         ${firstImg ? 
                             `<img src="${firstImg}" class="w-10 h-10 rounded-lg object-cover border border-slate-100 shadow-sm cursor-pointer hover:scale-110 transition-transform" onclick="event.stopPropagation(); ${window.productMasterViewEditor ? `viewProduct(${index})` : `window.openFullImagePreview(${index})`}">` :
@@ -1089,8 +1092,8 @@ function renderProductTable() {
                         }
                     </div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${product.product_code || ''}
+                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip pm-sticky-code" onmousemove="updateTooltipPos(event)">
+                    ${escapeHtml(product.product_code || '---')}
                     ${product.product_code ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
@@ -1100,8 +1103,8 @@ function renderProductTable() {
                         ${escapeHtml(product.product_code)}
                     </div>
                     ` : ''}</td>
-<td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${product.product_code2 || ''}
+                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
+                    ${product.product_code2 ? escapeHtml(product.product_code2) : '<span class="text-slate-300 font-normal">---</span>'}
                     ${product.product_code2 ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
@@ -1566,7 +1569,8 @@ window.handleSelectAll = async function(checkbox) {
                         id: selectionId,
                         is_selected: isSelected,
                         search: activeSearch,
-                        tab: currentTab
+                        tab: currentTab,
+                        pricelist_code_fields: window.getSelectedPricelistFields()
                     })
                 });
                 const result = await res.json().catch(() => ({}));
@@ -1873,6 +1877,13 @@ window.confirmAddProduct = async function() {
 }
 
 window.viewProduct = function(product) {
+    // W68_PRODUCT_AI_VIEW_STATUS_RESET_20261010
+    // Product Ledger View is reused between products. Clear any AI status/result
+    // and abort an old lookup before loading the next product.
+    if (typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
+
     if (typeof product === 'number') {
         product = products[product];
     }
@@ -1881,6 +1892,8 @@ window.viewProduct = function(product) {
     document.getElementById("view-prod-code").textContent = product.product_code;
     const viewPricelistCode = document.getElementById("view-pricelist-code");
     if (viewPricelistCode) viewPricelistCode.value = product.pricelist_code || 'N/A';
+    const viewPricelistCode2 = document.getElementById("view-pricelist-code2");
+    if (viewPricelistCode2) viewPricelistCode2.value = product.pricelist_code2 || 'N/A';
     document.getElementById("view-prod-part").textContent = product.part_number;
     document.getElementById("view-prod-cat").textContent = product.category || 'N/A';
     document.getElementById("view-prod-spec").textContent = product.specification || 'N/A';
@@ -2093,6 +2106,8 @@ window.editProduct = function(product) {
     document.getElementById("edit-product-code").value = product.product_code;
     const editPricelistCode = document.getElementById("edit-pricelist-code");
     if (editPricelistCode) editPricelistCode.value = product.pricelist_code || '';
+    const editPricelistCode2 = document.getElementById("edit-pricelist-code2");
+    if (editPricelistCode2) editPricelistCode2.value = product.pricelist_code2 || '';
     document.getElementById("edit-part-number").value = product.part_number;
     document.getElementById("edit-category").value = product.category;
     document.getElementById("edit-specification").value = product.specification || '';
@@ -2694,6 +2709,30 @@ window.parseApplicationString = function(applicationStr, mode = 'edit') {
 // W68_PRODUCT_MASTER_PRICELIST_GROUP_CHECKBOXES_20261016
 // Search by Pricelist Code filters the table. The group checkboxes below use
 // the same persisted is_selected_for_report state as each Product Master row.
+window.getSelectedPricelistFields = function() {
+    const code1 = document.getElementById('search-pricelist-code1');
+    const code2 = document.getElementById('search-pricelist-code2');
+
+    if (!code1 && !code2) return ['pricelist_code', 'pricelist_code2'];
+
+    const fields = [];
+    if (!code1 || code1.checked) fields.push('pricelist_code');
+    if (!code2 || code2.checked) fields.push('pricelist_code2');
+
+    return fields.length ? fields : ['pricelist_code', 'pricelist_code2'];
+};
+
+window.handlePricelistCodeFieldToggle = function() {
+    const code1 = document.getElementById('search-pricelist-code1');
+    const code2 = document.getElementById('search-pricelist-code2');
+
+    if (code1 && code2 && !code1.checked && !code2.checked) {
+        code1.checked = true;
+    }
+
+    void window.loadPricelistCodeGroups();
+};
+
 window.openProductSearchModal = function() {
     toggleModal('search-specific-modal', true);
     void window.loadPricelistCodeGroups();
@@ -2706,7 +2745,12 @@ window.loadPricelistCodeGroups = async function() {
     container.innerHTML = '<div class="col-span-full py-5 text-center text-[10px] font-bold text-slate-400">Loading Pricelist Code groups...</div>';
 
     try {
-        const response = await fetch(window.prodRoutes.pricelistGroups, {
+        const params = new URLSearchParams();
+        window.getSelectedPricelistFields().forEach((field) => {
+            params.append('pricelist_code_fields[]', field);
+        });
+
+        const response = await fetch(`${window.prodRoutes.pricelistGroups}?${params.toString()}`, {
             headers: { 'Accept': 'application/json' }
         });
         const data = await response.json().catch(() => ({}));
@@ -2778,7 +2822,8 @@ window.togglePricelistGroupSelection = async function(checkbox) {
             body: JSON.stringify({
                 id: 'pricelist-group',
                 pricelist_code: code,
-                is_selected: targetState
+                is_selected: targetState,
+                pricelist_code_fields: window.getSelectedPricelistFields()
             })
         });
 
@@ -2879,6 +2924,7 @@ function renderCurrentViewProduct(product) {
     setViewFieldValue('view-prod-code', product.product_code || '');
     setViewFieldValue('view-prod-code2', product.product_code2 || '');
     setViewFieldValue('view-pricelist-code', product.pricelist_code || '');
+    setViewFieldValue('view-pricelist-code2', product.pricelist_code2 || '');
     setViewFieldValue('view-prod-part', product.part_number || '');
     setViewFieldValue('view-prod-cat', product.category || '');
     setViewFieldValue('view-prod-spec', product.specification || '');
@@ -3015,6 +3061,16 @@ window.setProductViewEditMode = function(enabled) {
     if (pictureHint) pictureHint.classList.toggle('hidden', !enabled);
     if (galleryBtn) galleryBtn.classList.toggle('hidden', enabled);
 
+    const aiViewButton = document.getElementById('ai-part-search-view');
+    const aiViewStatus = document.getElementById('ai-part-status-view');
+
+    if (!enabled && typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
+
+    if (aiViewButton) aiViewButton.classList.toggle('hidden', !enabled);
+    if (aiViewStatus) aiViewStatus.classList.toggle('hidden', !enabled);
+
     window.renderViewProductImage();
     window.updateProductViewDirtyState();
 };
@@ -3071,6 +3127,9 @@ window.closeProductViewModal = function() {
     }
 
     window.setProductViewEditMode(false);
+    if (typeof window.resetProductPartAiStatus === 'function') {
+        window.resetProductPartAiStatus('view');
+    }
     toggleModal('view-product-modal', false);
 };
 
@@ -3090,6 +3149,7 @@ window.saveProductViewChanges = async function() {
         product_code: get('view-prod-code').trim(),
         product_code2: get('view-prod-code2').trim(),
         pricelist_code: get('view-pricelist-code').trim(),
+        pricelist_code2: get('view-pricelist-code2').trim(),
         part_number: get('view-prod-part').trim(),
         specification: get('view-prod-spec').trim(),
         category: get('view-prod-cat').trim(),
@@ -3372,3 +3432,461 @@ window.applyViewPictureManager = function() {
 
 
 
+
+
+// ============================================================================
+// PRODUCT MASTER GEMINI PART-NUMBER AI SEARCH - ADMIN + REGULAR
+// ============================================================================
+// W68_PRODUCT_MASTER_GEMINI_PART_SEARCH_20261010
+(function () {
+    const path = String(window.location.pathname || '').toLowerCase();
+    const aiRole = path.startsWith('/admin/')
+        ? 'admin'
+        : (path.startsWith('/regular/')
+            ? 'regular'
+            : (path.startsWith('/special/')
+                ? 'special'
+                : ''));
+
+    if (!aiRole) return;
+
+    const aiSearchUrl = aiRole === 'admin'
+        ? '/admin/masterlist/product/ai-part-search'
+        : (aiRole === 'regular'
+            ? '/regular/master-list/product-master/ai-part-search'
+            : '/special/master-list/product-master/ai-part-search');
+
+    function aiPartApplicationText(applications) {
+        return (applications || []).map(function (app) {
+            const brand = String(app.car_brand || '').trim().toUpperCase();
+            const model = String(app.car_model || '').trim().toUpperCase();
+            const engine = String(app.engine || '').trim().toUpperCase();
+            const from = String(app.year_from || '').trim();
+            const to = String(app.year_to || '').trim();
+            const year = from && to ? from + '-' + to : (from || to);
+            return [brand, model, engine, year].filter(Boolean).join(' ');
+        }).filter(Boolean).join('/ ');
+    }
+
+    function aiPartSpecificationText(applications) {
+        return (applications || []).map(function (app) {
+            const brand = String(app.car_brand || app.brand || app.make || app.vehicle_make || '').trim().toUpperCase();
+            const model = String(app.car_model || app.model || app.vehicle_model || '').trim().toUpperCase();
+            const engine = String(app.engine || app.engine_code || app.engine_codes || app.engine_type || '').trim().toUpperCase();
+
+            let from = String(app.year_from || app.from_year || app.start_year || '').trim();
+            let to = String(app.year_to || app.to_year || app.end_year || '').trim();
+
+            const rawYear = String(app.year_range || app.years || app.year || '').trim();
+            const yearMatches = rawYear.match(/\b(?:19|20)\d{2}\b/g) || [];
+
+            if (!from && yearMatches[0]) from = yearMatches[0];
+            if (!to && yearMatches[1]) to = yearMatches[1];
+            if (!to && from) to = from;
+
+            const year = from && to
+                ? (from === to ? from : from + '-' + to)
+                : (from || to || '');
+
+            return [
+                brand || '',
+                model || '',
+                year,
+                engine || ''
+            ].join(' | ');
+        }).filter(Boolean).join('\n');
+    }
+
+    function aiPartSetStructuredApplications(mode, applications) {
+        const container = document.getElementById(mode + '-application-entries');
+        if (!container) return;
+
+        const rows = Array.isArray(applications) ? applications : [];
+        container.innerHTML = '';
+
+        if (!rows.length) {
+            if (typeof createApplicationEntryHTML === 'function') {
+                container.innerHTML = createApplicationEntryHTML({}, false);
+            }
+            return;
+        }
+
+        rows.forEach(function (app, index) {
+            const rawYear = String(
+                app.year_range || app.years || app.year || ''
+            ).trim();
+            const yearMatches = rawYear.match(/\b(?:19|20)\d{2}\b/g) || [];
+
+            const entry = {
+                brand: String(
+                    app.car_brand || app.brand || app.make || app.vehicle_make || ''
+                ).trim().toUpperCase(),
+                model: String(
+                    app.car_model || app.model || app.vehicle_model || ''
+                ).trim().toUpperCase(),
+                yearFrom: String(
+                    app.year_from || app.from_year || app.start_year || yearMatches[0] || ''
+                ).trim(),
+                yearTo: String(
+                    app.year_to || app.to_year || app.end_year || yearMatches[1] || yearMatches[0] || ''
+                ).trim(),
+                engine: String(
+                    app.engine || app.engine_code || app.engine_codes || app.engine_type || ''
+                ).trim().toUpperCase()
+            };
+
+            if (typeof createApplicationEntryHTML === 'function') {
+                container.insertAdjacentHTML(
+                    'beforeend',
+                    createApplicationEntryHTML(entry, index > 0)
+                );
+
+                // Fill the actual Product Master inputs explicitly after creating
+                // the row so Car Model and Year never depend only on template mapping.
+                const renderedRows = container.querySelectorAll('.app-entry');
+                const rendered = renderedRows[renderedRows.length - 1];
+
+                if (rendered) {
+                    const values = {
+                        car_brand: entry.brand,
+                        car_model: entry.model,
+                        year_from: entry.yearFrom,
+                        year_to: entry.yearTo,
+                        engine: entry.engine
+                    };
+
+                    Object.entries(values).forEach(function (pair) {
+                        const input = rendered.querySelector('[data-field="' + pair[0] + '"]');
+                        if (!input) return;
+                        input.value = pair[1];
+                        input.setCustomValidity('');
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                }
+            }
+        });
+
+        if (typeof window.collectApplicationString === 'function') {
+            window.collectApplicationString(mode);
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    function aiPartStatusElement(mode) {
+        return document.getElementById('ai-part-status-' + mode);
+    }
+    const aiPartDefaultMessage = 'AI Search uses Philippine-market results to fill Description and vehicle Specification. Application is left unchanged.';
+    const aiPartControllers = {};
+
+    function resetAiPartStatus(mode) {
+        if (aiPartControllers[mode]) {
+            try { aiPartControllers[mode].abort(); } catch (e) {}
+            delete aiPartControllers[mode];
+        }
+
+        const button = document.getElementById('ai-part-search-' + mode);
+        if (button) aiPartSetButtonLoading(button, false);
+
+        const el = aiPartStatusElement(mode);
+        if (el) {
+            el.textContent = aiPartDefaultMessage;
+            el.classList.remove('text-emerald-600', 'text-red-600', 'text-amber-600');
+            el.classList.add('text-slate-400');
+        }
+    }
+
+    window.resetProductPartAiStatus = resetAiPartStatus;
+
+
+    function aiPartSetStatus(mode, message, kind) {
+        const el = aiPartStatusElement(mode);
+        if (!el) return;
+
+        el.textContent = message || '';
+        el.classList.remove('text-slate-400', 'text-emerald-600', 'text-red-600', 'text-amber-600');
+
+        if (kind === 'success') el.classList.add('text-emerald-600');
+        else if (kind === 'error') el.classList.add('text-red-600');
+        else if (kind === 'warning') el.classList.add('text-amber-600');
+        else el.classList.add('text-slate-400');
+    }
+
+    function aiPartSetButtonLoading(button, loading) {
+        if (!button) return;
+        button.disabled = !!loading;
+        button.classList.toggle('opacity-60', !!loading);
+        button.classList.toggle('cursor-wait', !!loading);
+        button.innerHTML = loading
+            ? '<span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span><span>Searching AI...</span>'
+            : '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i><span>AI Search</span>';
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    function aiPartFields(mode) {
+        if (mode === 'add') {
+            return {
+                part: document.querySelector('#add-product-form [name="part_number"]'),
+                description: document.querySelector('#add-product-form [name="description"]'),
+                specification: document.querySelector('#add-product-form [name="specification"]')
+            };
+        }
+
+        if (mode === 'edit') {
+            return {
+                part: document.getElementById('edit-part-number'),
+                description: document.getElementById('edit-description'),
+                specification: document.getElementById('edit-specification')
+            };
+        }
+
+        return {
+            part: document.getElementById('view-prod-part'),
+            description: document.getElementById('view-prod-desc'),
+            specification: document.getElementById('view-prod-spec')
+        };
+    }
+
+    async function runProductPartAiSearch(mode, button) {
+        const fields = aiPartFields(mode);
+        const partNumber = String(fields.part?.value || '').trim();
+
+        if (!partNumber) {
+            aiPartSetStatus(mode, 'Enter a Part Number first.', 'error');
+            fields.part?.focus();
+            return;
+        }
+
+        if (aiPartControllers[mode]) {
+            try { aiPartControllers[mode].abort(); } catch (e) {}
+        }
+
+        const controller = new AbortController();
+        aiPartControllers[mode] = controller;
+        const editProductId = mode === 'edit'
+            ? String(document.getElementById('edit-product-id')?.value || '')
+            : '';
+
+        aiPartSetButtonLoading(button, true);
+        aiPartSetStatus(mode, 'Searching the Philippine market for this exact part number...', 'loading');
+
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const response = await fetch(aiSearchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                signal: controller.signal,
+                body: JSON.stringify({ part_number: partNumber })
+            });
+
+            // The user may have opened another product while Gemini was working.
+            // Never apply an old result to a new Product Master form.
+            const currentPartNumber = String(aiPartFields(mode).part?.value || '').trim();
+            const currentEditProductId = mode === 'edit'
+                ? String(document.getElementById('edit-product-id')?.value || '')
+                : '';
+
+            if (
+                controller.signal.aborted
+                || currentPartNumber !== partNumber
+                || (mode === 'edit' && currentEditProductId !== editProductId)
+            ) {
+                return;
+            }
+
+            let result = {};
+            try {
+                result = await response.json();
+            } catch (e) {
+                throw new Error('AI Search returned an invalid server response.');
+            }
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || 'Gemini could not verify this part number.');
+            }
+
+            const latestPartNumber = String(aiPartFields(mode).part?.value || '').trim();
+            const latestEditProductId = mode === 'edit'
+                ? String(document.getElementById('edit-product-id')?.value || '')
+                : '';
+
+            if (
+                controller.signal.aborted
+                || latestPartNumber !== partNumber
+                || (mode === 'edit' && latestEditProductId !== editProductId)
+            ) {
+                return;
+            }
+
+            const description = String(result.description || '').trim().toUpperCase();
+            const applications = Array.isArray(result.applications) ? result.applications : [];
+            const productType = String(result.product_type || 'AUTOMOTIVE').trim().toUpperCase();
+            const isGeneralProduct = productType === 'GENERAL';
+
+            if (fields.description && description) {
+                fields.description.value = description;
+                fields.description.dispatchEvent(new Event('input', { bubbles: true }));
+                fields.description.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            // AI vehicle fitment now belongs in SPECIFICATION, not Application.
+            // Never modify the user's Application field/rows.
+            if (fields.specification && !isGeneralProduct) {
+                fields.specification.value = aiPartSpecificationText(applications);
+                fields.specification.dispatchEvent(new Event('input', { bubbles: true }));
+                fields.specification.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            if (mode === 'view' && typeof window.updateProductViewDirtyState === 'function') {
+                window.updateProductViewDirtyState();
+            }
+
+            const confidence = String(result.confidence || '').toUpperCase();
+
+            if (isGeneralProduct) {
+                aiPartSetStatus(
+                    mode,
+                    'Found ' + description
+                        + ' · GENERAL / UNIVERSAL PRODUCT'
+                        + (confidence ? ' · ' + confidence + ' confidence' : '')
+                        + ' · PHILIPPINE MARKET. No vehicle Specification was required.',
+                    'success'
+                );
+                return;
+            }
+
+            const incomplete = applications.some(function (app) {
+                return !String(app.year_from || '').trim()
+                    || !String(app.year_to || '').trim()
+                    || !String(app.engine || '').trim();
+            });
+
+            const count = applications.length;
+            const baseMessage = 'Found ' + description + ' with ' + count
+                + (count === 1 ? ' Philippine-market vehicle specification' : ' Philippine-market vehicle specifications')
+                + (confidence ? ' · ' + confidence + ' confidence' : '') + '.';
+
+            aiPartSetStatus(
+                mode,
+                incomplete
+                    ? baseMessage + ' Some year/engine fields were not verified; complete the blank fields before saving.'
+                    : baseMessage,
+                incomplete ? 'warning' : 'success'
+            );
+        } catch (error) {
+            if (error && error.name === 'AbortError') {
+                return;
+            }
+            console.error('Product Master AI Search error:', error);
+            aiPartSetStatus(mode, error.message || 'AI Search failed.', 'error');
+        } finally {
+            if (aiPartControllers[mode] === controller) {
+                delete aiPartControllers[mode];
+                aiPartSetButtonLoading(button, false);
+            }
+        }
+    }
+
+    function injectAiPartButton(mode) {
+        const fields = aiPartFields(mode);
+        const partInput = fields.part;
+        if (!partInput || document.getElementById('ai-part-search-' + mode)) return;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'ai-part-search-' + mode;
+        button.className = 'mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-maroon/10 text-maroon hover:bg-maroon hover:text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60';
+        button.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i><span>AI Search</span>';
+        button.addEventListener('click', function () {
+            runProductPartAiSearch(mode, button);
+        });
+
+        partInput.addEventListener('input', function () {
+            resetAiPartStatus(mode);
+        });
+
+        const status = document.createElement('p');
+        status.id = 'ai-part-status-' + mode;
+        status.className = 'mt-1.5 text-[10px] font-semibold text-slate-400 leading-relaxed';
+        status.textContent = aiPartDefaultMessage;
+
+        partInput.insertAdjacentElement('afterend', button);
+        button.insertAdjacentElement('afterend', status);
+    }
+
+    function initProductPartAiSearch() {
+        injectAiPartButton('add');
+        injectAiPartButton('edit');
+
+        ['add', 'edit'].forEach(function (mode) {
+            const modal = document.getElementById(mode + '-product-modal');
+            if (!modal) return;
+
+            let wasOpen = !modal.classList.contains('hidden');
+            const modalObserver = new MutationObserver(function () {
+                const isOpen = !modal.classList.contains('hidden');
+                if (isOpen && !wasOpen) {
+                    resetAiPartStatus(mode);
+                } else if (!isOpen && wasOpen) {
+                    resetAiPartStatus(mode);
+                }
+                wasOpen = isOpen;
+            });
+
+            modalObserver.observe(modal, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        });
+
+        const viewPart = document.getElementById('view-prod-part');
+        if (viewPart) {
+            injectAiPartButton('view');
+            const viewButton = document.getElementById('ai-part-search-view');
+            const viewStatus = document.getElementById('ai-part-status-view');
+
+            if (viewButton) viewButton.classList.add('hidden');
+            if (viewStatus) viewStatus.classList.add('hidden');
+
+            const observer = new MutationObserver(function () {
+                const button = document.getElementById('ai-part-search-view');
+                const status = document.getElementById('ai-part-status-view');
+                const editable = window.viewProductEditMode === true || !viewPart.hasAttribute('readonly');
+
+                if (button) button.classList.toggle('hidden', !editable);
+                if (status) status.classList.toggle('hidden', !editable);
+
+                if (!editable && typeof window.resetProductPartAiStatus === 'function') {
+                    window.resetProductPartAiStatus('view');
+                }
+            });
+
+            observer.observe(viewPart, {
+                attributes: true,
+                attributeFilter: ['readonly', 'class']
+            });
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initProductPartAiSearch);
+    } else {
+        initProductPartAiSearch();
+    }
+})();

@@ -4,6 +4,14 @@
 <style>
     .checkbox-col { display: none !important; }
     #product-tbody td:first-child { display: none !important; }
+
+    /* Sticky columns for Special User (no checkbox column) */
+    .pm-sticky-pic {
+        left: 0 !important;
+    }
+    .pm-sticky-code {
+        left: 80px !important;
+    }
 </style>
 @endpush
 
@@ -140,13 +148,13 @@
         </div>
 
         <div class="overflow-x-auto custom-scrollbar pb-10">
-            <table class="w-full text-left border-collapse table-fixed min-w-[2050px]">
+            <table class="product-master-table w-full text-left border-collapse table-fixed min-w-[2050px]">
                 <thead>
                     <tr class="border-b border-slate-100 bg-slate-50/20 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                        <th class="py-2.5 px-4 text-center w-[50px] checkbox-col"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
-                        <th class="py-2.5 px-4 w-[80px]">Picture</th>
-                        <th class="py-2.5 px-4 w-[210px] sortable-header" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
-<th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
+                        <th class="py-2.5 px-4 text-center w-[50px] checkbox-col pm-sticky-checkbox"><input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300" onclick="handleSelectAll(this)"></th>
+                        <th class="py-2.5 px-4 w-[80px] pm-sticky-pic">Picture</th>
+                        <th class="py-2.5 px-4 w-[210px] sortable-header pm-sticky-code" data-sort-key="productCode" onclick="window.handleSortClick('productCode')" style="cursor:pointer;user-select:none;">Product Code <span class="sort-indicator">&#8597;</span></th>
+                        <th class="py-2.5 px-4 w-[150px] whitespace-nowrap sortable-header" data-sort-key="productCode2" onclick="window.handleSortClick('productCode2')" style="cursor:pointer;user-select:none;">Product Code 2 <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[150px] sortable-header" data-sort-key="position" onclick="window.handleSortClick('position')" style="cursor:pointer;user-select:none;">Position <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[120px] sortable-header" data-sort-key="partNumber" onclick="window.handleSortClick('partNumber')" style="cursor:pointer;user-select:none;">Part No# <span class="sort-indicator">&#8597;</span></th>
                         <th class="py-2.5 px-4 w-[250px] sortable-header" data-sort-key="description" onclick="window.handleSortClick('description')" style="cursor:pointer;user-select:none;">Description <span class="sort-indicator">&#8597;</span></th>
@@ -161,10 +169,10 @@
                     </tr>
                     <!-- Column Specific Search Input Row -->
                     <tr class="border-b border-slate-100 bg-slate-50/10">
-                        <th class="px-4 checkbox-col"></th>
-                        <th class="px-4"></th>
-                        <th class="p-1.5 px-4"><input type="text" data-col="productCode" name="product_code" placeholder="Code..." class="column-search-input py-1 text-[10px] w-full"></th>
-<th class="p-1.5 px-4"><input data-col="productCode2" id="search-product-code2" name="search[productCode2]" data-search-key="productCode2" data-field="productCode2" data-column="productCode2" type="text" placeholder="Code 2..." class="column-search-input py-1 text-[10px] w-full"></th>
+                        <th class="px-4 checkbox-col pm-sticky-checkbox"></th>
+                        <th class="px-4 pm-sticky-pic"></th>
+                        <th class="p-1.5 px-4 pm-sticky-code"><input type="text" data-col="productCode" name="product_code" placeholder="Code..." class="column-search-input py-1 text-[10px] w-full"></th>
+                        <th class="p-1.5 px-4 w-[150px]"><input data-col="productCode2" id="search-product-code2" name="search[productCode2]" data-search-key="productCode2" data-field="productCode2" data-column="productCode2" type="text" placeholder="Code 2..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="position" name="position" placeholder="Pos..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="partNumber" name="part_number" placeholder="Part No..." class="column-search-input py-1 text-[10px] w-full"></th>
                         <th class="p-1.5 px-4"><input type="text" data-col="description" name="description" placeholder="Desc..." class="column-search-input py-1 text-[10px] w-full"></th>
@@ -181,7 +189,7 @@
                 <tbody id="product-tbody" class="divide-y divide-slate-100 text-sm">
                     <!-- Data will be loaded via AJAX -->
                     <tr>
-                        <td colspan="14" class="py-12 text-center text-slate-400 italic">Loading products...</td>
+                        <td colspan="15" class="py-12 text-center text-slate-400 italic">Loading products...</td>
                     </tr>
                 </tbody>
             </table>

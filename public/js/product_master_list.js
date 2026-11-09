@@ -1056,7 +1056,7 @@ function renderProductTable() {
     if (!tbody) return;
 
     if (products.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="py-12 text-center text-slate-400 italic">No products found matching your criteria.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="py-12 text-center text-slate-400 italic">No products found matching your criteria.</td></tr>`;
         return;
     }
 
@@ -1080,11 +1080,11 @@ function renderProductTable() {
         return `
             <tr class="${lowStockRowClass} hover:bg-slate-50/60 table-row-animate transition-colors cursor-pointer group" onclick="if(!event.target.closest('button') && !event.target.closest('input')) viewProduct(${index})">
                 ${window.productMasterWarehouseReadOnly ? '' : `
-                <td class="py-3 px-4 text-center align-middle">
+                <td class="py-3 px-4 text-center align-middle pm-sticky-checkbox">
                     <input type="checkbox" class="rounded border-slate-300 product-checkbox" value="${product.id}" ${isSelected ? 'checked' : ''} onchange="window.handleRowSelect(this, ${product.id})">
                 </td>
                 `}
-                <td class="py-3 px-4 text-center align-middle relative">
+                <td class="py-3 px-4 text-center align-middle relative pm-sticky-pic">
                     <div class="w-10 h-10 flex-shrink-0 mx-auto relative">
                         ${firstImg ? 
                             `<img src="${firstImg}" class="w-10 h-10 rounded-lg object-cover border border-slate-100 shadow-sm cursor-pointer hover:scale-110 transition-transform" onclick="event.stopPropagation(); ${window.productMasterViewEditor ? `viewProduct(${index})` : `window.openFullImagePreview(${index})`}">` :
@@ -1092,8 +1092,8 @@ function renderProductTable() {
                         }
                     </div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${product.product_code || ''}
+                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip pm-sticky-code" onmousemove="updateTooltipPos(event)">
+                    ${escapeHtml(product.product_code || '---')}
                     ${product.product_code ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
@@ -1103,8 +1103,8 @@ function renderProductTable() {
                         ${escapeHtml(product.product_code)}
                     </div>
                     ` : ''}</td>
-<td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${product.product_code2 || ''}
+                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
+                    ${product.product_code2 ? escapeHtml(product.product_code2) : '<span class="text-slate-300 font-normal">---</span>'}
                     ${product.product_code2 ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
