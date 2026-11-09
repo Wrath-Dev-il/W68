@@ -1080,11 +1080,11 @@ function renderProductTable() {
         return `
             <tr class="${lowStockRowClass} hover:bg-slate-50/60 table-row-animate transition-colors cursor-pointer group" onclick="if(!event.target.closest('button') && !event.target.closest('input')) viewProduct(${index})">
                 ${window.productMasterWarehouseReadOnly ? '' : `
-                <td class="py-3 px-4 text-center align-middle pm-sticky-checkbox">
+                <td class="py-3 px-4 text-center align-middle">
                     <input type="checkbox" class="rounded border-slate-300 product-checkbox" value="${product.id}" ${isSelected ? 'checked' : ''} onchange="window.handleRowSelect(this, ${product.id})">
                 </td>
                 `}
-                <td class="py-3 px-4 text-center align-middle relative pm-sticky-pic">
+                <td class="py-3 px-4 text-center align-middle relative">
                     <div class="w-10 h-10 flex-shrink-0 mx-auto relative">
                         ${firstImg ? 
                             `<img src="${firstImg}" class="w-10 h-10 rounded-lg object-cover border border-slate-100 shadow-sm cursor-pointer hover:scale-110 transition-transform" onclick="event.stopPropagation(); ${window.productMasterViewEditor ? `viewProduct(${index})` : `window.openFullImagePreview(${index})`}">` :
@@ -1092,7 +1092,7 @@ function renderProductTable() {
                         }
                     </div>
                 </td>
-                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip pm-sticky-code" onmousemove="updateTooltipPos(event)">
+                <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
                     ${escapeHtml(product.product_code || '---')}
                     ${product.product_code ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
@@ -1104,14 +1104,14 @@ function renderProductTable() {
                     </div>
                     ` : ''}</td>
                 <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${product.product_code2 ? escapeHtml(product.product_code2) : '<span class="text-slate-300 font-normal">---</span>'}
-                    ${product.product_code2 ? `
+                    ${escapeHtml(product.product_code2 || product.product_code || '---')}
+                    ${(product.product_code2 || product.product_code) ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
                             <i data-lucide="file-text" class="w-3.5 h-3.5 text-gold"></i>
-                            <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">Product Code 2</span>
+                            <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">${product.product_code2 ? 'Product Code 2' : 'Product Code'}</span>
                         </div>
-                        ${escapeHtml(product.product_code2)}
+                        ${escapeHtml(product.product_code2 || product.product_code)}
                     </div>
                     ` : ''}</td>
                 ${renderFloatingInfoCell(product.position || product.Position, 'Position', 'map-pin', 'py-3 px-4 text-slate-600 align-middle truncate')}
