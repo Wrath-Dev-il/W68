@@ -21,6 +21,19 @@ let currentPortalCustomerId = null;
 let currentPortalAuthorization = null;
 let currentPortalLoadId = null;
 let portalValidityMode = 'generate';
+let currentDiscountSubtab = 'product';
+let productDiscounts = [];
+let availableProductDiscountProducts = [];
+let currentProductDiscountLoadId = null;
+let productDiscountSaveTimers = {};
+let productDiscountModalSearchTimer = null;
+
+let descriptionDiscounts = [];
+let availableDescriptionDiscountDescriptions = [];
+let currentDescriptionDiscountLoadId = null;
+let descriptionDiscountSaveTimers = {};
+let descriptionDiscountModalSearchTimer = null;
+
 let brandDiscounts = [];
 let availableBrandDiscountBrands = [];
 let currentBrandDiscountLoadId = null;
@@ -57,6 +70,17 @@ const CUSTOMER_ENDPOINTS = (() => {
         brandDiscountAdd: (id) => (r.brandDiscountAdd || '/admin/masterlist/customer/brand-discounts/:id/add').replace(':id', id),
         brandDiscountSave: (id) => (r.brandDiscountSave || '/admin/masterlist/customer/brand-discounts/:id/save').replace(':id', id),
         brandDiscountDelete: (id) => (r.brandDiscountDelete || '/admin/masterlist/customer/brand-discounts/:id/delete').replace(':id', id),
+        productDiscounts: (id) => (r.productDiscounts || '/admin/masterlist/customer/product-discounts/:id').replace(':id', id),
+        productDiscountProducts: (id) => (r.productDiscountProducts || '/admin/masterlist/customer/product-discounts/:id/products').replace(':id', id),
+        productDiscountAdd: (id) => (r.productDiscountAdd || '/admin/masterlist/customer/product-discounts/:id/add').replace(':id', id),
+        productDiscountSave: (id) => (r.productDiscountSave || '/admin/masterlist/customer/product-discounts/:id/save').replace(':id', id),
+        productDiscountDelete: (id) => (r.productDiscountDelete || '/admin/masterlist/customer/product-discounts/:id/delete').replace(':id', id),
+        descriptionDiscounts: (id) => (r.descriptionDiscounts || '/admin/masterlist/customer/description-discounts/:id').replace(':id', id),
+        descriptionDiscountDescriptions: (id) => (r.descriptionDiscountDescriptions || '/admin/masterlist/customer/description-discounts/:id/descriptions').replace(':id', id),
+        descriptionDiscountAdd: (id) => (r.descriptionDiscountAdd || '/admin/masterlist/customer/description-discounts/:id/add').replace(':id', id),
+        descriptionDiscountSave: (id) => (r.descriptionDiscountSave || '/admin/masterlist/customer/description-discounts/:id/save').replace(':id', id),
+        descriptionDiscountDelete: (id) => (r.descriptionDiscountDelete || '/admin/masterlist/customer/description-discounts/:id/delete').replace(':id', id),
+        effectiveDiscount: (id) => (r.effectiveDiscount || '/admin/masterlist/customer/effective-discount/:id').replace(':id', id),
         soaAutoStatus: r.soaAutoStatus || '/admin/master-list/customer-master/soa-auto',
         soaAutoSave: r.soaAutoSave || '/admin/master-list/customer-master/soa-auto'
     };
@@ -1005,12 +1029,27 @@ window.openViewModal = async function(id) {
         currentCustomerNotesOriginal = '';
         setCustomerNotesStatus('Open Notes tab to load', 'idle');
     }
+    currentDiscountSubtab = 'product';
+    productDiscounts = [];
+    availableProductDiscountProducts = [];
+    currentProductDiscountLoadId = null;
+    productDiscountSaveTimers = {};
+
+    descriptionDiscounts = [];
+    availableDescriptionDiscountDescriptions = [];
+    currentDescriptionDiscountLoadId = null;
+    descriptionDiscountSaveTimers = {};
+
     brandDiscounts = [];
     availableBrandDiscountBrands = [];
     currentBrandDiscountLoadId = null;
     brandDiscountSaveTimers = {};
-    setBrandDiscountStatus('Open Brand Discount tab to load', 'idle');
+
+    setDiscountStatus('Open Discount tab to load', 'idle');
+    renderProductDiscounts();
+    renderDescriptionDiscounts();
     renderBrandDiscounts();
+    switchDiscountSubtab('product');
 
     window._purchaseHistoryData = [];
     ledgerData = [];
@@ -1608,14 +1647,14 @@ window.switchViewTab = function(tab) {
         return;
     }
 
-    if (tab === 'brand-discount' && bBtn && bCont) {
+    if ((tab === 'brand-discount' || tab === 'discount') && bBtn && bCont) {
         bBtn.classList.add('border-maroon', 'text-maroon');
         bBtn.classList.remove('border-transparent', 'text-slate-400');
         bCont.classList.remove('hidden');
         filters?.classList.add('hidden');
 
-        if (currentCustomerHistoryId && currentBrandDiscountLoadId !== Number(currentCustomerHistoryId)) {
-            loadBrandDiscounts(currentCustomerHistoryId);
+        if (currentCustomerHistoryId) {
+            loadActiveDiscountSubtab(currentCustomerHistoryId);
         }
         return;
     }
@@ -1632,13 +1671,722 @@ window.switchViewTab = function(tab) {
     }
 }
 
-function setBrandDiscountStatus(message, state = 'idle') {
+// ========== CUSTOMER DISCOUNT SUBTABS & CONTROLLERS (Priority: 1. Item, 2. Description, 3. Brand) ==========
+
+window.switchDiscountSubtab = function(subtab) {
+    currentDiscountSubtab = subtab || 'product';
+    ['product', 'description', 'brand'].forEach(s => {
+        const btn = document.getElementById(`subtab-btn-${s}`);
+        const cont = document.getElementById(`subtab-container-${s}`);
+        if (s === currentDiscountSubtab) {
+            btn?.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
+            btn?.classList.add('bg-maroon', 'text-white', 'shadow-sm');
+            cont?.classList.remove('hidden');
+        } else {
+            btn?.classList.add('bg-white', 'text-slate-600', 'border', 'border-slate-200');
+            btn?.classList.remove('bg-maroon', 'text-white', 'shadow-sm');
+            cont?.classList.add('hidden');
+        }
+    });
+
+    const addBtnLabel = document.getElementById('discount-add-btn-label');
+    if (addBtnLabel) {
+        if (currentDiscountSubtab === 'product') addBtnLabel.textContent = 'Add Item';
+        else if (currentDiscountSubtab === 'description') addBtnLabel.textContent = 'Add Description';
+        else addBtnLabel.textContent = 'Add Brand';
+    }
+
+    if (currentCustomerHistoryId) {
+        loadActiveDiscountSubtab(currentCustomerHistoryId);
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+window.openCurrentDiscountModal = function() {
+    if (currentDiscountSubtab === 'product') {
+        openProductDiscountModal();
+    } else if (currentDiscountSubtab === 'description') {
+        openDescriptionDiscountModal();
+    } else {
+        openBrandDiscountModal();
+    }
+};
+
+window.loadActiveDiscountSubtab = function(customerId) {
+    if (!customerId) return;
+    if (currentDiscountSubtab === 'product') {
+        if (currentProductDiscountLoadId !== Number(customerId)) {
+            loadProductDiscounts(customerId);
+        }
+    } else if (currentDiscountSubtab === 'description') {
+        if (currentDescriptionDiscountLoadId !== Number(customerId)) {
+            loadDescriptionDiscounts(customerId);
+        }
+    } else {
+        if (currentBrandDiscountLoadId !== Number(customerId)) {
+            loadBrandDiscounts(customerId);
+        }
+    }
+};
+
+function setDiscountStatus(message, state = 'idle') {
     const status = document.getElementById('brand-discount-status');
     if (!status) return;
     status.textContent = message;
     status.classList.remove('text-slate-400', 'text-amber-600', 'text-emerald-600', 'text-red-600');
     const cls = state === 'saving' ? 'text-amber-600' : state === 'saved' ? 'text-emerald-600' : state === 'error' ? 'text-red-600' : 'text-slate-400';
     status.classList.add(cls);
+}
+
+function normalizeDiscountValue(value) {
+    const raw = safeString(value).trim();
+    const number = raw === '' ? 0 : Number(raw);
+    if (!Number.isFinite(number) || number < 0 || number > 100) {
+        throw new Error('Discount must be from 0 to 100.');
+    }
+    return Math.round(number * 100) / 100;
+}
+
+async function readCustomerActionJson(response, fallbackMessage) {
+    let body = {};
+    try {
+        body = await response.json();
+    } catch (error) {
+        body = {};
+    }
+
+    if (!response.ok || body.success === false) {
+        throw new Error(body.message || fallbackMessage);
+    }
+    return body;
+}
+
+// -------------------------------------------------------------------------
+// 1. PRODUCT (PER ITEM) DISCOUNTS - PRIORITY 1
+// -------------------------------------------------------------------------
+
+function productDiscountKey(code) {
+    return safeString(code).trim().toLowerCase();
+}
+
+function normalizeProductDiscount(row = {}) {
+    return {
+        id: Number(row.id || 0),
+        product_id: row.product_id ? Number(row.product_id) : null,
+        product_code: safeString(row.product_code).trim(),
+        description: safeString(row.description).trim(),
+        brand: safeString(row.brand).trim(),
+        discount_percentage: Number(row.discount_percentage || 0)
+    };
+}
+
+function findProductDiscountInput(code) {
+    const key = productDiscountKey(code);
+    return Array.from(document.querySelectorAll('[data-product-discount-input]'))
+        .find(input => productDiscountKey(input.dataset.code) === key) || null;
+}
+
+function setProductDiscountModalStatus(message, state = 'idle') {
+    const status = document.getElementById('product-discount-modal-status');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.remove('text-slate-400', 'text-amber-600', 'text-emerald-600', 'text-red-600');
+    const cls = state === 'saving' ? 'text-amber-600' : state === 'saved' ? 'text-emerald-600' : state === 'error' ? 'text-red-600' : 'text-slate-400';
+    status.classList.add(cls);
+}
+
+function renderProductDiscounts() {
+    const tbody = document.getElementById('product-discount-tbody');
+    if (!tbody) return;
+
+    const rows = productDiscounts.map(normalizeProductDiscount).filter(row => row.product_code);
+    productDiscounts = rows;
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-300 italic">No per-item discount added for this customer. (Priority 1)</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const code = escapeHtml(row.product_code);
+        const desc = escapeHtml(row.description || 'N/A');
+        const brand = escapeHtml(row.brand || 'N/A');
+        const discount = Number(row.discount_percentage || 0).toFixed(2);
+        return `
+            <tr data-product-discount-row data-code="${code}">
+                <td class="py-3 px-4 font-bold text-maroon">${code}</td>
+                <td class="py-3 px-4 text-slate-700">${desc}</td>
+                <td class="py-3 px-4 font-bold text-slate-500">${brand}</td>
+                <td class="py-3 px-4">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-product-discount-input data-code="${code}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                </td>
+                <td class="py-3 px-4 text-center">
+                    <button type="button" data-product-discount-delete data-code="${code}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-product-discount-input]').forEach(input => {
+        input.addEventListener('input', () => queueProductDiscountSave(input.dataset.code, input.value));
+        input.addEventListener('blur', () => saveProductDiscountNow(input.dataset.code, input.value, true));
+    });
+
+    tbody.querySelectorAll('[data-product-discount-delete]').forEach(button => {
+        button.addEventListener('click', () => deleteProductDiscount(button.dataset.code));
+    });
+}
+
+async function loadProductDiscounts(customerId) {
+    if (!customerId) return;
+    setDiscountStatus('Loading Item Discounts...', 'saving');
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.productDiscounts(customerId), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load item discounts.');
+        productDiscounts = (body.discounts || []).map(normalizeProductDiscount);
+        currentProductDiscountLoadId = Number(customerId);
+        renderProductDiscounts();
+        setDiscountStatus(productDiscounts.length ? 'Saved automatically' : 'No item discounts yet', productDiscounts.length ? 'saved' : 'idle');
+    } catch (error) {
+        console.error('Product discount load failed:', error);
+        setDiscountStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function queueProductDiscountSave(code, value) {
+    const key = productDiscountKey(code);
+    if (!key) return;
+
+    clearTimeout(productDiscountSaveTimers[key]);
+    setDiscountStatus('Saving...', 'saving');
+    productDiscountSaveTimers[key] = setTimeout(() => saveProductDiscountNow(code, value), 650);
+}
+
+async function saveProductDiscountNow(code, value, fromBlur = false) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const key = productDiscountKey(code);
+    if (!customerId || !key) return;
+
+    clearTimeout(productDiscountSaveTimers[key]);
+
+    let discount;
+    try {
+        discount = normalizeDiscountValue(value);
+    } catch (error) {
+        setDiscountStatus(error.message, 'error');
+        return;
+    }
+
+    try {
+        setDiscountStatus('Saving...', 'saving');
+        const response = await fetch(CUSTOMER_ENDPOINTS.productDiscountSave(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                product_code: code,
+                discount_percentage: discount
+            })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to save item discount.');
+        const savedDiscount = Number(body.discount_percentage ?? discount);
+
+        productDiscounts = productDiscounts.map(row => (
+            productDiscountKey(row.product_code) === key
+                ? { ...row, discount_percentage: savedDiscount }
+                : row
+        ));
+
+        const input = findProductDiscountInput(code);
+        if (input && (fromBlur || document.activeElement !== input)) {
+            input.value = savedDiscount.toFixed(2);
+        }
+        setDiscountStatus('Saved automatically', 'saved');
+    } catch (error) {
+        console.error('Product discount save failed:', error);
+        setDiscountStatus(error.message || 'Save failed', 'error');
+    }
+}
+
+window.openProductDiscountModal = async function() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId) return;
+
+    const searchInput = document.getElementById('product-discount-search');
+    if (searchInput) searchInput.value = '';
+
+    toggleModal('product-discount-modal', true);
+    setProductDiscountModalStatus('Loading items...', 'saving');
+    await loadAvailableProductDiscountProducts();
+};
+
+window.filterProductDiscountModal = function() {
+    clearTimeout(productDiscountModalSearchTimer);
+    productDiscountModalSearchTimer = setTimeout(() => loadAvailableProductDiscountProducts(), 250);
+};
+
+async function loadAvailableProductDiscountProducts() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const tbody = document.getElementById('product-discount-product-tbody');
+    if (!customerId || !tbody) return;
+
+    const search = safeString(document.getElementById('product-discount-search')?.value).trim();
+    const url = new URL(CUSTOMER_ENDPOINTS.productDiscountProducts(customerId), window.location.origin);
+    if (search) url.searchParams.set('search', search);
+
+    tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-300 italic">Loading items...</td></tr>';
+
+    try {
+        const response = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load Product Master items.');
+        availableProductDiscountProducts = Array.isArray(body.products) ? body.products : [];
+        renderAvailableProductDiscountProducts();
+        setProductDiscountModalStatus(availableProductDiscountProducts.length ? 'Select items to add' : 'No items found', availableProductDiscountProducts.length ? 'idle' : 'error');
+    } catch (error) {
+        console.error('Product list load failed:', error);
+        tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-red-400 italic">Unable to load items.</td></tr>';
+        setProductDiscountModalStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function renderAvailableProductDiscountProducts() {
+    const tbody = document.getElementById('product-discount-product-tbody');
+    if (!tbody) return;
+
+    const rows = availableProductDiscountProducts
+        .map(row => ({
+            id: Number(row.id || 0),
+            product_code: safeString(row.product_code).trim(),
+            description: safeString(row.description).trim(),
+            brand: safeString(row.brand).trim(),
+            assigned: Boolean(row.assigned)
+        }))
+        .filter(row => row.product_code);
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-300 italic">No Product Master items found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const code = escapeHtml(row.product_code);
+        const desc = escapeHtml(row.description || 'N/A');
+        const brand = escapeHtml(row.brand || 'N/A');
+        const disabled = row.assigned ? 'disabled' : '';
+        const checked = row.assigned ? 'checked' : '';
+        const label = row.assigned ? 'Added' : 'Add';
+        const buttonClass = row.assigned
+            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            : 'bg-maroon text-white hover:bg-maroon-700';
+
+        return `
+            <tr>
+                <td class="py-3 px-5 text-center">
+                    <input type="checkbox" data-product-select value="${code}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                </td>
+                <td class="py-3 px-5 font-bold text-maroon">${code}</td>
+                <td class="py-3 px-5 text-slate-700 text-xs">${desc}</td>
+                <td class="py-3 px-5 font-bold text-slate-500 text-xs">${brand}</td>
+                <td class="py-3 px-5 text-center">
+                    <button type="button" data-product-add value="${code}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-product-add]').forEach(button => {
+        button.addEventListener('click', () => addProductDiscounts([button.value]));
+    });
+}
+
+function selectedProductDiscountCodes() {
+    return Array.from(document.querySelectorAll('[data-product-select]:checked:not(:disabled)'))
+        .map(input => safeString(input.value).trim())
+        .filter(Boolean);
+}
+
+window.addSelectedProductDiscounts = async function() {
+    const codes = selectedProductDiscountCodes();
+    if (!codes.length) {
+        setProductDiscountModalStatus('Select at least one item', 'error');
+        return;
+    }
+    await addProductDiscounts(codes);
+};
+
+async function addProductDiscounts(codes) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !Array.isArray(codes) || !codes.length) return;
+
+    setProductDiscountModalStatus('Adding item discount...', 'saving');
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.productDiscountAdd(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({ products: codes })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to add item discount.');
+        currentProductDiscountLoadId = null;
+        await loadProductDiscounts(customerId);
+        await loadAvailableProductDiscountProducts();
+        toggleModal('product-discount-modal', false);
+        showSuccessModal('Item Discount Added', body.message || 'Item discount added successfully.');
+    } catch (error) {
+        console.error('Product discount add failed:', error);
+        setProductDiscountModalStatus(error.message || 'Add failed', 'error');
+    }
+}
+
+function deleteProductDiscount(code) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !safeString(code).trim()) return;
+
+    showConfirmModal(
+        'Delete Item Discount',
+        `Delete the item discount for ${safeString(code).trim()} on this customer only?`,
+        async () => {
+            try {
+                const response = await fetch(CUSTOMER_ENDPOINTS.productDiscountDelete(customerId), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken()
+                    },
+                    body: JSON.stringify({ product_code: code })
+                });
+                const body = await readCustomerActionJson(response, 'Unable to delete item discount.');
+                productDiscounts = productDiscounts.filter(row => productDiscountKey(row.product_code) !== productDiscountKey(code));
+                renderProductDiscounts();
+                setDiscountStatus(productDiscounts.length ? 'Saved automatically' : 'No items yet', productDiscounts.length ? 'saved' : 'idle');
+                showSuccessModal('Item Discount Deleted', body.message || 'Item discount deleted.');
+            } catch (error) {
+                console.error('Product discount delete failed:', error);
+                setDiscountStatus(error.message || 'Delete failed', 'error');
+            }
+        }
+    );
+}
+
+// -------------------------------------------------------------------------
+// 2. DESCRIPTION DISCOUNTS - PRIORITY 2
+// -------------------------------------------------------------------------
+
+function descriptionDiscountKey(desc) {
+    return safeString(desc).trim().toLowerCase();
+}
+
+function normalizeDescriptionDiscount(row = {}) {
+    return {
+        id: Number(row.id || 0),
+        description: safeString(row.description).trim(),
+        discount_percentage: Number(row.discount_percentage || 0)
+    };
+}
+
+function findDescriptionDiscountInput(desc) {
+    const key = descriptionDiscountKey(desc);
+    return Array.from(document.querySelectorAll('[data-description-discount-input]'))
+        .find(input => descriptionDiscountKey(input.dataset.desc) === key) || null;
+}
+
+function setDescriptionDiscountModalStatus(message, state = 'idle') {
+    const status = document.getElementById('description-discount-modal-status');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.remove('text-slate-400', 'text-amber-600', 'text-emerald-600', 'text-red-600');
+    const cls = state === 'saving' ? 'text-amber-600' : state === 'saved' ? 'text-emerald-600' : state === 'error' ? 'text-red-600' : 'text-slate-400';
+    status.classList.add(cls);
+}
+
+function renderDescriptionDiscounts() {
+    const tbody = document.getElementById('description-discount-tbody');
+    if (!tbody) return;
+
+    const rows = descriptionDiscounts.map(normalizeDescriptionDiscount).filter(row => row.description);
+    descriptionDiscounts = rows;
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No description discount added for this customer. (Priority 2)</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const desc = escapeHtml(row.description);
+        const discount = Number(row.discount_percentage || 0).toFixed(2);
+        return `
+            <tr data-description-discount-row data-desc="${desc}">
+                <td class="py-3 px-4 font-bold text-slate-700">${desc}</td>
+                <td class="py-3 px-4">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-description-discount-input data-desc="${desc}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                </td>
+                <td class="py-3 px-4 text-center">
+                    <button type="button" data-description-discount-delete data-desc="${desc}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-description-discount-input]').forEach(input => {
+        input.addEventListener('input', () => queueDescriptionDiscountSave(input.dataset.desc, input.value));
+        input.addEventListener('blur', () => saveDescriptionDiscountNow(input.dataset.desc, input.value, true));
+    });
+
+    tbody.querySelectorAll('[data-description-discount-delete]').forEach(button => {
+        button.addEventListener('click', () => deleteDescriptionDiscount(button.dataset.desc));
+    });
+}
+
+async function loadDescriptionDiscounts(customerId) {
+    if (!customerId) return;
+    setDiscountStatus('Loading Description Discounts...', 'saving');
+
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.descriptionDiscounts(customerId), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load description discounts.');
+        descriptionDiscounts = (body.discounts || []).map(normalizeDescriptionDiscount);
+        currentDescriptionDiscountLoadId = Number(customerId);
+        renderDescriptionDiscounts();
+        setDiscountStatus(descriptionDiscounts.length ? 'Saved automatically' : 'No description discounts yet', descriptionDiscounts.length ? 'saved' : 'idle');
+    } catch (error) {
+        console.error('Description discount load failed:', error);
+        setDiscountStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function queueDescriptionDiscountSave(desc, value) {
+    const key = descriptionDiscountKey(desc);
+    if (!key) return;
+
+    clearTimeout(descriptionDiscountSaveTimers[key]);
+    setDiscountStatus('Saving...', 'saving');
+    descriptionDiscountSaveTimers[key] = setTimeout(() => saveDescriptionDiscountNow(desc, value), 650);
+}
+
+async function saveDescriptionDiscountNow(desc, value, fromBlur = false) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const key = descriptionDiscountKey(desc);
+    if (!customerId || !key) return;
+
+    clearTimeout(descriptionDiscountSaveTimers[key]);
+
+    let discount;
+    try {
+        discount = normalizeDiscountValue(value);
+    } catch (error) {
+        setDiscountStatus(error.message, 'error');
+        return;
+    }
+
+    try {
+        setDiscountStatus('Saving...', 'saving');
+        const response = await fetch(CUSTOMER_ENDPOINTS.descriptionDiscountSave(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({
+                description: desc,
+                discount_percentage: discount
+            })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to save description discount.');
+        const savedDiscount = Number(body.discount_percentage ?? discount);
+
+        descriptionDiscounts = descriptionDiscounts.map(row => (
+            descriptionDiscountKey(row.description) === key
+                ? { ...row, discount_percentage: savedDiscount }
+                : row
+        ));
+
+        const input = findDescriptionDiscountInput(desc);
+        if (input && (fromBlur || document.activeElement !== input)) {
+            input.value = savedDiscount.toFixed(2);
+        }
+        setDiscountStatus('Saved automatically', 'saved');
+    } catch (error) {
+        console.error('Description discount save failed:', error);
+        setDiscountStatus(error.message || 'Save failed', 'error');
+    }
+}
+
+window.openDescriptionDiscountModal = async function() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId) return;
+
+    const searchInput = document.getElementById('description-discount-search');
+    if (searchInput) searchInput.value = '';
+
+    toggleModal('description-discount-modal', true);
+    setDescriptionDiscountModalStatus('Loading descriptions...', 'saving');
+    await loadAvailableDescriptionDiscountDescriptions();
+};
+
+window.filterDescriptionDiscountModal = function() {
+    clearTimeout(descriptionDiscountModalSearchTimer);
+    descriptionDiscountModalSearchTimer = setTimeout(() => loadAvailableDescriptionDiscountDescriptions(), 250);
+};
+
+async function loadAvailableDescriptionDiscountDescriptions() {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    const tbody = document.getElementById('description-discount-tbody-modal');
+    if (!customerId || !tbody) return;
+
+    const search = safeString(document.getElementById('description-discount-search')?.value).trim();
+    const url = new URL(CUSTOMER_ENDPOINTS.descriptionDiscountDescriptions(customerId), window.location.origin);
+    if (search) url.searchParams.set('search', search);
+
+    tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">Loading descriptions...</td></tr>';
+
+    try {
+        const response = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const body = await readCustomerActionJson(response, 'Unable to load descriptions.');
+        availableDescriptionDiscountDescriptions = Array.isArray(body.descriptions) ? body.descriptions : [];
+        renderAvailableDescriptionDiscountDescriptions();
+        setDescriptionDiscountModalStatus(availableDescriptionDiscountDescriptions.length ? 'Select descriptions to add' : 'No descriptions found', availableDescriptionDiscountDescriptions.length ? 'idle' : 'error');
+    } catch (error) {
+        console.error('Description list load failed:', error);
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-red-400 italic">Unable to load descriptions.</td></tr>';
+        setDescriptionDiscountModalStatus(error.message || 'Load failed', 'error');
+    }
+}
+
+function renderAvailableDescriptionDiscountDescriptions() {
+    const tbody = document.getElementById('description-discount-tbody-modal');
+    if (!tbody) return;
+
+    const rows = availableDescriptionDiscountDescriptions
+        .map(row => ({
+            description: safeString(row.description).trim(),
+            assigned: Boolean(row.assigned)
+        }))
+        .filter(row => row.description);
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No descriptions found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => {
+        const desc = escapeHtml(row.description);
+        const disabled = row.assigned ? 'disabled' : '';
+        const checked = row.assigned ? 'checked' : '';
+        const label = row.assigned ? 'Added' : 'Add';
+        const buttonClass = row.assigned
+            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            : 'bg-maroon text-white hover:bg-maroon-700';
+
+        return `
+            <tr>
+                <td class="py-3 px-5 text-center">
+                    <input type="checkbox" data-description-select value="${desc}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                </td>
+                <td class="py-3 px-5 font-bold text-slate-700 text-xs">${desc}</td>
+                <td class="py-3 px-5 text-center">
+                    <button type="button" data-description-add value="${desc}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-description-add]').forEach(button => {
+        button.addEventListener('click', () => addDescriptionDiscounts([button.value]));
+    });
+}
+
+function selectedDescriptionDiscountDescriptions() {
+    return Array.from(document.querySelectorAll('[data-description-select]:checked:not(:disabled)'))
+        .map(input => safeString(input.value).trim())
+        .filter(Boolean);
+}
+
+window.addSelectedDescriptionDiscounts = async function() {
+    const descs = selectedDescriptionDiscountDescriptions();
+    if (!descs.length) {
+        setDescriptionDiscountModalStatus('Select at least one description', 'error');
+        return;
+    }
+    await addDescriptionDiscounts(descs);
+};
+
+async function addDescriptionDiscounts(descs) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !Array.isArray(descs) || !descs.length) return;
+
+    setDescriptionDiscountModalStatus('Adding description discount...', 'saving');
+    try {
+        const response = await fetch(CUSTOMER_ENDPOINTS.descriptionDiscountAdd(customerId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken()
+            },
+            body: JSON.stringify({ descriptions: descs })
+        });
+        const body = await readCustomerActionJson(response, 'Unable to add description discount.');
+        currentDescriptionDiscountLoadId = null;
+        await loadDescriptionDiscounts(customerId);
+        await loadAvailableDescriptionDiscountDescriptions();
+        toggleModal('description-discount-modal', false);
+        showSuccessModal('Description Discount Added', body.message || 'Description discount added successfully.');
+    } catch (error) {
+        console.error('Description discount add failed:', error);
+        setDescriptionDiscountModalStatus(error.message || 'Add failed', 'error');
+    }
+}
+
+function deleteDescriptionDiscount(desc) {
+    const customerId = Number(currentCustomerHistoryId || 0);
+    if (!customerId || !safeString(desc).trim()) return;
+
+    showConfirmModal(
+        'Delete Description Discount',
+        `Delete the description discount for "${safeString(desc).trim()}" on this customer only?`,
+        async () => {
+            try {
+                const response = await fetch(CUSTOMER_ENDPOINTS.descriptionDiscountDelete(customerId), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken()
+                    },
+                    body: JSON.stringify({ description: desc })
+                });
+                const body = await readCustomerActionJson(response, 'Unable to delete description discount.');
+                descriptionDiscounts = descriptionDiscounts.filter(row => descriptionDiscountKey(row.description) !== descriptionDiscountKey(desc));
+                renderDescriptionDiscounts();
+                setDiscountStatus(descriptionDiscounts.length ? 'Saved automatically' : 'No descriptions yet', descriptionDiscounts.length ? 'saved' : 'idle');
+                showSuccessModal('Description Discount Deleted', body.message || 'Description discount deleted.');
+            } catch (error) {
+                console.error('Description discount delete failed:', error);
+                setDiscountStatus(error.message || 'Delete failed', 'error');
+            }
+        }
+    );
+}
+
+// -------------------------------------------------------------------------
+// 3. BRAND DISCOUNTS - PRIORITY 3
+// -------------------------------------------------------------------------
+
+function setBrandDiscountStatus(message, state = 'idle') {
+    setDiscountStatus(message, state);
 }
 
 function setBrandDiscountModalStatus(message, state = 'idle') {
@@ -1662,33 +2410,10 @@ function normalizeBrandDiscount(row = {}) {
     };
 }
 
-function normalizeDiscountValue(value) {
-    const raw = safeString(value).trim();
-    const number = raw === '' ? 0 : Number(raw);
-    if (!Number.isFinite(number) || number < 0 || number > 100) {
-        throw new Error('Discount must be from 0 to 100.');
-    }
-    return Math.round(number * 100) / 100;
-}
-
 function findBrandDiscountInput(brand) {
     const key = brandDiscountKey(brand);
     return Array.from(document.querySelectorAll('[data-brand-discount-input]'))
         .find(input => brandDiscountKey(input.dataset.brand) === key) || null;
-}
-
-async function readCustomerActionJson(response, fallbackMessage) {
-    let body = {};
-    try {
-        body = await response.json();
-    } catch (error) {
-        body = {};
-    }
-
-    if (!response.ok || body.success === false) {
-        throw new Error(body.message || fallbackMessage);
-    }
-    return body;
 }
 
 function renderBrandDiscounts() {
@@ -1699,7 +2424,7 @@ function renderBrandDiscounts() {
     brandDiscounts = rows;
 
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No brand discount added for this customer.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-300 italic">No brand discount added for this customer. (Priority 3)</td></tr>';
         return;
     }
 
@@ -1712,7 +2437,7 @@ function renderBrandDiscounts() {
                 <td class="py-3 px-4">
                     <input type="number" min="0" max="100" step="0.01" value="${discount}" data-brand-discount-input data-brand="${brand}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
                 </td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-center">
                     <button type="button" data-brand-discount-delete data-brand="${brand}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                 </td>
             </tr>`;
@@ -1730,7 +2455,7 @@ function renderBrandDiscounts() {
 
 async function loadBrandDiscounts(customerId) {
     if (!customerId) return;
-    setBrandDiscountStatus('Loading...', 'saving');
+    setDiscountStatus('Loading Brand Discounts...', 'saving');
 
     try {
         const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscounts(customerId), {
@@ -1740,10 +2465,10 @@ async function loadBrandDiscounts(customerId) {
         brandDiscounts = (body.discounts || []).map(normalizeBrandDiscount);
         currentBrandDiscountLoadId = Number(customerId);
         renderBrandDiscounts();
-        setBrandDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
+        setDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
     } catch (error) {
         console.error('Brand discount load failed:', error);
-        setBrandDiscountStatus(error.message || 'Load failed', 'error');
+        setDiscountStatus(error.message || 'Load failed', 'error');
     }
 }
 
@@ -1752,7 +2477,7 @@ function queueBrandDiscountSave(brand, value) {
     if (!key) return;
 
     clearTimeout(brandDiscountSaveTimers[key]);
-    setBrandDiscountStatus('Saving...', 'saving');
+    setDiscountStatus('Saving...', 'saving');
     brandDiscountSaveTimers[key] = setTimeout(() => saveBrandDiscountNow(brand, value), 650);
 }
 
@@ -1767,12 +2492,12 @@ async function saveBrandDiscountNow(brand, value, fromBlur = false) {
     try {
         discount = normalizeDiscountValue(value);
     } catch (error) {
-        setBrandDiscountStatus(error.message, 'error');
+        setDiscountStatus(error.message, 'error');
         return;
     }
 
     try {
-        setBrandDiscountStatus('Saving...', 'saving');
+        setDiscountStatus('Saving...', 'saving');
         const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscountSave(customerId), {
             method: 'POST',
             headers: {
@@ -1799,10 +2524,10 @@ async function saveBrandDiscountNow(brand, value, fromBlur = false) {
         if (input && (fromBlur || document.activeElement !== input)) {
             input.value = savedDiscount.toFixed(2);
         }
-        setBrandDiscountStatus('Saved automatically', 'saved');
+        setDiscountStatus('Saved automatically', 'saved');
     } catch (error) {
         console.error('Brand discount save failed:', error);
-        setBrandDiscountStatus(error.message || 'Save failed', 'error');
+        setDiscountStatus(error.message || 'Save failed', 'error');
     }
 }
 
@@ -1816,12 +2541,12 @@ window.openBrandDiscountModal = async function() {
     toggleModal('brand-discount-modal', true);
     setBrandDiscountModalStatus('Loading brands...', 'saving');
     await loadAvailableBrandDiscountBrands();
-}
+};
 
 window.filterBrandDiscountModal = function() {
     clearTimeout(brandDiscountModalSearchTimer);
     brandDiscountModalSearchTimer = setTimeout(() => loadAvailableBrandDiscountBrands(), 250);
-}
+};
 
 async function loadAvailableBrandDiscountBrands() {
     const customerId = Number(currentCustomerHistoryId || 0);
@@ -1880,7 +2605,7 @@ function renderAvailableBrandDiscountBrands() {
                     <input type="checkbox" data-brand-select value="${brand}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${brand}</td>
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-center">
                     <button type="button" data-brand-add value="${brand}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
                 </td>
             </tr>`;
@@ -1904,7 +2629,7 @@ window.addSelectedBrandDiscounts = async function() {
         return;
     }
     await addBrandDiscounts(brands);
-}
+};
 
 async function addBrandDiscounts(brands) {
     const customerId = Number(currentCustomerHistoryId || 0);
@@ -1954,11 +2679,11 @@ function deleteBrandDiscount(brand) {
                 const body = await readCustomerActionJson(response, 'Unable to delete brand discount.');
                 brandDiscounts = brandDiscounts.filter(row => brandDiscountKey(row.brand) !== brandDiscountKey(brand));
                 renderBrandDiscounts();
-                setBrandDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
+                setDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
                 showSuccessModal('Brand Deleted', body.message || 'Brand discount deleted.');
             } catch (error) {
                 console.error('Brand discount delete failed:', error);
-                setBrandDiscountStatus(error.message || 'Delete failed', 'error');
+                setDiscountStatus(error.message || 'Delete failed', 'error');
             }
         }
     );

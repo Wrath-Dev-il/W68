@@ -2365,6 +2365,17 @@ Route::prefix('special')->name('special.')->group(function () {
     Route::post('/master-list/customer-master/brand-discounts/{id}/add', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.add', ['id' => $id]))->name('customer-master.brand-discounts.add');
     Route::post('/master-list/customer-master/brand-discounts/{id}/save', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.save', ['id' => $id]))->name('customer-master.brand-discounts.save');
     Route::post('/master-list/customer-master/brand-discounts/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.delete', ['id' => $id]))->name('customer-master.brand-discounts.delete');
+    Route::get('/master-list/customer-master/product-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.index', ['id' => $id]))->name('customer-master.product-discounts.index');
+    Route::get('/master-list/customer-master/product-discounts/{id}/products', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.products', ['id' => $id]))->name('customer-master.product-discounts.products');
+    Route::post('/master-list/customer-master/product-discounts/{id}/add', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.add', ['id' => $id]))->name('customer-master.product-discounts.add');
+    Route::post('/master-list/customer-master/product-discounts/{id}/save', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.save', ['id' => $id]))->name('customer-master.product-discounts.save');
+    Route::post('/master-list/customer-master/product-discounts/{id}/delete', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.delete', ['id' => $id]))->name('customer-master.product-discounts.delete');
+    Route::get('/master-list/customer-master/description-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.index', ['id' => $id]))->name('customer-master.description-discounts.index');
+    Route::get('/master-list/customer-master/description-discounts/{id}/descriptions', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.descriptions', ['id' => $id]))->name('customer-master.description-discounts.descriptions');
+    Route::post('/master-list/customer-master/description-discounts/{id}/add', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.add', ['id' => $id]))->name('customer-master.description-discounts.add');
+    Route::post('/master-list/customer-master/description-discounts/{id}/save', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.save', ['id' => $id]))->name('customer-master.description-discounts.save');
+    Route::post('/master-list/customer-master/description-discounts/{id}/delete', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.delete', ['id' => $id]))->name('customer-master.description-discounts.delete');
+    Route::get('/master-list/customer-master/effective-discount/{id}', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.effective-discount', ['id' => $id]))->name('customer-master.effective-discount');
     Route::get('/master-list/forwarder-master', fn () => hatdogSpecialUserView('Special_User.master_list.Forwarder_Master-list'))->name('forwarder-master');
 
     Route::get('/inventory/inventory-adjustment', fn () => hatdogSpecialUserView('Special_User.Inventory.inventory_adjustment'))->name('inv-adjust');
@@ -3953,6 +3964,17 @@ Route::prefix('regular')->name('regular.')->group(function () {
     Route::post('/master-list/customer-master/brand-discounts/{id}/add', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.add', ['id' => $id]))->name('customer-master.brand-discounts.add');
     Route::post('/master-list/customer-master/brand-discounts/{id}/save', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.save', ['id' => $id]))->name('customer-master.brand-discounts.save');
     Route::post('/master-list/customer-master/brand-discounts/{id}/delete', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.brand-discounts.delete', ['id' => $id]))->name('customer-master.brand-discounts.delete');
+    Route::get('/master-list/customer-master/product-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.index', ['id' => $id]))->name('customer-master.product-discounts.index');
+    Route::get('/master-list/customer-master/product-discounts/{id}/products', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.products', ['id' => $id]))->name('customer-master.product-discounts.products');
+    Route::post('/master-list/customer-master/product-discounts/{id}/add', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.add', ['id' => $id]))->name('customer-master.product-discounts.add');
+    Route::post('/master-list/customer-master/product-discounts/{id}/save', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.save', ['id' => $id]))->name('customer-master.product-discounts.save');
+    Route::post('/master-list/customer-master/product-discounts/{id}/delete', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.product-discounts.delete', ['id' => $id]))->name('customer-master.product-discounts.delete');
+    Route::get('/master-list/customer-master/description-discounts/{id}', fn ($id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.index', ['id' => $id]))->name('customer-master.description-discounts.index');
+    Route::get('/master-list/customer-master/description-discounts/{id}/descriptions', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.descriptions', ['id' => $id]))->name('customer-master.description-discounts.descriptions');
+    Route::post('/master-list/customer-master/description-discounts/{id}/add', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.add', ['id' => $id]))->name('customer-master.description-discounts.add');
+    Route::post('/master-list/customer-master/description-discounts/{id}/save', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.save', ['id' => $id]))->name('customer-master.description-discounts.save');
+    Route::post('/master-list/customer-master/description-discounts/{id}/delete', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.description-discounts.delete', ['id' => $id]))->name('customer-master.description-discounts.delete');
+    Route::get('/master-list/customer-master/effective-discount/{id}', fn (Request $request, $id) => hatdogRegularProxyToAdminRoute('admin.customer-master.effective-discount', ['id' => $id]))->name('customer-master.effective-discount');
 
     Route::match(['GET', 'POST'], '/master-list/forwarder-master/data', fn () => hatdogRegularProxyToAdminRoute('admin.forwarder-master.data'))->name('forwarder-master.data');
     Route::match(['GET', 'POST'], '/master-list/forwarder-master/create', fn () => hatdogRegularProxyToAdminRoute('admin.forwarder-master.create'))->name('forwarder-master.create');
@@ -9841,14 +9863,133 @@ Route::post('/admin/masterlist/customer/notes/{id}', function (Request $request,
     }
 })->name('admin.customer-master.notes.save');
 
+if (!function_exists('hatdogEnsureCustomerDiscountTablesExist')) {
+    function hatdogEnsureCustomerDiscountTablesExist(): void
+    {
+        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
+            Schema::connection('masterlist')->create('customer_brand_discounts', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('customer_id');
+                $table->string('brand');
+                $table->decimal('discount_percentage', 5, 2)->default(0);
+                $table->timestamps();
+
+                $table->unique(['customer_id', 'brand'], 'customer_brand_discounts_customer_brand_unique');
+                $table->index('brand');
+            });
+        }
+
+        if (!Schema::connection('masterlist')->hasTable('customer_description_discount')) {
+            Schema::connection('masterlist')->create('customer_description_discount', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('customer_id');
+                $table->string('description', 255);
+                $table->decimal('discount_percentage', 5, 2)->default(0);
+                $table->timestamps();
+
+                $table->unique(['customer_id', 'description'], 'customer_desc_discount_unique');
+                $table->index('description');
+            });
+        }
+
+        if (!Schema::connection('masterlist')->hasTable('customer_product_discount')) {
+            Schema::connection('masterlist')->create('customer_product_discount', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('customer_id');
+                $table->unsignedBigInteger('product_id')->nullable();
+                $table->string('product_code', 255);
+                $table->decimal('discount_percentage', 5, 2)->default(0);
+                $table->timestamps();
+
+                $table->unique(['customer_id', 'product_code'], 'customer_prod_code_discount_unique');
+                $table->index('product_id');
+                $table->index('product_code');
+            });
+        }
+    }
+}
+
+if (!function_exists('hatdogGetCustomerEffectiveDiscount')) {
+    function hatdogGetCustomerEffectiveDiscount(int $customerId, int $productId = 0, string $productCode = '', string $description = '', string $brand = ''): array
+    {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        // Priority 1: Per Item (product code or product id)
+        if ($productId > 0 || trim($productCode) !== '') {
+            $itemQuery = DB::connection('masterlist')
+                ->table('customer_product_discount')
+                ->where('customer_id', $customerId);
+
+            if ($productId > 0 && trim($productCode) !== '') {
+                $itemQuery->where(function ($q) use ($productId, $productCode) {
+                    $q->where('product_id', $productId)->orWhere('product_code', trim($productCode));
+                });
+            } elseif ($productId > 0) {
+                $itemQuery->where('product_id', $productId);
+            } else {
+                $itemQuery->where('product_code', trim($productCode));
+            }
+
+            $itemRow = $itemQuery->first(['discount_percentage', 'product_code']);
+            if ($itemRow !== null) {
+                return [
+                    'discount_percentage' => (float) $itemRow->discount_percentage,
+                    'priority_level' => 1,
+                    'matched_type' => 'item',
+                    'matched_value' => (string) $itemRow->product_code,
+                ];
+            }
+        }
+
+        // Priority 2: Description
+        if (trim($description) !== '') {
+            $descRow = DB::connection('masterlist')
+                ->table('customer_description_discount')
+                ->where('customer_id', $customerId)
+                ->where('description', trim($description))
+                ->first(['discount_percentage', 'description']);
+            if ($descRow !== null) {
+                return [
+                    'discount_percentage' => (float) $descRow->discount_percentage,
+                    'priority_level' => 2,
+                    'matched_type' => 'description',
+                    'matched_value' => (string) $descRow->description,
+                ];
+            }
+        }
+
+        // Priority 3: Brand
+        if (trim($brand) !== '') {
+            $brandRow = DB::connection('masterlist')
+                ->table('customer_brand_discounts')
+                ->where('customer_id', $customerId)
+                ->where('brand', trim($brand))
+                ->first(['discount_percentage', 'brand']);
+            if ($brandRow !== null) {
+                return [
+                    'discount_percentage' => (float) $brandRow->discount_percentage,
+                    'priority_level' => 3,
+                    'matched_type' => 'brand',
+                    'matched_value' => (string) $brandRow->brand,
+                ];
+            }
+        }
+
+        return [
+            'discount_percentage' => 0.0,
+            'priority_level' => 0,
+            'matched_type' => 'none',
+            'matched_value' => '',
+        ];
+    }
+}
+
 Route::get('/admin/masterlist/customer/brand-discounts/{id}', function ($id) {
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
-            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
-        }
+        hatdogEnsureCustomerDiscountTablesExist();
 
         $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
         if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
@@ -10065,6 +10206,471 @@ Route::post('/admin/masterlist/customer/brand-discounts/{id}/delete', function (
         return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
     }
 })->name('admin.customer-master.brand-discounts.delete');
+
+// Customer Product (Item) Discounts - Priority 1
+Route::get('/admin/masterlist/customer/product-discounts/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $discounts = DB::connection('masterlist')
+            ->table('customer_product_discount as cpd')
+            ->leftJoin('products as p', function ($join) {
+                $join->on('p.id', '=', 'cpd.product_id')
+                    ->orWhere('p.product_code', '=', 'cpd.product_code');
+            })
+            ->where('cpd.customer_id', $id)
+            ->orderBy('cpd.product_code')
+            ->select([
+                'cpd.id',
+                'cpd.product_id',
+                'cpd.product_code',
+                'cpd.discount_percentage',
+                'p.description',
+                'p.category as brand',
+            ])
+            ->get()
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'product_id' => $row->product_id ? (int) $row->product_id : null,
+                'product_code' => (string) $row->product_code,
+                'description' => (string) ($row->description ?? 'N/A'),
+                'brand' => (string) ($row->brand ?? 'N/A'),
+                'discount_percentage' => (float) $row->discount_percentage,
+            ])
+            ->values();
+
+        return response()->json(['success' => true, 'discounts' => $discounts]);
+    } catch (\Throwable $e) {
+        Log::error('Customer product discounts load error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.product-discounts.index');
+
+Route::get('/admin/masterlist/customer/product-discounts/{id}/products', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $search = trim((string) $request->query('search', ''));
+        $assignedCodes = DB::connection('masterlist')
+            ->table('customer_product_discount')
+            ->where('customer_id', $id)
+            ->pluck('product_code')
+            ->map(fn ($c) => mb_strtolower(trim((string) $c)))
+            ->flip();
+
+        $query = DB::connection('masterlist')
+            ->table('products')
+            ->select('id', 'product_code', 'description', 'category as brand', 'part_number');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('product_code', 'LIKE', '%' . $search . '%')
+                  ->orWhere('description', 'LIKE', '%' . $search . '%')
+                  ->orWhere('category', 'LIKE', '%' . $search . '%')
+                  ->orWhere('part_number', 'LIKE', '%' . $search . '%');
+            });
+        }
+
+        $products = $query->orderBy('product_code')
+            ->limit(100)
+            ->get()
+            ->map(function ($p) use ($assignedCodes) {
+                $code = trim((string) $p->product_code);
+                return [
+                    'id' => (int) $p->id,
+                    'product_code' => $code,
+                    'description' => (string) ($p->description ?? ''),
+                    'brand' => (string) ($p->brand ?? ''),
+                    'part_number' => (string) ($p->part_number ?? ''),
+                    'assigned' => $assignedCodes->has(mb_strtolower($code)),
+                ];
+            })
+            ->values();
+
+        return response()->json(['success' => true, 'products' => $products]);
+    } catch (\Throwable $e) {
+        Log::error('Customer products list error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.product-discounts.products');
+
+Route::post('/admin/masterlist/customer/product-discounts/{id}/add', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'products' => ['required', 'array', 'min:1'],
+            'products.*' => ['required'],
+        ]);
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id', 'name']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $rawList = collect($validated['products'])->map(fn ($p) => trim((string) $p))->filter()->values();
+
+        $matchedProducts = DB::connection('masterlist')
+            ->table('products')
+            ->where(function ($q) use ($rawList) {
+                $q->whereIn('product_code', $rawList->all())
+                  ->orWhereIn('id', $rawList->map(fn ($v) => (int) $v)->filter()->all());
+            })
+            ->get(['id', 'product_code']);
+
+        $now = now();
+        $rows = [];
+        foreach ($matchedProducts as $p) {
+            $rows[] = [
+                'customer_id' => (int) $id,
+                'product_id' => (int) $p->id,
+                'product_code' => (string) $p->product_code,
+                'discount_percentage' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (empty($rows)) {
+            return response()->json(['success' => false, 'message' => 'No valid products found.'], 422);
+        }
+
+        DB::connection('masterlist')
+            ->table('customer_product_discount')
+            ->upsert($rows, ['customer_id', 'product_code'], ['updated_at']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item discount added successfully.',
+            'added_count' => count($rows),
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer product discount add error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.product-discounts.add');
+
+Route::post('/admin/masterlist/customer/product-discounts/{id}/save', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'product_code' => ['required', 'string', 'max:255'],
+            'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $code = trim((string) $validated['product_code']);
+        $discount = round((float) $validated['discount_percentage'], 2);
+
+        $updated = DB::connection('masterlist')
+            ->table('customer_product_discount')
+            ->where('customer_id', $id)
+            ->where('product_code', $code)
+            ->update([
+                'discount_percentage' => $discount,
+                'updated_at' => now(),
+            ]);
+
+        if (!$updated) {
+            return response()->json(['success' => false, 'message' => 'Item discount row was not found for this customer.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item discount saved.',
+            'product_code' => $code,
+            'discount_percentage' => $discount,
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer product discount save error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.product-discounts.save');
+
+Route::post('/admin/masterlist/customer/product-discounts/{id}/delete', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'product_code' => ['required', 'string', 'max:255'],
+        ]);
+
+        $deleted = DB::connection('masterlist')
+            ->table('customer_product_discount')
+            ->where('customer_id', $id)
+            ->where('product_code', trim((string) $validated['product_code']))
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => $deleted ? 'Item discount deleted.' : 'Item discount was already deleted.',
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer product discount delete error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.product-discounts.delete');
+
+// Customer Description Discounts - Priority 2
+Route::get('/admin/masterlist/customer/description-discounts/{id}', function ($id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $discounts = DB::connection('masterlist')
+            ->table('customer_description_discount')
+            ->where('customer_id', $id)
+            ->orderBy('description')
+            ->get(['id', 'description', 'discount_percentage'])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'description' => (string) $row->description,
+                'discount_percentage' => (float) $row->discount_percentage,
+            ])
+            ->values();
+
+        return response()->json(['success' => true, 'discounts' => $discounts]);
+    } catch (\Throwable $e) {
+        Log::error('Customer description discounts load error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.description-discounts.index');
+
+Route::get('/admin/masterlist/customer/description-discounts/{id}/descriptions', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $search = trim((string) $request->query('search', ''));
+        $query = DB::connection('masterlist')
+            ->table('products')
+            ->select('description')
+            ->whereNotNull('description')
+            ->where('description', '!=', '');
+
+        if ($search !== '') {
+            $query->where('description', 'LIKE', '%' . $search . '%');
+        }
+
+        $assigned = DB::connection('masterlist')
+            ->table('customer_description_discount')
+            ->where('customer_id', $id)
+            ->pluck('description')
+            ->map(fn ($d) => mb_strtolower(trim((string) $d)))
+            ->flip();
+
+        $descriptions = $query
+            ->distinct()
+            ->orderBy('description')
+            ->limit(200)
+            ->pluck('description')
+            ->map(function ($desc) use ($assigned) {
+                $desc = trim((string) $desc);
+                return [
+                    'description' => $desc,
+                    'assigned' => $assigned->has(mb_strtolower($desc)),
+                ];
+            })
+            ->values();
+
+        return response()->json(['success' => true, 'descriptions' => $descriptions]);
+    } catch (\Throwable $e) {
+        Log::error('Customer descriptions list error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.description-discounts.descriptions');
+
+Route::post('/admin/masterlist/customer/description-discounts/{id}/add', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'descriptions' => ['required', 'array', 'min:1'],
+            'descriptions.*' => ['required', 'string', 'max:255'],
+        ]);
+
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id', 'name']);
+        if (!$customer) return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+
+        $descs = collect($validated['descriptions'])
+            ->map(fn ($d) => trim((string) $d))
+            ->filter()
+            ->unique(fn ($d) => mb_strtolower($d))
+            ->values();
+
+        $validMap = DB::connection('masterlist')
+            ->table('products')
+            ->whereIn('description', $descs->all())
+            ->whereNotNull('description')
+            ->where('description', '!=', '')
+            ->distinct()
+            ->pluck('description')
+            ->mapWithKeys(fn ($d) => [mb_strtolower(trim((string) $d)) => trim((string) $d)]);
+
+        $now = now();
+        $rows = $descs
+            ->map(fn ($d) => $validMap->get(mb_strtolower($d)) ?: $d)
+            ->filter()
+            ->unique(fn ($d) => mb_strtolower($d))
+            ->map(fn ($d) => [
+                'customer_id' => (int) $id,
+                'description' => $d,
+                'discount_percentage' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->values()
+            ->all();
+
+        if (empty($rows)) {
+            return response()->json(['success' => false, 'message' => 'No valid descriptions were selected.'], 422);
+        }
+
+        DB::connection('masterlist')
+            ->table('customer_description_discount')
+            ->upsert($rows, ['customer_id', 'description'], ['updated_at']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Description discount added successfully.',
+            'added_count' => count($rows),
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer description discount add error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.description-discounts.add');
+
+Route::post('/admin/masterlist/customer/description-discounts/{id}/save', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'description' => ['required', 'string', 'max:255'],
+            'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $description = trim((string) $validated['description']);
+        $discount = round((float) $validated['discount_percentage'], 2);
+
+        $updated = DB::connection('masterlist')
+            ->table('customer_description_discount')
+            ->where('customer_id', $id)
+            ->where('description', $description)
+            ->update([
+                'discount_percentage' => $discount,
+                'updated_at' => now(),
+            ]);
+
+        if (!$updated) {
+            return response()->json(['success' => false, 'message' => 'Description discount row was not found for this customer.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Description discount saved.',
+            'description' => $description,
+            'discount_percentage' => $discount,
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer description discount save error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.description-discounts.save');
+
+Route::post('/admin/masterlist/customer/description-discounts/{id}/delete', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        hatdogEnsureCustomerDiscountTablesExist();
+
+        $validated = $request->validate([
+            'description' => ['required', 'string', 'max:255'],
+        ]);
+
+        $deleted = DB::connection('masterlist')
+            ->table('customer_description_discount')
+            ->where('customer_id', $id)
+            ->where('description', trim((string) $validated['description']))
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => $deleted ? 'Description discount deleted.' : 'Description discount was already deleted.',
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        Log::error('Customer description discount delete error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.description-discounts.delete');
+
+// Customer Effective Discount Lookup - Resolves according to priority: 1. Item, 2. Description, 3. Brand
+Route::get('/admin/masterlist/customer/effective-discount/{id}', function (Request $request, $id) {
+    $user = session('user');
+    if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
+
+    try {
+        $productId = (int) $request->query('product_id', 0);
+        $productCode = trim((string) $request->query('product_code', ''));
+        $description = trim((string) $request->query('description', ''));
+        $brand = trim((string) $request->query('brand', ''));
+
+        $result = hatdogGetCustomerEffectiveDiscount((int) $id, $productId, $productCode, $description, $brand);
+
+        return response()->json(array_merge(['success' => true], $result));
+    } catch (\Throwable $e) {
+        Log::error('Customer effective discount lookup error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+    }
+})->name('admin.customer-master.effective-discount');
 
 // Forwarder Master List View
 Route::get('/admin/masterlist/forwarder', function () {

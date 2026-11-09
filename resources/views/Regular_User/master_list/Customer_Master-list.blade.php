@@ -324,7 +324,7 @@
                         <div class="flex items-center px-6 border-b border-slate-100 bg-slate-50/30">
                             <button onclick="switchViewTab('purchase')" id="tab-btn-purchase" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-maroon text-maroon">Purchase History</button>
                             <button onclick="switchViewTab('ledger')" id="tab-btn-ledger" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Ledger / Payment History</button>
-                            <button onclick="switchViewTab('brand-discount')" id="tab-btn-brand-discount" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Brand Discount</button>
+                            <button onclick="switchViewTab('brand-discount')" id="tab-btn-brand-discount" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Discount</button>
                             <button onclick="switchViewTab('notes')" id="tab-btn-notes" class="px-8 py-5 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-400">Notes</button>
                         </div>
 
@@ -406,20 +406,77 @@
                                     </table>
                                 </div>
                             </div>
-                            <!-- Tab 3 Content: Brand Discount -->
+                            <!-- Tab 3 Content: Customer Discounts (Item / Description / Brand) -->
                             <div id="view-container-brand-discount" class="hidden flex-1 overflow-hidden border border-slate-100 rounded-2xl shadow-sm flex flex-col bg-slate-50/40">
-                                <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-white">
-                                    <div>
-                                        <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">Brand Discount Table</p>
-                                        <p class="mt-1 text-[9px] font-semibold text-slate-400">Discount values autosave while editing.</p>
+                                <!-- Top Bar with Priority Banner -->
+                                <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-100 bg-white">
+                                    <div class="flex flex-col gap-1">
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">Customer Discounts</p>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[8.5px] font-extrabold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                                                Priority: 1. Item &rarr; 2. Description &rarr; 3. Brand
+                                            </span>
+                                        </div>
+                                        <p class="text-[9px] font-semibold text-slate-400">Values autosave while editing. Priority dictates which discount applies during sales.</p>
                                     </div>
                                     <div class="flex items-center gap-3">
                                         <div id="brand-discount-status" class="text-[9px] font-black uppercase tracking-widest text-slate-400">Not loaded</div>
-                                        <button type="button" onclick="openBrandDiscountModal()" class="rounded-xl bg-maroon px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest text-white shadow-lg">Add Brand</button>
+                                        <button id="discount-add-btn" type="button" onclick="openCurrentDiscountModal()" class="rounded-xl bg-maroon px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-white shadow-lg flex items-center gap-1.5 hover:bg-maroon-800 transition-all">
+                                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                            <span id="discount-add-btn-label">Add Item</span>
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="overflow-x-auto flex-1 custom-scrollbar bg-white">
+
+                                <!-- Subtabs (Pills) for Item, Description, Brand -->
+                                <div class="flex items-center gap-2 px-5 py-2.5 bg-slate-100/70 border-b border-slate-200/60">
+                                    <button type="button" onclick="switchDiscountSubtab('product')" id="subtab-btn-product" class="px-4 py-1.5 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition-all bg-maroon text-white shadow-sm flex items-center gap-1.5">
+                                        <span class="w-4 h-4 rounded-full bg-white/20 text-white flex items-center justify-center text-[9px]">1</span>
+                                        <span>Per Item</span>
+                                    </button>
+                                    <button type="button" onclick="switchDiscountSubtab('description')" id="subtab-btn-description" class="px-4 py-1.5 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition-all bg-white text-slate-600 hover:text-slate-900 border border-slate-200 flex items-center gap-1.5">
+                                        <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-[9px]">2</span>
+                                        <span>Per Description</span>
+                                    </button>
+                                    <button type="button" onclick="switchDiscountSubtab('brand')" id="subtab-btn-brand" class="px-4 py-1.5 rounded-xl text-[9.5px] font-bold uppercase tracking-wider transition-all bg-white text-slate-600 hover:text-slate-900 border border-slate-200 flex items-center gap-1.5">
+                                        <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-[9px]">3</span>
+                                        <span>Brand</span>
+                                    </button>
+                                </div>
+
+                                <!-- Subtab 1: Per Item Discount Table -->
+                                <div id="subtab-container-product" class="overflow-x-auto flex-1 custom-scrollbar bg-white">
                                     <table class="w-full text-left border-collapse min-w-[720px]">
+                                        <thead class="sticky top-0 bg-slate-50 text-slate-400 text-[9px] font-bold uppercase tracking-widest z-10">
+                                            <tr class="border-b">
+                                                <th class="py-3 px-4">Product Code</th>
+                                                <th class="py-3 px-4">Description</th>
+                                                <th class="py-3 px-4">Brand</th>
+                                                <th class="py-3 px-4">Discount (Percentage)</th>
+                                                <th class="py-3 px-4 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="product-discount-tbody" class="divide-y text-[11px] text-slate-600"></tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Subtab 2: Per Description Discount Table -->
+                                <div id="subtab-container-description" class="hidden overflow-x-auto flex-1 custom-scrollbar bg-white">
+                                    <table class="w-full text-left border-collapse min-w-[600px]">
+                                        <thead class="sticky top-0 bg-slate-50 text-slate-400 text-[9px] font-bold uppercase tracking-widest z-10">
+                                            <tr class="border-b">
+                                                <th class="py-3 px-4">Description</th>
+                                                <th class="py-3 px-4">Discount (Percentage)</th>
+                                                <th class="py-3 px-4 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="description-discount-tbody" class="divide-y text-[11px] text-slate-600"></tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Subtab 3: Brand Discount Table -->
+                                <div id="subtab-container-brand" class="hidden overflow-x-auto flex-1 custom-scrollbar bg-white">
+                                    <table class="w-full text-left border-collapse min-w-[600px]">
                                         <thead class="sticky top-0 bg-slate-50 text-slate-400 text-[9px] font-bold uppercase tracking-widest z-10">
                                             <tr class="border-b">
                                                 <th class="py-3 px-4">Brand</th>
@@ -680,6 +737,86 @@
         </div>
     </div>
 
+    <!-- ADD PRODUCT (ITEM) DISCOUNT MODAL -->
+    <div id="product-discount-modal" class="fixed inset-0 z-[960] hidden overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div onclick="toggleModal('product-discount-modal', false)" class="fixed inset-0 bg-maroon-900/50 backdrop-blur-sm"></div>
+            <div class="modal-animate-in relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div class="bg-maroon-gradient px-6 py-5 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-widest">Add Item Discount (Per Item)</h3>
+                            <p class="mt-1 text-[10px] font-medium text-white/60">Select Product Master items for this customer. (Priority 1)</p>
+                        </div>
+                        <button type="button" onclick="toggleModal('product-discount-modal', false)" class="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="border-b border-slate-100 bg-slate-50 p-4">
+                    <div class="flex gap-3">
+                        <input id="product-discount-search" type="text" onkeyup="filterProductDiscountModal()" placeholder="Search product code, description, brand, part number..." class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold outline-none focus:border-maroon">
+                        <button type="button" onclick="addSelectedProductDiscounts()" class="rounded-xl bg-maroon px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg">Add Selected</button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto custom-scrollbar">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 bg-white text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            <tr class="border-b border-slate-100">
+                                <th class="px-5 py-3 w-20 text-center">Checkbox</th>
+                                <th class="px-5 py-3">Product Code</th>
+                                <th class="px-5 py-3">Description</th>
+                                <th class="px-5 py-3">Brand</th>
+                                <th class="px-5 py-3 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-discount-product-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                    </table>
+                </div>
+                <div id="product-discount-modal-status" class="border-t border-slate-100 px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Not loaded</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD DESCRIPTION DISCOUNT MODAL -->
+    <div id="description-discount-modal" class="fixed inset-0 z-[960] hidden overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div onclick="toggleModal('description-discount-modal', false)" class="fixed inset-0 bg-maroon-900/50 backdrop-blur-sm"></div>
+            <div class="modal-animate-in relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div class="bg-maroon-gradient px-6 py-5 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-widest">Add Description Discount</h3>
+                            <p class="mt-1 text-[10px] font-medium text-white/60">Select Product Master descriptions for this customer. (Priority 2)</p>
+                        </div>
+                        <button type="button" onclick="toggleModal('description-discount-modal', false)" class="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="border-b border-slate-100 bg-slate-50 p-4">
+                    <div class="flex gap-3">
+                        <input id="description-discount-search" type="text" onkeyup="filterDescriptionDiscountModal()" placeholder="Search description..." class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold outline-none focus:border-maroon">
+                        <button type="button" onclick="addSelectedDescriptionDiscounts()" class="rounded-xl bg-maroon px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg">Add Selected</button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto custom-scrollbar">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 bg-white text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            <tr class="border-b border-slate-100">
+                                <th class="px-5 py-3 w-20 text-center">Checkbox</th>
+                                <th class="px-5 py-3">Description</th>
+                                <th class="px-5 py-3 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="description-discount-tbody-modal" class="divide-y divide-slate-100 text-xs"></tbody>
+                    </table>
+                </div>
+                <div id="description-discount-modal-status" class="border-t border-slate-100 px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Not loaded</div>
+            </div>
+        </div>
+    </div>
+
     <!-- ADD BRAND DISCOUNT MODAL -->
     <div id="brand-discount-modal" class="fixed inset-0 z-[960] hidden overflow-y-auto">
         <div class="flex min-h-screen items-center justify-center p-4">
@@ -761,6 +898,17 @@
             brandDiscountAdd: '{{ route("regular.customer-master.brand-discounts.add", ["id" => ":id"]) }}',
             brandDiscountSave: '{{ route("regular.customer-master.brand-discounts.save", ["id" => ":id"]) }}',
             brandDiscountDelete: '{{ route("regular.customer-master.brand-discounts.delete", ["id" => ":id"]) }}',
+            productDiscounts: '{{ route("regular.customer-master.product-discounts.index", ["id" => ":id"]) }}',
+            productDiscountProducts: '{{ route("regular.customer-master.product-discounts.products", ["id" => ":id"]) }}',
+            productDiscountAdd: '{{ route("regular.customer-master.product-discounts.add", ["id" => ":id"]) }}',
+            productDiscountSave: '{{ route("regular.customer-master.product-discounts.save", ["id" => ":id"]) }}',
+            productDiscountDelete: '{{ route("regular.customer-master.product-discounts.delete", ["id" => ":id"]) }}',
+            descriptionDiscounts: '{{ route("regular.customer-master.description-discounts.index", ["id" => ":id"]) }}',
+            descriptionDiscountDescriptions: '{{ route("regular.customer-master.description-discounts.descriptions", ["id" => ":id"]) }}',
+            descriptionDiscountAdd: '{{ route("regular.customer-master.description-discounts.add", ["id" => ":id"]) }}',
+            descriptionDiscountSave: '{{ route("regular.customer-master.description-discounts.save", ["id" => ":id"]) }}',
+            descriptionDiscountDelete: '{{ route("regular.customer-master.description-discounts.delete", ["id" => ":id"]) }}',
+            effectiveDiscount: '{{ route("regular.customer-master.effective-discount", ["id" => ":id"]) }}',
             soaAutoStatus: '{{ route("regular.customer-master.soa-auto.status") }}',
             soaAutoSave: '{{ route("regular.customer-master.soa-auto.save") }}',
         };
