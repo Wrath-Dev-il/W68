@@ -1104,14 +1104,14 @@ function renderProductTable() {
                     </div>
                     ` : ''}</td>
                 <td class="py-3 px-4 font-bold text-slate-800 align-middle truncate relative group/tooltip" onmousemove="updateTooltipPos(event)">
-                    ${escapeHtml(product.product_code2 || product.product_code || '---')}
-                    ${(product.product_code2 || product.product_code) ? `
+                    ${escapeHtml(product.product_code2 || '')}
+                    ${product.product_code2 ? `
                     <div class="fixed invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 w-72 p-4 bg-slate-900 text-white text-[12px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[9999] pointer-events-none break-words whitespace-normal leading-relaxed border border-slate-700/50 backdrop-blur-md custom-tooltip-box">
                         <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
                             <i data-lucide="file-text" class="w-3.5 h-3.5 text-gold"></i>
-                            <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">${product.product_code2 ? 'Product Code 2' : 'Product Code'}</span>
+                            <span class="font-black text-gold uppercase tracking-[0.2em] text-[10px]">Product Code 2</span>
                         </div>
-                        ${escapeHtml(product.product_code2 || product.product_code)}
+                        ${escapeHtml(product.product_code2)}
                     </div>
                     ` : ''}</td>
                 ${renderFloatingInfoCell(product.position || product.Position, 'Position', 'map-pin', 'py-3 px-4 text-slate-600 align-middle truncate')}
