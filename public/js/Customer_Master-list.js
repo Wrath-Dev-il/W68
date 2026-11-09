@@ -1780,7 +1780,11 @@ function normalizeProductDiscount(row = {}) {
     };
 }
 
-function findProductDiscountInput(code) {
+function findProductDiscountInput(code, id = null) {
+    if (id) {
+        const byId = document.querySelector(`[data-product-discount-input][data-id="${id}"]`);
+        if (byId) return byId;
+    }
     const key = productDiscountKey(code);
     return Array.from(document.querySelectorAll('[data-product-discount-input]'))
         .find(input => productDiscountKey(input.dataset.code) === key) || null;
@@ -1807,32 +1811,40 @@ function renderProductDiscounts() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const code = escapeHtml(row.product_code);
         const desc = escapeHtml(row.description || 'N/A');
         const brand = escapeHtml(row.brand || 'N/A');
         const discount = Number(row.discount_percentage || 0).toFixed(2);
         return `
-            <tr data-product-discount-row data-code="${code}">
+            <tr data-product-discount-row data-id="${row.id}" data-index="${idx}" data-code="${code}">
                 <td class="py-3 px-4 font-bold text-maroon">${code}</td>
                 <td class="py-3 px-4 text-slate-700">${desc}</td>
                 <td class="py-3 px-4 font-bold text-slate-500">${brand}</td>
                 <td class="py-3 px-4">
-                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-product-discount-input data-code="${code}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-product-discount-input data-id="${row.id}" data-index="${idx}" data-code="${code}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
                 </td>
                 <td class="py-3 px-4 text-center">
-                    <button type="button" data-product-discount-delete data-code="${code}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                    <button type="button" data-product-discount-delete data-id="${row.id}" data-index="${idx}" data-code="${code}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-product-discount-input]').forEach(input => {
-        input.addEventListener('input', () => queueProductDiscountSave(input.dataset.code, input.value));
-        input.addEventListener('blur', () => saveProductDiscountNow(input.dataset.code, input.value, true));
+        const idx = Number(input.dataset.index);
+        const row = productDiscounts[idx] || {};
+        const id = Number(input.dataset.id || row.id || 0);
+        const code = row.product_code || input.dataset.code;
+        input.addEventListener('input', () => queueProductDiscountSave(code, input.value, id));
+        input.addEventListener('blur', () => saveProductDiscountNow(code, input.value, true, id));
     });
 
     tbody.querySelectorAll('[data-product-discount-delete]').forEach(button => {
-        button.addEventListener('click', () => deleteProductDiscount(button.dataset.code));
+        const idx = Number(button.dataset.index);
+        const row = productDiscounts[idx] || {};
+        const id = Number(button.dataset.id || row.id || 0);
+        const code = row.product_code || button.dataset.code;
+        button.addEventListener('click', () => deleteProductDiscount(code, id));
     });
 }
 
@@ -1855,18 +1867,18 @@ async function loadProductDiscounts(customerId) {
     }
 }
 
-function queueProductDiscountSave(code, value) {
-    const key = productDiscountKey(code);
+function queueProductDiscountSave(code, value, id = null) {
+    const key = (id ? `id_${id}` : '') || productDiscountKey(code);
     if (!key) return;
 
     clearTimeout(productDiscountSaveTimers[key]);
     setDiscountStatus('Saving...', 'saving');
-    productDiscountSaveTimers[key] = setTimeout(() => saveProductDiscountNow(code, value), 650);
+    productDiscountSaveTimers[key] = setTimeout(() => saveProductDiscountNow(code, value, false, id), 650);
 }
 
-async function saveProductDiscountNow(code, value, fromBlur = false) {
+async function saveProductDiscountNow(code, value, fromBlur = false, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    const key = productDiscountKey(code);
+    const key = (id ? `id_${id}` : '') || productDiscountKey(code);
     if (!customerId || !key) return;
 
     clearTimeout(productDiscountSaveTimers[key]);
@@ -1889,22 +1901,26 @@ async function saveProductDiscountNow(code, value, fromBlur = false) {
                 'X-CSRF-TOKEN': getCsrfToken()
             },
             body: JSON.stringify({
+                id: id ? Number(id) : null,
                 product_code: code,
                 discount_percentage: discount
             })
         });
         const body = await readCustomerActionJson(response, 'Unable to save item discount.');
         const savedDiscount = Number(body.discount_percentage ?? discount);
+        const savedId = Number(body.id ?? id ?? 0);
 
-        productDiscounts = productDiscounts.map(row => (
-            productDiscountKey(row.product_code) === key
-                ? { ...row, discount_percentage: savedDiscount }
-                : row
-        ));
+        productDiscounts = productDiscounts.map(row => {
+            const matches = (id && Number(row.id) === Number(id)) || (productDiscountKey(row.product_code) === productDiscountKey(code));
+            return matches
+                ? { ...row, id: savedId || row.id, discount_percentage: savedDiscount }
+                : row;
+        });
 
-        const input = findProductDiscountInput(code);
+        const input = findProductDiscountInput(code, id || savedId);
         if (input && (fromBlur || document.activeElement !== input)) {
             input.value = savedDiscount.toFixed(2);
+            if (savedId) input.dataset.id = String(savedId);
         }
         setDiscountStatus('Saved automatically', 'saved');
     } catch (error) {
@@ -1975,7 +1991,7 @@ function renderAvailableProductDiscountProducts() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const code = escapeHtml(row.product_code);
         const desc = escapeHtml(row.description || 'N/A');
         const brand = escapeHtml(row.brand || 'N/A');
@@ -1989,25 +2005,32 @@ function renderAvailableProductDiscountProducts() {
         return `
             <tr>
                 <td class="py-3 px-5 text-center">
-                    <input type="checkbox" data-product-select value="${code}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                    <input type="checkbox" data-product-select data-index="${idx}" value="${code}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
                 </td>
                 <td class="py-3 px-5 font-bold text-maroon">${code}</td>
                 <td class="py-3 px-5 text-slate-700 text-xs">${desc}</td>
                 <td class="py-3 px-5 font-bold text-slate-500 text-xs">${brand}</td>
                 <td class="py-3 px-5 text-center">
-                    <button type="button" data-product-add value="${code}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                    <button type="button" data-product-add data-index="${idx}" value="${code}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-product-add]').forEach(button => {
-        button.addEventListener('click', () => addProductDiscounts([button.value]));
+        const idx = Number(button.dataset.index);
+        const row = availableProductDiscountProducts[idx];
+        const code = (row && row.product_code) ? row.product_code : button.value;
+        button.addEventListener('click', () => addProductDiscounts([code]));
     });
 }
 
 function selectedProductDiscountCodes() {
     return Array.from(document.querySelectorAll('[data-product-select]:checked:not(:disabled)'))
-        .map(input => safeString(input.value).trim())
+        .map(input => {
+            const idx = Number(input.dataset.index);
+            const row = availableProductDiscountProducts[idx];
+            return (row && row.product_code) ? row.product_code : safeString(input.value).trim();
+        })
         .filter(Boolean);
 }
 
@@ -2047,13 +2070,14 @@ async function addProductDiscounts(codes) {
     }
 }
 
-function deleteProductDiscount(code) {
+function deleteProductDiscount(code, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    if (!customerId || !safeString(code).trim()) return;
+    if (!customerId || (!safeString(code).trim() && !id)) return;
 
+    const label = safeString(code).trim() || `Item #${id}`;
     showConfirmModal(
         'Delete Item Discount',
-        `Delete the item discount for ${safeString(code).trim()} on this customer only?`,
+        `Delete the item discount for ${label} on this customer only?`,
         async () => {
             try {
                 const response = await fetch(CUSTOMER_ENDPOINTS.productDiscountDelete(customerId), {
@@ -2063,10 +2087,16 @@ function deleteProductDiscount(code) {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': getCsrfToken()
                     },
-                    body: JSON.stringify({ product_code: code })
+                    body: JSON.stringify({
+                        id: id ? Number(id) : null,
+                        product_code: code
+                    })
                 });
                 const body = await readCustomerActionJson(response, 'Unable to delete item discount.');
-                productDiscounts = productDiscounts.filter(row => productDiscountKey(row.product_code) !== productDiscountKey(code));
+                productDiscounts = productDiscounts.filter(row => {
+                    if (id && Number(row.id) === Number(id)) return false;
+                    return productDiscountKey(row.product_code) !== productDiscountKey(code);
+                });
                 renderProductDiscounts();
                 setDiscountStatus(productDiscounts.length ? 'Saved automatically' : 'No items yet', productDiscounts.length ? 'saved' : 'idle');
                 showSuccessModal('Item Discount Deleted', body.message || 'Item discount deleted.');
@@ -2094,7 +2124,11 @@ function normalizeDescriptionDiscount(row = {}) {
     };
 }
 
-function findDescriptionDiscountInput(desc) {
+function findDescriptionDiscountInput(desc, id = null) {
+    if (id) {
+        const byId = document.querySelector(`[data-description-discount-input][data-id="${id}"]`);
+        if (byId) return byId;
+    }
     const key = descriptionDiscountKey(desc);
     return Array.from(document.querySelectorAll('[data-description-discount-input]'))
         .find(input => descriptionDiscountKey(input.dataset.desc) === key) || null;
@@ -2121,28 +2155,36 @@ function renderDescriptionDiscounts() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const desc = escapeHtml(row.description);
         const discount = Number(row.discount_percentage || 0).toFixed(2);
         return `
-            <tr data-description-discount-row data-desc="${desc}">
+            <tr data-description-discount-row data-id="${row.id}" data-index="${idx}" data-desc="${desc}">
                 <td class="py-3 px-4 font-bold text-slate-700">${desc}</td>
                 <td class="py-3 px-4">
-                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-description-discount-input data-desc="${desc}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-description-discount-input data-id="${row.id}" data-index="${idx}" data-desc="${desc}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
                 </td>
                 <td class="py-3 px-4 text-center">
-                    <button type="button" data-description-discount-delete data-desc="${desc}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                    <button type="button" data-description-discount-delete data-id="${row.id}" data-index="${idx}" data-desc="${desc}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-description-discount-input]').forEach(input => {
-        input.addEventListener('input', () => queueDescriptionDiscountSave(input.dataset.desc, input.value));
-        input.addEventListener('blur', () => saveDescriptionDiscountNow(input.dataset.desc, input.value, true));
+        const idx = Number(input.dataset.index);
+        const row = descriptionDiscounts[idx] || {};
+        const id = Number(input.dataset.id || row.id || 0);
+        const desc = row.description || input.dataset.desc;
+        input.addEventListener('input', () => queueDescriptionDiscountSave(desc, input.value, id));
+        input.addEventListener('blur', () => saveDescriptionDiscountNow(desc, input.value, true, id));
     });
 
     tbody.querySelectorAll('[data-description-discount-delete]').forEach(button => {
-        button.addEventListener('click', () => deleteDescriptionDiscount(button.dataset.desc));
+        const idx = Number(button.dataset.index);
+        const row = descriptionDiscounts[idx] || {};
+        const id = Number(button.dataset.id || row.id || 0);
+        const desc = row.description || button.dataset.desc;
+        button.addEventListener('click', () => deleteDescriptionDiscount(desc, id));
     });
 }
 
@@ -2165,18 +2207,18 @@ async function loadDescriptionDiscounts(customerId) {
     }
 }
 
-function queueDescriptionDiscountSave(desc, value) {
-    const key = descriptionDiscountKey(desc);
+function queueDescriptionDiscountSave(desc, value, id = null) {
+    const key = (id ? `id_${id}` : '') || descriptionDiscountKey(desc);
     if (!key) return;
 
     clearTimeout(descriptionDiscountSaveTimers[key]);
     setDiscountStatus('Saving...', 'saving');
-    descriptionDiscountSaveTimers[key] = setTimeout(() => saveDescriptionDiscountNow(desc, value), 650);
+    descriptionDiscountSaveTimers[key] = setTimeout(() => saveDescriptionDiscountNow(desc, value, false, id), 650);
 }
 
-async function saveDescriptionDiscountNow(desc, value, fromBlur = false) {
+async function saveDescriptionDiscountNow(desc, value, fromBlur = false, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    const key = descriptionDiscountKey(desc);
+    const key = (id ? `id_${id}` : '') || descriptionDiscountKey(desc);
     if (!customerId || !key) return;
 
     clearTimeout(descriptionDiscountSaveTimers[key]);
@@ -2199,22 +2241,26 @@ async function saveDescriptionDiscountNow(desc, value, fromBlur = false) {
                 'X-CSRF-TOKEN': getCsrfToken()
             },
             body: JSON.stringify({
+                id: id ? Number(id) : null,
                 description: desc,
                 discount_percentage: discount
             })
         });
         const body = await readCustomerActionJson(response, 'Unable to save description discount.');
         const savedDiscount = Number(body.discount_percentage ?? discount);
+        const savedId = Number(body.id ?? id ?? 0);
 
-        descriptionDiscounts = descriptionDiscounts.map(row => (
-            descriptionDiscountKey(row.description) === key
-                ? { ...row, discount_percentage: savedDiscount }
-                : row
-        ));
+        descriptionDiscounts = descriptionDiscounts.map(row => {
+            const matches = (id && Number(row.id) === Number(id)) || (descriptionDiscountKey(row.description) === descriptionDiscountKey(desc));
+            return matches
+                ? { ...row, id: savedId || row.id, discount_percentage: savedDiscount }
+                : row;
+        });
 
-        const input = findDescriptionDiscountInput(desc);
+        const input = findDescriptionDiscountInput(desc, id || savedId);
         if (input && (fromBlur || document.activeElement !== input)) {
             input.value = savedDiscount.toFixed(2);
+            if (savedId) input.dataset.id = String(savedId);
         }
         setDiscountStatus('Saved automatically', 'saved');
     } catch (error) {
@@ -2282,7 +2328,7 @@ function renderAvailableDescriptionDiscountDescriptions() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const desc = escapeHtml(row.description);
         const disabled = row.assigned ? 'disabled' : '';
         const checked = row.assigned ? 'checked' : '';
@@ -2294,23 +2340,30 @@ function renderAvailableDescriptionDiscountDescriptions() {
         return `
             <tr>
                 <td class="py-3 px-5 text-center">
-                    <input type="checkbox" data-description-select value="${desc}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                    <input type="checkbox" data-description-select data-index="${idx}" value="${desc}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
                 </td>
                 <td class="py-3 px-5 font-bold text-slate-700 text-xs">${desc}</td>
                 <td class="py-3 px-5 text-center">
-                    <button type="button" data-description-add value="${desc}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                    <button type="button" data-description-add data-index="${idx}" value="${desc}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-description-add]').forEach(button => {
-        button.addEventListener('click', () => addDescriptionDiscounts([button.value]));
+        const idx = Number(button.dataset.index);
+        const row = availableDescriptionDiscountDescriptions[idx];
+        const desc = (row && row.description) ? row.description : button.value;
+        button.addEventListener('click', () => addDescriptionDiscounts([desc]));
     });
 }
 
 function selectedDescriptionDiscountDescriptions() {
     return Array.from(document.querySelectorAll('[data-description-select]:checked:not(:disabled)'))
-        .map(input => safeString(input.value).trim())
+        .map(input => {
+            const idx = Number(input.dataset.index);
+            const row = availableDescriptionDiscountDescriptions[idx];
+            return (row && row.description) ? row.description : safeString(input.value).trim();
+        })
         .filter(Boolean);
 }
 
@@ -2350,13 +2403,14 @@ async function addDescriptionDiscounts(descs) {
     }
 }
 
-function deleteDescriptionDiscount(desc) {
+function deleteDescriptionDiscount(desc, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    if (!customerId || !safeString(desc).trim()) return;
+    if (!customerId || (!safeString(desc).trim() && !id)) return;
 
+    const label = safeString(desc).trim() || `Description #${id}`;
     showConfirmModal(
         'Delete Description Discount',
-        `Delete the description discount for "${safeString(desc).trim()}" on this customer only?`,
+        `Delete the description discount for "${label}" on this customer only?`,
         async () => {
             try {
                 const response = await fetch(CUSTOMER_ENDPOINTS.descriptionDiscountDelete(customerId), {
@@ -2366,10 +2420,16 @@ function deleteDescriptionDiscount(desc) {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': getCsrfToken()
                     },
-                    body: JSON.stringify({ description: desc })
+                    body: JSON.stringify({
+                        id: id ? Number(id) : null,
+                        description: desc
+                    })
                 });
                 const body = await readCustomerActionJson(response, 'Unable to delete description discount.');
-                descriptionDiscounts = descriptionDiscounts.filter(row => descriptionDiscountKey(row.description) !== descriptionDiscountKey(desc));
+                descriptionDiscounts = descriptionDiscounts.filter(row => {
+                    if (id && Number(row.id) === Number(id)) return false;
+                    return descriptionDiscountKey(row.description) !== descriptionDiscountKey(desc);
+                });
                 renderDescriptionDiscounts();
                 setDiscountStatus(descriptionDiscounts.length ? 'Saved automatically' : 'No descriptions yet', descriptionDiscounts.length ? 'saved' : 'idle');
                 showSuccessModal('Description Discount Deleted', body.message || 'Description discount deleted.');
@@ -2410,7 +2470,11 @@ function normalizeBrandDiscount(row = {}) {
     };
 }
 
-function findBrandDiscountInput(brand) {
+function findBrandDiscountInput(brand, id = null) {
+    if (id) {
+        const byId = document.querySelector(`[data-brand-discount-input][data-id="${id}"]`);
+        if (byId) return byId;
+    }
     const key = brandDiscountKey(brand);
     return Array.from(document.querySelectorAll('[data-brand-discount-input]'))
         .find(input => brandDiscountKey(input.dataset.brand) === key) || null;
@@ -2428,28 +2492,36 @@ function renderBrandDiscounts() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const brand = escapeHtml(row.brand);
         const discount = Number(row.discount_percentage || 0).toFixed(2);
         return `
-            <tr data-brand-discount-row data-brand="${brand}">
+            <tr data-brand-discount-row data-id="${row.id}" data-index="${idx}" data-brand="${brand}">
                 <td class="py-3 px-4 font-bold text-slate-700">${brand}</td>
                 <td class="py-3 px-4">
-                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-brand-discount-input data-brand="${brand}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
+                    <input type="number" min="0" max="100" step="0.01" value="${discount}" data-brand-discount-input data-id="${row.id}" data-index="${idx}" data-brand="${brand}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 text-right text-xs font-bold text-slate-700 outline-none focus:border-maroon">
                 </td>
                 <td class="py-3 px-4 text-center">
-                    <button type="button" data-brand-discount-delete data-brand="${brand}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                    <button type="button" data-brand-discount-delete data-id="${row.id}" data-index="${idx}" data-brand="${brand}" class="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-brand-discount-input]').forEach(input => {
-        input.addEventListener('input', () => queueBrandDiscountSave(input.dataset.brand, input.value));
-        input.addEventListener('blur', () => saveBrandDiscountNow(input.dataset.brand, input.value, true));
+        const idx = Number(input.dataset.index);
+        const row = brandDiscounts[idx] || {};
+        const id = Number(input.dataset.id || row.id || 0);
+        const brand = row.brand || input.dataset.brand;
+        input.addEventListener('input', () => queueBrandDiscountSave(brand, input.value, id));
+        input.addEventListener('blur', () => saveBrandDiscountNow(brand, input.value, true, id));
     });
 
     tbody.querySelectorAll('[data-brand-discount-delete]').forEach(button => {
-        button.addEventListener('click', () => deleteBrandDiscount(button.dataset.brand));
+        const idx = Number(button.dataset.index);
+        const row = brandDiscounts[idx] || {};
+        const id = Number(button.dataset.id || row.id || 0);
+        const brand = row.brand || button.dataset.brand;
+        button.addEventListener('click', () => deleteBrandDiscount(brand, id));
     });
 }
 
@@ -2472,18 +2544,18 @@ async function loadBrandDiscounts(customerId) {
     }
 }
 
-function queueBrandDiscountSave(brand, value) {
-    const key = brandDiscountKey(brand);
+function queueBrandDiscountSave(brand, value, id = null) {
+    const key = (id ? `id_${id}` : '') || brandDiscountKey(brand);
     if (!key) return;
 
     clearTimeout(brandDiscountSaveTimers[key]);
     setDiscountStatus('Saving...', 'saving');
-    brandDiscountSaveTimers[key] = setTimeout(() => saveBrandDiscountNow(brand, value), 650);
+    brandDiscountSaveTimers[key] = setTimeout(() => saveBrandDiscountNow(brand, value, false, id), 650);
 }
 
-async function saveBrandDiscountNow(brand, value, fromBlur = false) {
+async function saveBrandDiscountNow(brand, value, fromBlur = false, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    const key = brandDiscountKey(brand);
+    const key = (id ? `id_${id}` : '') || brandDiscountKey(brand);
     if (!customerId || !key) return;
 
     clearTimeout(brandDiscountSaveTimers[key]);
@@ -2506,6 +2578,7 @@ async function saveBrandDiscountNow(brand, value, fromBlur = false) {
                 'X-CSRF-TOKEN': getCsrfToken()
             },
             body: JSON.stringify({
+                id: id ? Number(id) : null,
                 brand,
                 discount_percentage: discount
             })
@@ -2513,16 +2586,19 @@ async function saveBrandDiscountNow(brand, value, fromBlur = false) {
         const body = await readCustomerActionJson(response, 'Unable to save brand discount.');
         const savedBrand = safeString(body.brand || brand).trim();
         const savedDiscount = Number(body.discount_percentage ?? discount);
+        const savedId = Number(body.id ?? id ?? 0);
 
-        brandDiscounts = brandDiscounts.map(row => (
-            brandDiscountKey(row.brand) === key
-                ? { ...row, brand: savedBrand, discount_percentage: savedDiscount }
-                : row
-        ));
+        brandDiscounts = brandDiscounts.map(row => {
+            const matches = (id && Number(row.id) === Number(id)) || (brandDiscountKey(row.brand) === key);
+            return matches
+                ? { ...row, id: savedId || row.id, brand: savedBrand, discount_percentage: savedDiscount }
+                : row;
+        });
 
-        const input = findBrandDiscountInput(brand);
+        const input = findBrandDiscountInput(brand, id || savedId);
         if (input && (fromBlur || document.activeElement !== input)) {
             input.value = savedDiscount.toFixed(2);
+            if (savedId) input.dataset.id = String(savedId);
         }
         setDiscountStatus('Saved automatically', 'saved');
     } catch (error) {
@@ -2590,7 +2666,7 @@ function renderAvailableBrandDiscountBrands() {
         return;
     }
 
-    tbody.innerHTML = rows.map(row => {
+    tbody.innerHTML = rows.map((row, idx) => {
         const brand = escapeHtml(row.brand);
         const disabled = row.assigned ? 'disabled' : '';
         const checked = row.assigned ? 'checked' : '';
@@ -2602,23 +2678,30 @@ function renderAvailableBrandDiscountBrands() {
         return `
             <tr>
                 <td class="py-3 px-4 text-center">
-                    <input type="checkbox" data-brand-select value="${brand}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
+                    <input type="checkbox" data-brand-select data-index="${idx}" value="${brand}" ${checked} ${disabled} class="h-4 w-4 rounded border-slate-300 text-maroon focus:ring-maroon">
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-700">${brand}</td>
                 <td class="py-3 px-4 text-center">
-                    <button type="button" data-brand-add value="${brand}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
+                    <button type="button" data-brand-add data-index="${idx}" value="${brand}" ${disabled} class="rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest ${buttonClass}">${label}</button>
                 </td>
             </tr>`;
     }).join('');
 
     tbody.querySelectorAll('[data-brand-add]').forEach(button => {
-        button.addEventListener('click', () => addBrandDiscounts([button.value]));
+        const idx = Number(button.dataset.index);
+        const row = availableBrandDiscountBrands[idx];
+        const brand = (row && row.brand) ? row.brand : button.value;
+        button.addEventListener('click', () => addBrandDiscounts([brand]));
     });
 }
 
 function selectedBrandDiscountBrands() {
     return Array.from(document.querySelectorAll('[data-brand-select]:checked:not(:disabled)'))
-        .map(input => safeString(input.value).trim())
+        .map(input => {
+            const idx = Number(input.dataset.index);
+            const row = availableBrandDiscountBrands[idx];
+            return (row && row.brand) ? row.brand : safeString(input.value).trim();
+        })
         .filter(Boolean);
 }
 
@@ -2658,13 +2741,14 @@ async function addBrandDiscounts(brands) {
     }
 }
 
-function deleteBrandDiscount(brand) {
+function deleteBrandDiscount(brand, id = null) {
     const customerId = Number(currentCustomerHistoryId || 0);
-    if (!customerId || !safeString(brand).trim()) return;
+    if (!customerId || (!safeString(brand).trim() && !id)) return;
 
+    const label = safeString(brand).trim() || `Brand #${id}`;
     showConfirmModal(
         'Delete Brand Discount',
-        `Delete the brand discount for ${safeString(brand).trim()} on this customer only?`,
+        `Delete the brand discount for ${label} on this customer only?`,
         async () => {
             try {
                 const response = await fetch(CUSTOMER_ENDPOINTS.brandDiscountDelete(customerId), {
@@ -2674,10 +2758,16 @@ function deleteBrandDiscount(brand) {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': getCsrfToken()
                     },
-                    body: JSON.stringify({ brand })
+                    body: JSON.stringify({
+                        id: id ? Number(id) : null,
+                        brand
+                    })
                 });
                 const body = await readCustomerActionJson(response, 'Unable to delete brand discount.');
-                brandDiscounts = brandDiscounts.filter(row => brandDiscountKey(row.brand) !== brandDiscountKey(brand));
+                brandDiscounts = brandDiscounts.filter(row => {
+                    if (id && Number(row.id) === Number(id)) return false;
+                    return brandDiscountKey(row.brand) !== brandDiscountKey(brand);
+                });
                 renderBrandDiscounts();
                 setDiscountStatus(brandDiscounts.length ? 'Saved automatically' : 'No brands yet', brandDiscounts.length ? 'saved' : 'idle');
                 showSuccessModal('Brand Deleted', body.message || 'Brand discount deleted.');

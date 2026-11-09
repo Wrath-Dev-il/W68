@@ -53,3 +53,4 @@ return new class extends Migration
         Schema::connection('masterlist')->dropIfExists('customer_description_discount');
     }
 };
+

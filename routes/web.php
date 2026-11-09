@@ -9943,10 +9943,14 @@ if (!function_exists('hatdogGetCustomerEffectiveDiscount')) {
 
         // Priority 2: Description
         if (trim($description) !== '') {
+            $descClean = trim($description);
             $descRow = DB::connection('masterlist')
                 ->table('customer_description_discount')
                 ->where('customer_id', $customerId)
-                ->where('description', trim($description))
+                ->where(function ($q) use ($descClean) {
+                    $q->where('description', $descClean)
+                      ->orWhereRaw('TRIM(LOWER(description)) = ?', [mb_strtolower($descClean)]);
+                })
                 ->first(['discount_percentage', 'description']);
             if ($descRow !== null) {
                 return [
@@ -9960,10 +9964,14 @@ if (!function_exists('hatdogGetCustomerEffectiveDiscount')) {
 
         // Priority 3: Brand
         if (trim($brand) !== '') {
+            $brandClean = trim($brand);
             $brandRow = DB::connection('masterlist')
                 ->table('customer_brand_discounts')
                 ->where('customer_id', $customerId)
-                ->where('brand', trim($brand))
+                ->where(function ($q) use ($brandClean) {
+                    $q->where('brand', $brandClean)
+                      ->orWhereRaw('TRIM(LOWER(brand)) = ?', [mb_strtolower($brandClean)]);
+                })
                 ->first(['discount_percentage', 'brand']);
             if ($brandRow !== null) {
                 return [
@@ -10137,34 +10145,68 @@ Route::post('/admin/masterlist/customer/brand-discounts/{id}/save', function (Re
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
-            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
-        }
+        hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'brand' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'brand' => ['nullable', 'string', 'max:255'],
             'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
-        $brand = trim((string) $validated['brand']);
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $brand = trim((string) $request->input('brand', ''));
         $discount = round((float) $validated['discount_percentage'], 2);
 
-        $updated = DB::connection('masterlist')
+        $query = DB::connection('masterlist')
             ->table('customer_brand_discounts')
-            ->where('customer_id', $id)
-            ->where('brand', $brand)
-            ->update([
-                'discount_percentage' => $discount,
-                'updated_at' => now(),
-            ]);
+            ->where('customer_id', $id);
 
-        if (!$updated) {
-            return response()->json(['success' => false, 'message' => 'Brand discount row was not found for this customer.'], 404);
+        $existing = null;
+        if ($rowId > 0) {
+            $existing = (clone $query)->where('id', $rowId)->first();
+        }
+        if (!$existing && $brand !== '') {
+            $existing = (clone $query)->where('brand', $brand)->first();
+        }
+        if (!$existing && $brand !== '') {
+            $existing = (clone $query)->whereRaw('TRIM(LOWER(brand)) = ?', [mb_strtolower($brand)])->first();
+        }
+
+        if ($existing) {
+            DB::connection('masterlist')
+                ->table('customer_brand_discounts')
+                ->where('id', $existing->id)
+                ->update([
+                    'discount_percentage' => $discount,
+                    'updated_at' => now(),
+                ]);
+            $brand = (string) $existing->brand;
+            $rowId = (int) $existing->id;
+        } else {
+            if ($brand === '') {
+                return response()->json(['success' => false, 'message' => 'Brand name is required.'], 422);
+            }
+            $rowId = DB::connection('masterlist')
+                ->table('customer_brand_discounts')
+                ->insertGetId([
+                    'customer_id' => (int) $id,
+                    'brand' => $brand,
+                    'discount_percentage' => $discount,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Brand discount saved.',
+            'id' => $rowId,
             'brand' => $brand,
             'discount_percentage' => $discount,
         ]);
@@ -10181,19 +10223,31 @@ Route::post('/admin/masterlist/customer/brand-discounts/{id}/delete', function (
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
     try {
-        if (!Schema::connection('masterlist')->hasTable('customer_brand_discounts')) {
-            return response()->json(['success' => false, 'message' => 'Customer brand discount table is missing. Run the migration first.'], 422);
-        }
+        hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'brand' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'brand' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $deleted = DB::connection('masterlist')
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $brand = trim((string) $request->input('brand', ''));
+
+        $query = DB::connection('masterlist')
             ->table('customer_brand_discounts')
-            ->where('customer_id', $id)
-            ->where('brand', trim((string) $validated['brand']))
-            ->delete();
+            ->where('customer_id', $id);
+
+        if ($rowId > 0) {
+            $query->where('id', $rowId);
+        } elseif ($brand !== '') {
+            $query->where(function ($q) use ($brand) {
+                $q->where('brand', $brand)
+                  ->orWhereRaw('TRIM(LOWER(brand)) = ?', [mb_strtolower($brand)]);
+            });
+        }
+
+        $deleted = $query->delete();
 
         return response()->json([
             'success' => true,
@@ -10373,29 +10427,71 @@ Route::post('/admin/masterlist/customer/product-discounts/{id}/save', function (
         hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'product_code' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'product_code' => ['nullable', 'string', 'max:255'],
             'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
-        $code = trim((string) $validated['product_code']);
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $code = trim((string) $request->input('product_code', ''));
         $discount = round((float) $validated['discount_percentage'], 2);
 
-        $updated = DB::connection('masterlist')
+        $query = DB::connection('masterlist')
             ->table('customer_product_discount')
-            ->where('customer_id', $id)
-            ->where('product_code', $code)
-            ->update([
-                'discount_percentage' => $discount,
-                'updated_at' => now(),
-            ]);
+            ->where('customer_id', $id);
 
-        if (!$updated) {
-            return response()->json(['success' => false, 'message' => 'Item discount row was not found for this customer.'], 404);
+        $existing = null;
+        if ($rowId > 0) {
+            $existing = (clone $query)->where('id', $rowId)->first();
+        }
+        if (!$existing && $code !== '') {
+            $existing = (clone $query)->where('product_code', $code)->first();
+        }
+        if (!$existing && $code !== '') {
+            $existing = (clone $query)->whereRaw('TRIM(LOWER(product_code)) = ?', [mb_strtolower($code)])->first();
+        }
+
+        if ($existing) {
+            DB::connection('masterlist')
+                ->table('customer_product_discount')
+                ->where('id', $existing->id)
+                ->update([
+                    'discount_percentage' => $discount,
+                    'updated_at' => now(),
+                ]);
+            $code = (string) $existing->product_code;
+            $rowId = (int) $existing->id;
+        } else {
+            if ($code === '') {
+                return response()->json(['success' => false, 'message' => 'Product code is required.'], 422);
+            }
+            $product = DB::connection('masterlist')
+                ->table('products')
+                ->where('product_code', $code)
+                ->first(['id']);
+
+            $rowId = DB::connection('masterlist')
+                ->table('customer_product_discount')
+                ->insertGetId([
+                    'customer_id' => (int) $id,
+                    'product_id' => $product ? (int) $product->id : null,
+                    'product_code' => $code,
+                    'discount_percentage' => $discount,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Item discount saved.',
+            'id' => $rowId,
             'product_code' => $code,
             'discount_percentage' => $discount,
         ]);
@@ -10415,14 +10511,28 @@ Route::post('/admin/masterlist/customer/product-discounts/{id}/delete', function
         hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'product_code' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'product_code' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $deleted = DB::connection('masterlist')
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $code = trim((string) $request->input('product_code', ''));
+
+        $query = DB::connection('masterlist')
             ->table('customer_product_discount')
-            ->where('customer_id', $id)
-            ->where('product_code', trim((string) $validated['product_code']))
-            ->delete();
+            ->where('customer_id', $id);
+
+        if ($rowId > 0) {
+            $query->where('id', $rowId);
+        } elseif ($code !== '') {
+            $query->where(function ($q) use ($code) {
+                $q->where('product_code', $code)
+                  ->orWhereRaw('TRIM(LOWER(product_code)) = ?', [mb_strtolower($code)]);
+            });
+        }
+
+        $deleted = $query->delete();
 
         return response()->json([
             'success' => true,
@@ -10589,29 +10699,65 @@ Route::post('/admin/masterlist/customer/description-discounts/{id}/save', functi
         hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'description' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'description' => ['nullable', 'string', 'max:255'],
             'discount_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
-        $description = trim((string) $validated['description']);
+        $customer = DB::connection('masterlist')->table('customers')->where('id', $id)->first(['id']);
+        if (!$customer) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $description = trim((string) $request->input('description', ''));
         $discount = round((float) $validated['discount_percentage'], 2);
 
-        $updated = DB::connection('masterlist')
+        $query = DB::connection('masterlist')
             ->table('customer_description_discount')
-            ->where('customer_id', $id)
-            ->where('description', $description)
-            ->update([
-                'discount_percentage' => $discount,
-                'updated_at' => now(),
-            ]);
+            ->where('customer_id', $id);
 
-        if (!$updated) {
-            return response()->json(['success' => false, 'message' => 'Description discount row was not found for this customer.'], 404);
+        $existing = null;
+        if ($rowId > 0) {
+            $existing = (clone $query)->where('id', $rowId)->first();
+        }
+        if (!$existing && $description !== '') {
+            $existing = (clone $query)->where('description', $description)->first();
+        }
+        if (!$existing && $description !== '') {
+            $existing = (clone $query)->whereRaw('TRIM(LOWER(description)) = ?', [mb_strtolower($description)])->first();
+        }
+
+        if ($existing) {
+            DB::connection('masterlist')
+                ->table('customer_description_discount')
+                ->where('id', $existing->id)
+                ->update([
+                    'discount_percentage' => $discount,
+                    'updated_at' => now(),
+                ]);
+            $description = (string) $existing->description;
+            $rowId = (int) $existing->id;
+        } else {
+            if ($description === '') {
+                return response()->json(['success' => false, 'message' => 'Description is required.'], 422);
+            }
+            $rowId = DB::connection('masterlist')
+                ->table('customer_description_discount')
+                ->insertGetId([
+                    'customer_id' => (int) $id,
+                    'description' => $description,
+                    'discount_percentage' => $discount,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Description discount saved.',
+            'id' => $rowId,
             'description' => $description,
             'discount_percentage' => $discount,
         ]);
@@ -10631,14 +10777,28 @@ Route::post('/admin/masterlist/customer/description-discounts/{id}/delete', func
         hatdogEnsureCustomerDiscountTablesExist();
 
         $validated = $request->validate([
-            'description' => ['required', 'string', 'max:255'],
+            'id' => ['nullable', 'integer'],
+            'row_id' => ['nullable', 'integer'],
+            'description' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $deleted = DB::connection('masterlist')
+        $rowId = (int) ($request->input('id') ?: $request->input('row_id', 0));
+        $description = trim((string) $request->input('description', ''));
+
+        $query = DB::connection('masterlist')
             ->table('customer_description_discount')
-            ->where('customer_id', $id)
-            ->where('description', trim((string) $validated['description']))
-            ->delete();
+            ->where('customer_id', $id);
+
+        if ($rowId > 0) {
+            $query->where('id', $rowId);
+        } elseif ($description !== '') {
+            $query->where(function ($q) use ($description) {
+                $q->where('description', $description)
+                  ->orWhereRaw('TRIM(LOWER(description)) = ?', [mb_strtolower($description)]);
+            });
+        }
+
+        $deleted = $query->delete();
 
         return response()->json([
             'success' => true,
