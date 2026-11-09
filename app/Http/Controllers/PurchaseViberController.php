@@ -510,21 +510,21 @@ class PurchaseViberController extends Controller
             $query = ViberListItem::where('viber_list_id', $viberListId);
             if ($shipped === '1') {
                 $query->whereNotNull('purchase_note_id');
+                // Exclude already-invoiced items from To-Shipped views
+                // Invoiced items should only appear in Arrived
+                $query->whereNotExists(function ($q) {
+                    $q->select(DB::raw(1))
+                      ->from('purchase_notes')
+                      ->join('purchase_orders', DB::raw("REPLACE(purchase_notes.purchase_note_number, 'SN-', '')"), '=', 'purchase_orders.po_number')
+                      ->join('purchase_order_items', function ($j) {
+                          $j->on('purchase_order_items.purchase_order_id', '=', 'purchase_orders.id')
+                            ->on('purchase_order_items.product_id', '=', 'viber_list_items.product_id');
+                      })
+                      ->whereColumn('purchase_notes.id', 'viber_list_items.purchase_note_id');
+                });
             } elseif ($shipped === '0') {
                 $query->whereNull('purchase_note_id');
             }
-            // Exclude already-invoiced items from Entry and To-Shipped views
-            // Invoiced items should only appear in Arrived
-            $query->whereNotExists(function ($q) {
-                $q->select(DB::raw(1))
-                  ->from('purchase_notes')
-                  ->join('purchase_orders', DB::raw("REPLACE(purchase_notes.purchase_note_number, 'SN-', '')"), '=', 'purchase_orders.po_number')
-                  ->join('purchase_order_items', function ($j) {
-                      $j->on('purchase_order_items.purchase_order_id', '=', 'purchase_orders.id')
-                        ->on('purchase_order_items.product_id', '=', 'viber_list_items.product_id');
-                  })
-                  ->whereColumn('purchase_notes.id', 'viber_list_items.purchase_note_id');
-            });
             $items = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')
                 ->get();
 

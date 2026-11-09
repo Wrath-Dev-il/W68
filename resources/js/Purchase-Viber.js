@@ -127,8 +127,8 @@ function getActiveList() {
     return getCurrentLists().find(l => l.id === state.activeViberListId) || null;
 }
 
-function getSearch() { return state.searchQueries[state.activeViberListId] || ''; }
-function setSearch(val) { state.searchQueries[state.activeViberListId] = val; }
+function getSearch() { return String(state.globalEntrySearchQuery || ''); }
+function setSearch(val) { state.globalEntrySearchQuery = String(val ?? ''); }
 function getColFilter(col) {
     if (!state.columnFilters[state.activeViberListId]) state.columnFilters[state.activeViberListId] = {};
     return state.columnFilters[state.activeViberListId][col] || '';
@@ -412,6 +412,167 @@ window.selectSupplierItems = async function(viberListId) {
     updateAddToNoteBtn();
 };
 
+// W68_READY_TO_SHIPPED_INLINE_AUTOSAVE_20261006
+// Ready-to-Shipped only: New Cost, QTY, and Unit save automatically.
+// Requests are serialized per field so a slow earlier request cannot overwrite
+// a newer value typed by the user.
+const w68ReadyAutoSaveState = {};
+
+function w68ReadyAutoSaveKey(itemId, field) {
+    return String(itemId) + ':' + String(field);
+}
+
+function w68SetReadyAutoSaveVisual(input, stateName) {
+    if (!input) return;
+
+    input.style.transition = 'background-color .18s ease, border-color .18s ease';
+    input.style.borderColor = '';
+    input.style.backgroundColor = '';
+    input.title = 'Auto-saved';
+
+    if (stateName === 'pending' || stateName === 'saving') {
+        input.style.borderColor = '#f59e0b';
+        input.style.backgroundColor = '#fffbeb';
+        input.title = stateName === 'saving' ? 'Saving...' : 'Waiting to save...';
+    } else if (stateName === 'saved') {
+        input.style.borderColor = '#10b981';
+        input.style.backgroundColor = '#ecfdf5';
+        input.title = 'Saved automatically';
+    } else if (stateName === 'error') {
+        input.style.borderColor = '#ef4444';
+        input.style.backgroundColor = '#fef2f2';
+        input.title = 'Auto-save failed';
+    }
+}
+
+function w68UpdateReadyItemCache(itemId, field, value, serverData = null) {
+    const apply = (item) => {
+        if (!item || Number(item.id) !== Number(itemId)) return;
+
+        if (serverData && typeof serverData === 'object' && Object.prototype.hasOwnProperty.call(serverData, field)) {
+            item[field] = serverData[field];
+        } else {
+            item[field] = value;
+        }
+    };
+
+    (toShippedReadyItems || []).forEach(apply);
+    (toShippedItemsCache || []).forEach(apply);
+
+    const active = getActiveList();
+    if (active && Array.isArray(active._cachedItems)) {
+        active._cachedItems.forEach(apply);
+    }
+}
+
+window.queueReadyToShippedAutoSave = function(input, itemId, field, immediate = false) {
+    if (VIBER_READ_ONLY || !input || toShippedTab !== 'ready') return;
+
+    const allowed = ['new_cost', 'order_qty', 'unit'];
+    if (!allowed.includes(field)) return;
+
+    const key = w68ReadyAutoSaveKey(itemId, field);
+    if (!w68ReadyAutoSaveState[key]) {
+        w68ReadyAutoSaveState[key] = {
+            timer: null,
+            saving: false,
+            queued: false,
+            input: null,
+            savedTimer: null,
+        };
+    }
+
+    const state = w68ReadyAutoSaveState[key];
+    state.input = input;
+    state.queued = true;
+
+    w68SetReadyAutoSaveVisual(input, 'pending');
+
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = setTimeout(
+        () => window.saveReadyToShippedField(itemId, field),
+        immediate ? 0 : 500
+    );
+};
+
+window.saveReadyToShippedField = async function(itemId, field) {
+    if (VIBER_READ_ONLY || toShippedTab !== 'ready') return;
+
+    const key = w68ReadyAutoSaveKey(itemId, field);
+    const state = w68ReadyAutoSaveState[key];
+    if (!state || !state.input) return;
+
+    if (state.saving) {
+        state.queued = true;
+        return;
+    }
+
+    const input = state.input;
+    let value;
+
+    if (field === 'new_cost' || field === 'order_qty') {
+        value = Number(input.value);
+        if (!Number.isFinite(value) || value < 0) {
+            w68SetReadyAutoSaveVisual(input, 'error');
+            return;
+        }
+    } else {
+        value = String(input.value || '').trim();
+        if (value.length > 50) {
+            w68SetReadyAutoSaveVisual(input, 'error');
+            return;
+        }
+    }
+
+    const updateRoute = window.viberRoutes?.updateItem;
+    if (!updateRoute || !String(updateRoute).includes(':id')) {
+        w68SetReadyAutoSaveVisual(input, 'error');
+        return;
+    }
+
+    state.saving = true;
+    state.queued = false;
+    w68SetReadyAutoSaveVisual(input, 'saving');
+
+    try {
+        const response = await fetch(String(updateRoute).replace(':id', itemId), {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || window.csrfToken || '',
+            },
+            body: JSON.stringify({ [field]: value }),
+        });
+
+        const json = await response.json();
+        if (!response.ok || !json.success) {
+            throw new Error(json.message || 'Failed to auto-save item.');
+        }
+
+        w68UpdateReadyItemCache(itemId, field, value, json.data || null);
+        w68SetReadyAutoSaveVisual(input, 'saved');
+
+        if (state.savedTimer) clearTimeout(state.savedTimer);
+        state.savedTimer = setTimeout(() => {
+            w68SetReadyAutoSaveVisual(input, 'idle');
+        }, 1000);
+    } catch (error) {
+        console.error('Ready-to-Shipped auto-save error:', error);
+        w68SetReadyAutoSaveVisual(input, 'error');
+    } finally {
+        state.saving = false;
+
+        if (state.queued) {
+            if (state.timer) clearTimeout(state.timer);
+            state.timer = setTimeout(
+                () => window.saveReadyToShippedField(itemId, field),
+                80
+            );
+        }
+    }
+};
+
 function renderToShippedItems() {
     const tbody = document.getElementById('viber-to-shipped-items-tbody');
     if (!tbody) return;
@@ -458,9 +619,52 @@ function renderToShippedItems() {
             <td class="py-3 px-4 ${textClass}">${item.description || '—'}</td>
             <td class="py-3 px-4 ${textClass}">${item.application || '—'}</td>
             <td class="py-3 px-4 text-right ${textClass}">${item.last_cost != null ? formatCurrencyValue(item.last_cost, toShippedTab === 'ready' ? toShippedCurrency : item.currency_code) : '—'}</td>
-            <td class="py-3 px-4 text-right ${isClickable && isSelected ? 'text-maroon' : 'text-slate-600'}">${item.new_cost != null ? formatCurrencyValue(item.new_cost, toShippedTab === 'ready' ? toShippedCurrency : item.currency_code) : '—'}</td>
-            <td class="py-3 px-4 text-center ${isClickable && isSelected ? 'text-maroon font-semibold' : 'text-slate-600'}">${item.order_qty != null ? parseFloat(item.order_qty) : '—'}</td>
-            <td class="py-3 px-4 ${textClass}">${item.oum_unit || '—'}</td>
+            <td class="py-3 px-4 text-right ${isClickable && isSelected ? 'text-maroon' : 'text-slate-600'}">
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
+                    ? `<div class="inline-flex items-center gap-1" onclick="event.stopPropagation()">
+                        <span class="text-[10px] font-bold text-slate-400">${escapePrintValue(CURRENCY_SYMBOLS[toShippedCurrency] || '₱')}</span>
+                        <input type="number" min="0" step="0.01"
+                            value="${Number(item.new_cost || 0).toFixed(2)}"
+                            data-ready-item-id="${item.id}"
+                            data-ready-field="new_cost"
+                            onclick="event.stopPropagation()"
+                            onkeydown="event.stopPropagation()"
+                            oninput="event.stopPropagation(); queueReadyToShippedAutoSave(this, ${item.id}, 'new_cost')"
+                            onblur="queueReadyToShippedAutoSave(this, ${item.id}, 'new_cost', true)"
+                            class="inline-edit-input w-24 px-2 py-1.5 text-xs text-right text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-maroon/40 focus:ring-1 focus:ring-maroon/20"
+                            title="Auto-saved">
+                    </div>`
+                    : (item.new_cost != null ? formatCurrencyValue(item.new_cost, item.currency_code) : '—')}
+            </td>
+            <td class="py-3 px-4 text-center ${isClickable && isSelected ? 'text-maroon font-semibold' : 'text-slate-600'}">
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
+                    ? `<input type="number" min="0" step="any"
+                        value="${item.order_qty != null ? Number(item.order_qty) : 0}"
+                        data-ready-item-id="${item.id}"
+                        data-ready-field="order_qty"
+                        onclick="event.stopPropagation()"
+                        onkeydown="event.stopPropagation()"
+                        oninput="event.stopPropagation(); queueReadyToShippedAutoSave(this, ${item.id}, 'order_qty')"
+                        onblur="queueReadyToShippedAutoSave(this, ${item.id}, 'order_qty', true)"
+                        class="inline-edit-input w-20 px-2 py-1.5 text-xs text-center text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-maroon/40 focus:ring-1 focus:ring-maroon/20"
+                        title="Auto-saved">`
+                    : (item.order_qty != null ? parseFloat(item.order_qty) : '—')}
+            </td>
+            <td class="py-3 px-4 ${textClass}">
+                ${!VIBER_READ_ONLY && toShippedTab === 'ready'
+                    ? `<input type="text" maxlength="50"
+                        value="${escapePrintValue(item.unit || item.oum_unit || '')}"
+                        data-ready-item-id="${item.id}"
+                        data-ready-field="unit"
+                        onclick="event.stopPropagation()"
+                        onkeydown="event.stopPropagation()"
+                        oninput="event.stopPropagation(); queueReadyToShippedAutoSave(this, ${item.id}, 'unit')"
+                        onblur="queueReadyToShippedAutoSave(this, ${item.id}, 'unit', true)"
+                        class="inline-edit-input w-20 px-2 py-1.5 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-maroon/40 focus:ring-1 focus:ring-maroon/20"
+                        placeholder="Unit"
+                        title="Auto-saved">`
+                    : (item.unit || item.oum_unit || '—')}
+            </td>
             <td class="py-3 px-4 ${textClass}">${item.ordered_date || '—'}</td>
         </tr>`;
     });
@@ -634,11 +838,168 @@ function renderMainView() {
     tableArea.classList.remove('hidden');
 }
 
+// W68_GLOBAL_ENTRY_SUPPLIER_SEARCH_20260922
+let w68EntryGlobalSearchTimer = null;
+let w68EntryGlobalSearchSequence = 0;
+
+function w68EntryGlobalSearchMatches(item, supplier, query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return true;
+
+    const values = [
+        item?.item_code,
+        item?.part_no,
+        item?.description,
+        item?.application,
+        item?.brand,
+        item?.unit,
+        item?.oum_unit,
+        item?.remarks,
+        item?.ordered_date,
+        item?.last_cost,
+        item?.new_cost,
+        item?.order_qty,
+        supplier?.supplier_code,
+        supplier?.supplier_name,
+    ];
+
+    return values.some(value => String(value ?? '').toLowerCase().includes(q));
+}
+
+function w68FormatEntrySearchDate(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return raw || '—';
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const month = months[Math.max(0, Math.min(11, Number(match[2]) - 1))];
+    return `${match[3]}-${month}-${match[1]}`;
+}
+
+function w68UpdateGlobalEntrySearchFooter(totalItems, supplierCount) {
+    const info = document.getElementById('table-range-info');
+    const indicator = document.getElementById('table-page-indicator');
+    const prevBtn = document.getElementById('table-prev-btn');
+    const nextBtn = document.getElementById('table-next-btn');
+
+    if (info) {
+        info.textContent = totalItems > 0
+            ? `Showing ${totalItems} matching item${totalItems === 1 ? '' : 's'} across ${supplierCount} supplier${supplierCount === 1 ? '' : 's'}`
+            : 'Showing 0 matching items';
+    }
+    if (indicator) indicator.textContent = 'All suppliers';
+    [prevBtn, nextBtn].forEach(btn => {
+        if (!btn) return;
+        btn.disabled = true;
+        btn.className = 'px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed';
+    });
+}
+
+async function w68RenderGlobalEntrySupplierSearch(tbody, query) {
+    const sequence = ++w68EntryGlobalSearchSequence;
+    const lists = [...(state.viberLists.entry || [])]
+        .sort((a, b) => String(a.supplier_name || a.supplier_code || '').localeCompare(String(b.supplier_name || b.supplier_code || '')));
+    const columnCount = VIBER_READ_ONLY ? 10 : 11;
+
+    document.getElementById('viber-empty-no-supplier')?.classList.add('hidden');
+    document.getElementById('viber-empty-no-selection')?.classList.add('hidden');
+    document.getElementById('viber-empty-no-items')?.classList.add('hidden');
+    document.getElementById('viber-table-area')?.classList.remove('hidden');
+    document.getElementById('viber-print-entry-btn')?.classList.add('hidden');
+
+    tbody.innerHTML = `<tr><td colspan="${columnCount}" class="py-12 text-center text-slate-400">
+        <div class="inline-flex items-center gap-2 text-sm font-semibold">
+            <span class="inline-block w-4 h-4 rounded-full border-2 border-slate-300 border-t-maroon animate-spin"></span>
+            Searching all suppliers...
+        </div>
+    </td></tr>`;
+
+    const groups = await Promise.all(lists.map(async supplier => {
+        let items = supplier._cachedItems;
+        if (!Array.isArray(items)) {
+            items = await fetchItems(supplier.id);
+            supplier._cachedItems = items;
+        }
+
+        const matches = items.filter(item =>
+            w68EntryGlobalSearchMatches(item, supplier, query)
+        );
+        return { supplier, matches };
+    }));
+
+    if (sequence !== w68EntryGlobalSearchSequence || String(getSearch()).trim() !== String(query).trim()) {
+        return;
+    }
+
+    const visibleGroups = groups.filter(group => group.matches.length > 0);
+    const totalItems = visibleGroups.reduce((sum, group) => sum + group.matches.length, 0);
+
+    if (totalItems === 0) {
+        tbody.innerHTML = `<tr><td colspan="${columnCount}" class="py-16 text-center text-slate-400">
+            <i data-lucide="search-x" class="w-10 h-10 mx-auto mb-3 opacity-50"></i>
+            <p class="text-sm font-medium">No matching Purchase Entry items across suppliers.</p>
+            <p class="text-xs mt-1">Search Item Code, Part No., Description, Application, cost, quantity, unit, date, remarks, or supplier.</p>
+        </td></tr>`;
+        w68UpdateGlobalEntrySearchFooter(0, 0);
+        if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 0);
+        return;
+    }
+
+    let html = '';
+    visibleGroups.forEach(({ supplier, matches }) => {
+        const supplierName = escapePrintValue(supplier.supplier_name || supplier.supplier_code || 'UNNAMED SUPPLIER');
+        const supplierCode = escapePrintValue(supplier.supplier_code || '');
+        html += `<tr class="bg-maroon-950 border-y border-maroon-900">
+            <td colspan="${columnCount}" class="py-2.5 px-4 text-yellow-300">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <i data-lucide="building-2" class="w-4 h-4"></i>
+                    <span class="text-sm font-extrabold uppercase tracking-wide">${supplierName}</span>
+                    ${supplierCode && supplierCode !== supplierName ? `<span class="text-[10px] font-bold text-white/70">${supplierCode}</span>` : ''}
+                    <span class="ml-auto text-[10px] font-bold text-white/70">${matches.length} MATCH${matches.length === 1 ? '' : 'ES'}</span>
+                </div>
+            </td>
+        </tr>`;
+
+        matches.forEach(e => {
+            const hasPn = e.purchase_note_id != null;
+            const isRollback = isRollbackItem(e);
+            let rowClass = '';
+            if (isRollback) rowClass = 'viber-row-rollback';
+            else if (hasPn) rowClass = 'viber-row-has-pn';
+            else if (e.is_shared_item) rowClass = 'viber-row-shared';
+            html += `<tr data-product-id="${escapePrintValue(e.product_id || '')}" data-item-code="${escapePrintValue(e.item_code || '')}" data-item-id="${escapePrintValue(e.id || '')}" class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${rowClass}">
+                <td class="py-3 px-4 text-xs font-mono text-maroon font-semibold">${escapePrintValue(e.item_code || '—')}</td>
+                <td class="py-3 px-4 text-xs text-slate-700">${escapePrintValue(e.part_no || '—')}</td>
+                <td class="py-3 px-4 text-xs text-slate-700 max-w-[240px] whitespace-normal break-words">${escapePrintValue(e.description || '—')}</td>
+                <td class="py-3 px-4 text-xs text-slate-600 max-w-[220px] whitespace-normal break-words">${escapePrintValue(e.application || '—')}</td>
+                <td class="py-3 px-4 text-xs text-right text-slate-600 whitespace-nowrap">${formatCurrencyValue(e.last_cost, e.currency_code)}</td>
+                <td class="py-3 px-4 text-xs text-right font-semibold text-slate-800 whitespace-nowrap">${formatCurrencyValue(e.new_cost, e.currency_code)}</td>
+                <td class="py-3 px-4 text-xs text-center font-semibold text-slate-800">${escapePrintValue(e.order_qty ?? 0)}</td>
+                <td class="py-3 px-4 text-xs text-slate-600">${escapePrintValue(e.unit || e.oum_unit || '—')}</td>
+                <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">${w68FormatEntrySearchDate(e.ordered_date)}</td>
+                <td class="py-3 px-4 text-xs text-slate-500 max-w-[220px] whitespace-pre-wrap break-words">${escapePrintValue(e.remarks || '—')}</td>
+                ${VIBER_READ_ONLY ? '' : '<td class="py-3 px-4 text-center text-[10px] font-bold text-slate-400">VIEW</td>'}
+            </tr>`;
+        });
+    });
+
+    tbody.innerHTML = html;
+    w68UpdateGlobalEntrySearchFooter(totalItems, visibleGroups.length);
+    if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 0);
+}
+
 // ── Table Rendering ──
 async function renderTable() {
     const tbody = document.getElementById('viber-table-body');
+    if (!tbody) return;
+
+    const globalSearch = getSearch().trim();
+    if (state.activeDashboard === 'entry' && globalSearch !== '') {
+        await w68RenderGlobalEntrySupplierSearch(tbody, globalSearch);
+        return;
+    }
+
     const active = getActiveList();
-    if (!tbody || !active) return;
+    if (!active) return;
 
     const items = await fetchItems(active.id);
     // Cache items on the list object for filter/search
@@ -762,6 +1123,7 @@ function updatePagination(from, to, total) {
 }
 
 window.changePage = function(delta) {
+    if (state.activeDashboard === 'entry' && getSearch().trim() !== '') return;
     const active = getActiveList();
     if (!active) return;
     let cp = getPage();
@@ -776,7 +1138,20 @@ window.changePage = function(delta) {
 window.handleViberSearch = function(input) {
     setSearch(input.value);
     setPage(1);
-    renderTable();
+    window.clearTimeout(w68EntryGlobalSearchTimer);
+
+    if (getSearch().trim() === '') {
+        w68EntryGlobalSearchSequence++;
+        renderAll();
+        return;
+    }
+
+    state.selectedEntryItemIds = new Set();
+    if (typeof updateTransferButtonState === 'function') updateTransferButtonState();
+
+    w68EntryGlobalSearchTimer = window.setTimeout(() => {
+        renderTable();
+    }, 250);
 };
 
 // ── Column Filter ──

@@ -983,7 +983,7 @@ async function w68RenderGlobalEntrySupplierSearch(tbody, query) {
         }
 
         const matches = items.filter(item =>
-            item?.purchase_note_id == null && w68EntryGlobalSearchMatches(item, supplier, query)
+            w68EntryGlobalSearchMatches(item, supplier, query)
         );
         return { supplier, matches };
     }));
@@ -1022,7 +1022,13 @@ async function w68RenderGlobalEntrySupplierSearch(tbody, query) {
         </tr>`;
 
         matches.forEach(e => {
-            html += `<tr data-product-id="${escapePrintValue(e.product_id || '')}" data-item-code="${escapePrintValue(e.item_code || '')}" data-item-id="${escapePrintValue(e.id || '')}" class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+            const hasPn = e.purchase_note_id != null;
+            const isRollback = isRollbackItem(e);
+            let rowClass = '';
+            if (isRollback) rowClass = 'viber-row-rollback';
+            else if (hasPn) rowClass = 'viber-row-has-pn';
+            else if (e.is_shared_item) rowClass = 'viber-row-shared';
+            html += `<tr data-product-id="${escapePrintValue(e.product_id || '')}" data-item-code="${escapePrintValue(e.item_code || '')}" data-item-id="${escapePrintValue(e.id || '')}" class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${rowClass}">
                 <td class="py-3 px-4 text-xs font-mono text-maroon font-semibold">${escapePrintValue(e.item_code || '—')}</td>
                 <td class="py-3 px-4 text-xs text-slate-700">${escapePrintValue(e.part_no || '—')}</td>
                 <td class="py-3 px-4 text-xs text-slate-700 max-w-[240px] whitespace-normal break-words">${escapePrintValue(e.description || '—')}</td>
