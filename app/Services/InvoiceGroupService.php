@@ -25,6 +25,8 @@ class InvoiceGroupService
 
         $title = trim((string) $request->input('title', ''));
         $items = $request->input('items');
+        $groupedDate = $request->input('grouped_date');
+        $groupedDate = $groupedDate && strtotime($groupedDate) ? date('Y-m-d', strtotime($groupedDate)) : now()->toDateString();
 
         if ($title === '') {
             return ['success' => false, 'message' => 'Group title is required.'];
@@ -42,11 +44,11 @@ class InvoiceGroupService
         }
 
         try {
-            return DB::connection('accounting')->transaction(function () use ($title, $items, $user, $processClosure) {
+            return DB::connection('accounting')->transaction(function () use ($title, $items, $user, $processClosure, $groupedDate) {
                 $groupId = DB::connection('accounting')->table('payment_invoice_groups')->insertGetId([
                     'title' => $title,
                     'created_by' => $this->actorName($user),
-                    'grouped_date' => now()->toDateString(),
+                    'grouped_date' => $groupedDate,
                     'status' => 'active',
                     'discount_percent' => 0,
                     'discount_amount' => 0,

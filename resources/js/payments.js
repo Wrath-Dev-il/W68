@@ -1421,6 +1421,9 @@ window.openPaymentGroupModal = function() {
     if (error) error.classList.add('hidden');
     if (count) count.textContent = `${items.length} invoice${items.length > 1 ? 's' : ''} selected`;
 
+    const groupDate = document.getElementById('payment-group-date');
+    if (groupDate) groupDate.value = new Date().toISOString().slice(0, 10);
+
     const groupSelect = document.getElementById('payment-existing-group-select');
     const groupSearch = document.getElementById('payment-existing-group-search');
     if (groupSelect) groupSelect.value = '';
@@ -1470,6 +1473,7 @@ window.submitPaymentGroup = async function() {
     }
 
     const isAppend = !!selectedGroupId;
+    const groupedDate = document.getElementById('payment-group-date')?.value || '';
     if (createBtn) {
         createBtn.disabled = true;
         createBtn.textContent = isAppend ? 'Adding...' : 'Creating...';
@@ -1487,7 +1491,7 @@ window.submitPaymentGroup = async function() {
             response = await fetch(routes().groupsStore, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
-                body: JSON.stringify({ title, items })
+                body: JSON.stringify({ title, items, grouped_date: groupedDate })
             });
         }
         const data = await response.json();

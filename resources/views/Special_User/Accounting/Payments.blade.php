@@ -886,6 +886,10 @@
                     <input type="text" id="payment-group-title" oninput="window.updateGroupButton()" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 outline-none focus:border-maroon focus:ring-2 focus:ring-maroon/20" placeholder="Group Title">
                 </div>
                 <div>
+                    <label for="payment-group-date" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">DATE CREATED</label>
+                    <input type="date" id="payment-group-date" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 outline-none focus:border-maroon focus:ring-2 focus:ring-maroon/20">
+                </div>
+                <div>
                     <label for="payment-existing-group-search" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">USE EXISTING GROUP</label>
                     <div id="payment-existing-group-combobox" class="relative">
                         <div class="relative">
