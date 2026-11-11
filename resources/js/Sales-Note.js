@@ -1872,6 +1872,35 @@ window.printSalesNoteOrderDetails = async function(customNoteOrId) {
     const totalDiscount = parseFloat(note.total_discount || 0);
     const netTotal = parseFloat(note.net_total || (grossTotal - totalDiscount) || 0);
 
+    const isSpecialStore = Boolean(
+        note.is_special_store ||
+        (note.remarks && /PORTAL ORDER|SPECIAL STORE/i.test(note.remarks)) ||
+        (note.so_type && /SPECIAL STORE|PORTAL/i.test(note.so_type))
+    );
+
+    const customerName = escapeHtml(note.customer_name || '---');
+    const customerAddress = escapeHtml(note.customer_address || '---');
+    const salesNumber = escapeHtml(note.sales_number || '---');
+    const orderDate = escapeHtml(note.order_date || '---');
+
+    let orderedBy = escapeHtml(note.ordered_by || note.prepared_by || '---');
+    let confirmedBy = escapeHtml(note.confirmed_by || note.checked_by || '---');
+    let shipment = escapeHtml(note.shipment || '');
+
+    if ((!shipment || shipment === '---') && note.remarks) {
+        const fwMatch = note.remarks.match(/\[Forwarder:\s*([^\]]+)\]/i);
+        const delMatch = note.remarks.match(/DELIVERY:\s*([^\|\[\n]+)/i);
+        const shipMatch = note.remarks.match(/(?:SHIPMENT|SHIPPING|COURIER):\s*([^\|\[\n]+)/i);
+        if (fwMatch) {
+            shipment = escapeHtml(fwMatch[1].trim());
+        } else if (shipMatch) {
+            shipment = escapeHtml(shipMatch[1].trim());
+        } else if (delMatch) {
+            shipment = escapeHtml(delMatch[1].trim());
+        }
+    }
+    if (!shipment) shipment = '---';
+
     const rowsHtml = items.length > 0 ? items.map(item => {
         const pCode = escapeHtml(item.product_code || item.item_code || '---');
         const desc = escapeHtml(window.formatSalesItemFullDescription(item));
@@ -1975,6 +2004,41 @@ window.printSalesNoteOrderDetails = async function(customNoteOrId) {
             text-transform: uppercase;
             margin-bottom: 12px;
         }
+        .store-subtitle {
+            text-align: center;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            color: #000;
+        }
+        .portal-header-grid {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        .portal-col {
+            width: 48%;
+        }
+        .portal-row {
+            display: flex;
+            margin-bottom: 5px;
+            line-height: 1.35;
+        }
+        .portal-row .lbl {
+            font-weight: 800;
+            text-transform: uppercase;
+            min-width: 120px;
+            flex-shrink: 0;
+            color: #000;
+        }
+        .portal-row .val {
+            font-weight: 700;
+            color: #000;
+            word-break: break-word;
+        }
         .order-customer-date {
             display: flex;
             justify-content: space-between;
@@ -2075,24 +2139,44 @@ window.printSalesNoteOrderDetails = async function(customNoteOrId) {
     </div>
 
     <div class="order-container">
+        ${isSpecialStore ? `
+        <div class="order-header">
+            <h1 class="order-title" style="margin-bottom: 4px;">ORDER DETAILS</h1>
+            <div class="store-subtitle">W68 SPECIAL STORE</div>
+            <div class="portal-header-grid">
+                <div class="portal-col">
+                    <div class="portal-row"><span class="lbl">CUSTOMER:</span><span class="val">${customerName}</span></div>
+                    <div class="portal-row"><span class="lbl">ADDRESS:</span><span class="val">${customerAddress}</span></div>
+                    <div class="portal-row"><span class="lbl">ORDER BY:</span><span class="val">${orderedBy}</span></div>
+                    <div class="portal-row"><span class="lbl">CONFIRMED BY:</span><span class="val">${confirmedBy}</span></div>
+                </div>
+                <div class="portal-col">
+                    <div class="portal-row"><span class="lbl">SN NO:</span><span class="val">${salesNumber}</span></div>
+                    <div class="portal-row"><span class="lbl">DATE:</span><span class="val">${orderDate}</span></div>
+                    <div class="portal-row"><span class="lbl">SHIPMENT:</span><span class="val">${shipment}</span></div>
+                </div>
+            </div>
+        </div>
+        ` : `
         <div class="order-header">
             <h1 class="order-title">ORDER DETAILS</h1>
             <div class="order-customer-date">
                 <div class="customer-name-box">
                     <span class="label">customer name:</span>
-                    <span class="value">${escapeHtml(note.customer_name || '---')}</span>
+                    <span class="value">${customerName}</span>
                 </div>
                 <div class="date-box">
                     <span class="label">date:</span>
-                    <span class="value">${escapeHtml(note.order_date || '---')}</span>
+                    <span class="value">${orderDate}</span>
                 </div>
             </div>
             ${note.sales_number ? `
             <div class="order-meta-row">
-                <div><span class="label">S.O. NO.:</span> <span class="value">${escapeHtml(note.sales_number)}</span></div>
+                <div><span class="label">S.O. NO.:</span> <span class="value">${salesNumber}</span></div>
                 ${note.salesman ? `<div><span class="label">SALESMAN:</span> <span class="value">${escapeHtml(note.salesman)}</span></div>` : ''}
             </div>` : ''}
         </div>
+        `}
 
         <table class="order-table">
             <colgroup>

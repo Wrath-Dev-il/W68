@@ -16156,6 +16156,74 @@ Route::get('/admin/sales/sales-note/detail/{id}', function ($id) {
             }
         }
 
+        // Resolve portal order details if coming from W68 Special Store portal
+        $portalOrder = null;
+        if (\Illuminate\Support\Facades\Schema::connection('sales')->hasTable('w68_portal_orders')) {
+            $portalOrder = DB::connection('sales')
+                ->table('w68_portal_orders')
+                ->where('sales_note_id', $note->id)
+                ->orWhere('sales_number', $note->sales_number)
+                ->first();
+        }
+
+        $remarks = (string) ($note->remarks ?? '');
+        $isSpecialStore = !empty($portalOrder)
+            || stripos($remarks, 'PORTAL ORDER') !== false
+            || stripos($remarks, 'SPECIAL STORE') !== false
+            || stripos($note->so_type ?? '', 'SPECIAL STORE') !== false
+            || stripos($note->so_type ?? '', 'PORTAL') !== false;
+
+        // Customer address
+        $customer = null;
+        if (!empty($note->customer_id)) {
+            $customer = \App\Models\Customer::on('masterlist')->find($note->customer_id);
+        }
+        if (!$customer && !empty($note->customer_name)) {
+            $customer = \App\Models\Customer::on('masterlist')->where('name', $note->customer_name)->first();
+        }
+        $customerAddress = $customer ? ($customer->address ?? '') : '';
+
+        // Ordered by
+        $orderedBy = '';
+        if ($portalOrder && !empty($portalOrder->prepared_by)) {
+            $orderedBy = trim((string) $portalOrder->prepared_by);
+        } elseif ($portalOrder && !empty($portalOrder->login_id)) {
+            $portalLogin = DB::connection('system')->table('logins')->where('login_ID', $portalOrder->login_id)->first();
+            if ($portalLogin) {
+                $orderedBy = trim(($portalLogin->User_First_Name ?? '') . ' ' . ($portalLogin->User_Last_Name ?? '')) ?: ($portalLogin->User_ID ?? '');
+            }
+        }
+        if ($orderedBy === '') {
+            $orderedBy = trim((string) ($note->prepared_by ?? '')) ?: ($customer->contact_person ?? '');
+        }
+
+        // Confirmed by
+        $confirmedBy = '';
+        if ($portalOrder && !empty($portalOrder->checked_by)) {
+            $confirmedBy = trim((string) $portalOrder->checked_by);
+        }
+        if ($confirmedBy === '') {
+            $confirmedBy = trim((string) ($note->checked_by ?? ''));
+        }
+
+        // Shipment
+        $shipment = '';
+        if (preg_match('/\[Forwarder:\s*([^\]]+)\]/i', $remarks, $m)) {
+            $shipment = trim($m[1]);
+        }
+        if ($shipment === '' && preg_match('/(?:SHIPMENT|SHIPPING|COURIER):\s*([^\|\[\n]+)/i', $remarks, $m)) {
+            $shipment = trim($m[1]);
+        }
+        if ($shipment === '' && preg_match('/DELIVERY:\s*([^\|\[\n]+)/i', $remarks, $m)) {
+            $shipment = trim($m[1]);
+        }
+        if ($shipment === '') {
+            $so = DB::connection('sales')->table('sales_orders')->where('sales_note_id', $note->id)->first();
+            if ($so && !empty($so->waybill_no)) {
+                $shipment = trim((string) $so->waybill_no);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'note' => [
@@ -16164,6 +16232,11 @@ Route::get('/admin/sales/sales-note/detail/{id}', function ($id) {
                 'order_date' => $note->order_date,
                 'customer_name' => $note->customer_name,
                 'customer_id' => $note->customer_id,
+                'customer_address' => $customerAddress,
+                'is_special_store' => (bool) $isSpecialStore,
+                'ordered_by' => $orderedBy,
+                'confirmed_by' => $confirmedBy,
+                'shipment' => $shipment,
                 'salesman' => $note->salesman,
                 'prepared_by' => $note->prepared_by,
                 'checked_by' => $note->checked_by,
