@@ -1745,6 +1745,24 @@ window.loadSalesHistory = async function() {
     }
 };
 
+window.formatSalesItemFullDescription = function(item) {
+    if (!item) return '';
+    const _descSegments = [];
+    const _descText = (item.description || '').trim();
+    if (_descText) _descSegments.push(_descText);
+    let _partApp = '';
+    const _pn = (item.part_number || '').trim();
+    const _app = (item.application || '').trim();
+    if (_pn && _pn !== 'N/A') _partApp += '(' + _pn + ')';
+    if (_app && _app !== 'N/A') _partApp += _app;
+    if (_partApp) _descSegments.push(_partApp);
+    const _pos = (item.position || '').trim();
+    if (_pos && _pos !== 'N/A') _descSegments.push(_pos);
+    const _brand = (item.brand || item.category || '').trim();
+    if (_brand && _brand !== 'N/A') _descSegments.push(_brand);
+    return _descSegments.length > 0 ? _descSegments.join('|') : (_descText || '---');
+};
+
 window.viewSalesDetail = async function(id) {
     const tbody = document.getElementById('view-items-tbody');
     if (!tbody) return;
@@ -1775,7 +1793,7 @@ window.viewSalesDetail = async function(id) {
                 tbody.innerHTML = note.items.map(item => `
                     <tr class="hover:bg-slate-50 transition-colors">
                         <td class="p-4 px-6 font-bold text-maroon">${item.product_code}</td>
-                        <td class="p-4 px-6 text-slate-700">${item.description || ''}</td>
+                        <td class="p-4 px-6 text-slate-700 font-medium">${window.formatSalesItemFullDescription(item)}</td>
                         <td class="p-4 px-6 text-center font-bold">${item.quantity}</td>
                         <td class="p-4 px-6 text-center font-bold text-slate-600">${item.on_hand ?? 0}</td>
                         <td class="p-4 px-6 text-center uppercase text-slate-500">${item.oum}</td>
@@ -1856,21 +1874,7 @@ window.printSalesNoteOrderDetails = async function(customNoteOrId) {
 
     const rowsHtml = items.length > 0 ? items.map(item => {
         const pCode = escapeHtml(item.product_code || item.item_code || '---');
-        // Build combined description: Description|(Part Number)Application|Position|Brand
-        const _descSegments = [];
-        const _descText = (item.description || '').trim();
-        if (_descText) _descSegments.push(_descText);
-        let _partApp = '';
-        const _pn = (item.part_number || '').trim();
-        const _app = (item.application || '').trim();
-        if (_pn && _pn !== 'N/A') _partApp += '(' + _pn + ')';
-        if (_app && _app !== 'N/A') _partApp += _app;
-        if (_partApp) _descSegments.push(_partApp);
-        const _pos = (item.position || '').trim();
-        if (_pos && _pos !== 'N/A') _descSegments.push(_pos);
-        const _brand = (item.category || '').trim();
-        if (_brand && _brand !== 'N/A') _descSegments.push(_brand);
-        const desc = escapeHtml(_descSegments.length > 0 ? _descSegments.join('|') : '---');
+        const desc = escapeHtml(window.formatSalesItemFullDescription(item));
         const mainQty = Number(item.quantity ?? 0);
         const addQty = Number(item.additional_qty ?? 0);
         const qtyDisplay = addQty > 0 ? `${mainQty} (+${addQty})` : `${mainQty}`;
