@@ -1755,6 +1755,7 @@ window.loadSalesHistory = async function() {
 window.viewSalesDetail = async function(id) {
     const tbody = document.getElementById('view-items-tbody');
     if (!tbody) return;
+    window._currentViewingSalesNote = null;
     const viewColspan = isSalesNotePriceCodeEnabled() ? 10 : 9;
     toggleModal('view-sales-modal', true);
     tbody.innerHTML = `<tr><td colspan="${viewColspan}" class="p-4 text-center text-slate-400">Loading...</td></tr>`;
@@ -1764,6 +1765,7 @@ window.viewSalesDetail = async function(id) {
         const r = await res.json();
         if (r.success) {
             const note = r.note;
+            window._currentViewingSalesNote = note;
             document.getElementById('view-transaction-label').textContent = 'Transaction: ' + note.sales_number;
             document.getElementById('view-sales-no').textContent = note.sales_number;
             document.getElementById('view-sales-date').textContent = note.order_date;
@@ -1808,6 +1810,350 @@ window.viewSalesDetail = async function(id) {
         console.error('Error loading sales detail:', e);
         tbody.innerHTML = `<tr><td colspan="${viewColspan}" class="p-4 text-center text-red-400 italic">Error loading details.</td></tr>`;
     }
+};
+
+window.printSalesNoteOrderDetails = async function(customNoteOrId) {
+    let note = null;
+    if (typeof customNoteOrId === 'object' && customNoteOrId !== null) {
+        note = customNoteOrId;
+    } else if (typeof customNoteOrId === 'number' || (typeof customNoteOrId === 'string' && /^\d+$/.test(customNoteOrId))) {
+        try {
+            const url = (window.salesRoutes?.detailUrl || '/admin/sales/sales-note/detail/:id').replace(':id', customNoteOrId);
+            const res = await fetch(url);
+            const r = await res.json();
+            if (r.success) {
+                note = r.note;
+            }
+        } catch (e) {
+            console.error('Error fetching sales note for print:', e);
+        }
+    } else {
+        note = window._currentViewingSalesNote;
+    }
+
+    if (!note) {
+        alert('Please wait for the sales note details to finish loading.');
+        return;
+    }
+
+    const items = note.items || [];
+    const hasDiscount = items.some(item => {
+        const d = parseFloat(item.discount);
+        return !isNaN(d) && d > 0;
+    }) || ((parseFloat(note.total_discount) || 0) > 0);
+
+    const formatNumber = num => {
+        const val = parseFloat(num) || 0;
+        return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const escapeHtml = str => {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+
+    const grossTotal = parseFloat(note.gross_total || 0);
+    const totalDiscount = parseFloat(note.total_discount || 0);
+    const netTotal = parseFloat(note.net_total || (grossTotal - totalDiscount) || 0);
+
+    const rowsHtml = items.length > 0 ? items.map(item => {
+        const pCode = escapeHtml(item.product_code || item.item_code || '---');
+        const desc = escapeHtml(item.description || '---');
+        const mainQty = Number(item.quantity ?? 0);
+        const addQty = Number(item.additional_qty ?? 0);
+        const qtyDisplay = addQty > 0 ? `${mainQty} (+${addQty})` : `${mainQty}`;
+        const unit = escapeHtml(item.oum || item.unit || '---');
+        const unitPrice = formatNumber(item.unit_price);
+        const discVal = parseFloat(item.discount || 0);
+        const discDisplay = discVal > 0 ? `${discVal.toFixed(2).replace(/\.00$/, '')}%` : '-';
+        const subtotal = formatNumber(item.subtotal);
+
+        return `
+            <tr>
+                <td class="text-left font-bold" style="padding-left: 6px;">${pCode}</td>
+                <td class="text-left" style="padding-left: 6px;">${desc}</td>
+                <td class="text-center font-bold">${qtyDisplay}</td>
+                <td class="text-center uppercase">${unit}</td>
+                <td class="text-right" style="padding-right: 6px;">₱ ${unitPrice}</td>
+                ${hasDiscount ? `<td class="text-center">${discDisplay}</td>` : ''}
+                <td class="text-right font-bold" style="padding-right: 6px;">₱ ${subtotal}</td>
+            </tr>
+        `;
+    }).join('') : `
+        <tr>
+            <td colspan="${hasDiscount ? 7 : 6}" class="text-center" style="padding: 16px; font-style: italic;">No items found.</td>
+        </tr>
+    `;
+
+    const totalColspan = hasDiscount ? 6 : 5;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORDER DETAILS - ${escapeHtml(note.customer_name || note.sales_number || 'Print')}</title>
+    <style>
+        @page {
+            size: auto;
+            margin: 10mm 15mm;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+            color: #000;
+            background: #fff;
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.35;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .no-print {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #cbd5e1;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 18px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .btn-print {
+            background-color: #800000;
+            color: #ffffff;
+        }
+        .btn-close {
+            background-color: #f1f5f9;
+            color: #334155;
+            border-color: #cbd5e1;
+        }
+        .order-container {
+            width: 100%;
+            margin: 0 auto;
+        }
+        .order-header {
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #000;
+        }
+        .order-title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        .order-customer-date {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .customer-name-box {
+            text-align: left;
+            flex: 1;
+            padding-right: 15px;
+        }
+        .date-box {
+            text-align: right;
+            white-space: nowrap;
+        }
+        .label {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-right: 6px;
+        }
+        .value {
+            font-weight: bold;
+        }
+        .order-meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 11px;
+            color: #334155;
+        }
+        table.order-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: auto;
+            page-break-inside: auto;
+        }
+        table.order-table th {
+            border: 1px solid #000;
+            background-color: #f8fafc;
+            color: #000;
+            padding: 7px 5px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            word-wrap: break-word;
+        }
+        table.order-table td {
+            border: 1px solid #000;
+            padding: 6px 5px;
+            font-size: 11px;
+            vertical-align: middle;
+            word-wrap: break-word;
+        }
+        table.order-table tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+        .text-left { text-align: left; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: bold; }
+        .font-mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+        .uppercase { text-transform: uppercase; }
+        .total-summary-row td {
+            padding: 5px 6px;
+            font-size: 11px;
+        }
+        .total-main-row td {
+            padding: 8px 6px;
+            font-size: 13px;
+            font-weight: bold;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+        }
+        @media print {
+            body {
+                padding: 0;
+                margin: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            table.order-table th {
+                background-color: #f1f5f9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button class="btn btn-print" onclick="window.print()">Print</button>
+        <button class="btn btn-close" onclick="window.close()">Close</button>
+    </div>
+
+    <div class="order-container">
+        <div class="order-header">
+            <h1 class="order-title">ORDER DETAILS</h1>
+            <div class="order-customer-date">
+                <div class="customer-name-box">
+                    <span class="label">customer name:</span>
+                    <span class="value">${escapeHtml(note.customer_name || '---')}</span>
+                </div>
+                <div class="date-box">
+                    <span class="label">date:</span>
+                    <span class="value">${escapeHtml(note.order_date || '---')}</span>
+                </div>
+            </div>
+            ${note.sales_number ? `
+            <div class="order-meta-row">
+                <div><span class="label">S.O. NO.:</span> <span class="value">${escapeHtml(note.sales_number)}</span></div>
+                ${note.salesman ? `<div><span class="label">SALESMAN:</span> <span class="value">${escapeHtml(note.salesman)}</span></div>` : ''}
+            </div>` : ''}
+        </div>
+
+        <table class="order-table">
+            <colgroup>
+                ${hasDiscount ? `
+                <col style="width: 18%;">
+                <col style="width: 32%;">
+                <col style="width: 8%;">
+                <col style="width: 8%;">
+                <col style="width: 11%;">
+                <col style="width: 10%;">
+                <col style="width: 13%;">
+                ` : `
+                <col style="width: 20%;">
+                <col style="width: 44%;">
+                <col style="width: 8%;">
+                <col style="width: 8%;">
+                <col style="width: 10%;">
+                <col style="width: 10%;">
+                `}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th class="text-left" style="padding-left: 6px;">Product code</th>
+                    <th class="text-left" style="padding-left: 6px;">description</th>
+                    <th class="text-center">QTY</th>
+                    <th class="text-center">UNIT</th>
+                    <th class="text-right" style="padding-right: 6px;">UNIT PRICE</th>
+                    ${hasDiscount ? `<th class="text-center">DISCOUNT</th>` : ''}
+                    <th class="text-right" style="padding-right: 6px;">SUB TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+            <tfoot>
+                ${hasDiscount ? `
+                <tr class="total-summary-row">
+                    <td colspan="${totalColspan}" class="text-right font-bold" style="border-top: 2px solid #000;">GROSS TOTAL:</td>
+                    <td class="text-right font-bold" style="border-top: 2px solid #000; padding-right: 6px;">₱ ${formatNumber(grossTotal)}</td>
+                </tr>
+                <tr class="total-summary-row">
+                    <td colspan="${totalColspan}" class="text-right font-bold" style="color: #b91c1c;">TOTAL DISCOUNT:</td>
+                    <td class="text-right font-bold" style="color: #b91c1c; padding-right: 6px;">- ₱ ${formatNumber(totalDiscount)}</td>
+                </tr>
+                ` : ''}
+                <tr class="total-main-row">
+                    <td colspan="${totalColspan}" class="text-right">SUB TOTAL:</td>
+                    <td class="text-right" style="padding-right: 6px;">₱ ${formatNumber(netTotal)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.focus();
+                window.print();
+            }, 300);
+        };
+    </script>
+</body>
+</html>`;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+        alert('Please allow popups to open the print view.');
+        return;
+    }
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
 };
 
 window.openDeleteModal = function(id, salesNumber) {

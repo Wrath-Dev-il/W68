@@ -1020,9 +1020,15 @@
                         <p id="view-transaction-label" class="text-[10px] text-white/60 uppercase tracking-widest font-bold">Transaction: ---</p>
                     </div>
                 </div>
-                <button onclick="toggleModal('view-sales-modal', false)" class="text-white/70 hover:text-white transition-colors">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
+                <div class="flex items-center space-x-3">
+                    <button type="button" onclick="window.printSalesNoteOrderDetails()" class="px-4 py-2 bg-white text-maroon hover:bg-gold hover:text-maroon text-xs font-bold rounded-xl shadow-md flex items-center space-x-2 transition-all cursor-pointer uppercase tracking-wider">
+                        <i data-lucide="printer" class="w-4 h-4"></i>
+                        <span>Print</span>
+                    </button>
+                    <button onclick="toggleModal('view-sales-modal', false)" class="text-white/70 hover:text-white transition-colors">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
             </div>
             <!-- Body (30/70 Split) -->
             <div class="flex flex-col md:flex-row h-full gap-8 p-8 overflow-y-auto">
@@ -1107,7 +1113,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                        <div class="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-between items-center">
                             <div class="flex items-center space-x-8">
                                 <div>
                                     <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Gross Total</p>
@@ -1124,6 +1130,10 @@
                                     <h3 id="view-grand-total" class="text-2xl font-extrabold text-maroon tracking-tight">₱ 0.00</h3>
                                 </div>
                             </div>
+                            <button type="button" onclick="window.printSalesNoteOrderDetails()" class="px-5 py-2.5 bg-maroon text-white hover:bg-maroon-800 text-xs font-bold rounded-xl shadow-md flex items-center space-x-2 transition-all cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="printer" class="w-4 h-4 text-gold"></i>
+                                <span>Print Order Details</span>
+                            </button>
                         </div>
                     </div>
                 </div>
