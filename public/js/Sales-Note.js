@@ -1863,7 +1863,21 @@ window.printSalesNoteOrderDetails = async function(customNoteOrId) {
 
     const rowsHtml = items.length > 0 ? items.map(item => {
         const pCode = escapeHtml(item.product_code || item.item_code || '---');
-        const desc = escapeHtml(item.description || '---');
+        // Build combined description: Description|(Part Number)Application|Position|Brand
+        const _descSegments = [];
+        const _descText = (item.description || '').trim();
+        if (_descText) _descSegments.push(_descText);
+        let _partApp = '';
+        const _pn = (item.part_number || '').trim();
+        const _app = (item.application || '').trim();
+        if (_pn && _pn !== 'N/A') _partApp += '(' + _pn + ')';
+        if (_app && _app !== 'N/A') _partApp += _app;
+        if (_partApp) _descSegments.push(_partApp);
+        const _pos = (item.position || '').trim();
+        if (_pos && _pos !== 'N/A') _descSegments.push(_pos);
+        const _brand = (item.category || '').trim();
+        if (_brand && _brand !== 'N/A') _descSegments.push(_brand);
+        const desc = escapeHtml(_descSegments.length > 0 ? _descSegments.join('|') : '---');
         const mainQty = Number(item.quantity ?? 0);
         const addQty = Number(item.additional_qty ?? 0);
         const qtyDisplay = addQty > 0 ? `${mainQty} (+${addQty})` : `${mainQty}`;
