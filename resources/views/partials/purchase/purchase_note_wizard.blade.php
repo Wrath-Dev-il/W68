@@ -1,7 +1,7 @@
     <!-- PURCHASE NOTE WIZARD (Add / Edit — single modal, 4 steps) -->
     <div id="purchase-note-wizard-modal" class="fixed inset-0 z-[400] hidden flex items-center justify-center p-4" role="dialog" aria-modal="true">
         <div onclick="closePurchaseNoteWizard()" class="fixed inset-0 bg-slate-900/60 transition-opacity backdrop-blur-sm"></div>
-        <div class="relative bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all max-w-6xl w-full modal-animate-in flex flex-col max-h-[92vh]">
+        <div class="relative bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all max-w-[96vw] 2xl:max-w-[1600px] w-full modal-animate-in flex flex-col max-h-[92vh]">
             <div class="bg-maroon p-6 flex flex-wrap justify-between items-center gap-4 text-white border-b-4 border-gold shrink-0">
                 <div class="flex items-center space-x-4 min-w-0">
                     <div class="p-3 bg-white/10 rounded-2xl border-2 border-gold shadow-sm shrink-0">
@@ -189,19 +189,19 @@
                         </div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                        <div class="overflow-x-auto custom-scrollbar max-h-[min(340px,40vh)]">
-                            <table class="w-full text-left border-collapse min-w-[920px]">
+                        <div class="overflow-x-auto custom-scrollbar max-h-[min(480px,50vh)]">
+                            <table class="w-full text-left border-collapse min-w-[1100px]">
                                 <thead class="sticky top-0 bg-slate-50 border-b border-slate-100 z-10" id="po-items-thead">
                                     <tr>
                                         <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-24">Arrangement</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Item Code</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Part No.</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Description</th>
-                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Unit</th>
-                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase w-24">QTY</th>
-                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase w-24 hidden" id="actual-qty-header">ACTUAL QTY</th>
-                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase w-48">Unit Cost</th>
-                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right w-32">Sub Total</th>
+                                        <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-24 min-w-[80px]">Unit</th>
+                                        <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-28 min-w-[110px]">QTY</th>
+                                        <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-28 min-w-[100px] hidden" id="actual-qty-header">ACTUAL QTY</th>
+                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase w-48 min-w-[170px]">Unit Cost</th>
+                                        <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right w-32 min-w-[110px]">Sub Total</th>
                                         <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-center w-20">Action</th>
                                     </tr>
                                     <tr id="pn-item-column-search-row" class="bg-slate-50/80 border-t border-slate-100">
@@ -209,9 +209,9 @@
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="itemCode" oninput="filterPurchaseNoteItems('itemCode', this.value)" placeholder="Search Code..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="partNo" oninput="filterPurchaseNoteItems('partNo', this.value)" placeholder="Search Part No..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="description" oninput="filterPurchaseNoteItems('description', this.value)" placeholder="Search Description..." class="column-search-input text-[9px]"></th>
-                                        <th class="p-2 px-3"><input type="text" data-pn-item-search="unit" oninput="filterPurchaseNoteItems('unit', this.value)" placeholder="Search Unit..." class="column-search-input text-[9px]"></th>
-                                        <th class="p-2 px-3"><input type="text" data-pn-item-search="qty" oninput="filterPurchaseNoteItems('qty', this.value)" placeholder="Search QTY..." class="column-search-input text-[9px]"></th>
-                                        <th class="p-2 px-3 hidden" id="actual-qty-search-header"><input type="text" data-pn-item-search="actualQty" oninput="filterPurchaseNoteItems('actualQty', this.value)" placeholder="Search Actual..." class="column-search-input text-[9px]"></th>
+                                        <th class="p-2 px-2 text-center min-w-[80px]"><input type="text" data-pn-item-search="unit" oninput="filterPurchaseNoteItems('unit', this.value)" placeholder="Search Unit..." class="column-search-input text-[9px] min-w-[70px] text-center"></th>
+                                        <th class="p-2 px-2 text-center min-w-[110px]"><input type="text" data-pn-item-search="qty" oninput="filterPurchaseNoteItems('qty', this.value)" placeholder="Search QTY..." class="column-search-input text-[9px] min-w-[90px] text-center"></th>
+                                        <th class="p-2 px-2 text-center min-w-[100px] hidden" id="actual-qty-search-header"><input type="text" data-pn-item-search="actualQty" oninput="filterPurchaseNoteItems('actualQty', this.value)" placeholder="Search Actual..." class="column-search-input text-[9px] min-w-[80px] text-center"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="cost" oninput="filterPurchaseNoteItems('cost', this.value)" placeholder="Search Cost..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="subTotal" oninput="filterPurchaseNoteItems('subTotal', this.value)" placeholder="Search Sub Total..." class="column-search-input text-[9px]"></th>
                                         <th class="p-2 px-3"><input type="text" data-pn-item-search="action" oninput="filterPurchaseNoteItems('action', this.value)" placeholder="Search Action..." class="column-search-input text-[9px]"></th>
@@ -278,17 +278,17 @@
                     <div class="space-y-3">
                         <h4 class="text-xs font-bold text-slate-800 uppercase tracking-widest border-l-4 border-maroon pl-3">Purchase Items</h4>
                         <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
-                            <div class="overflow-x-auto custom-scrollbar max-h-[min(280px,35vh)]">
-                                <table class="w-full text-left text-xs min-w-[700px]">
+                            <div class="overflow-x-auto custom-scrollbar max-h-[min(340px,40vh)]">
+                                <table class="w-full text-left text-xs min-w-[900px]">
                                     <thead class="bg-slate-50 sticky top-0">
                                         <tr>
                                             <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Item Code</th>
                                             <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Part No.</th>
                                             <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Description</th>
-                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase">Unit</th>
-                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-center">QTY</th>
-                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right">Unit Cost</th>
-                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right">Sub Total</th>
+                                            <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-24 min-w-[80px]">Unit</th>
+                                            <th class="p-3 px-3 text-[10px] font-bold text-slate-500 uppercase text-center w-28 min-w-[100px]">QTY</th>
+                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right w-36 min-w-[120px]">Unit Cost</th>
+                                            <th class="p-3 px-4 text-[10px] font-bold text-slate-500 uppercase text-right w-36 min-w-[120px]">Sub Total</th>
                                         </tr>
                                     </thead>
                                     <tbody id="review-items-tbody" class="divide-y divide-slate-100"></tbody>

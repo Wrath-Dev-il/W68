@@ -1924,46 +1924,46 @@ window.renderPOItemsTable = function() {
         let actualQtyCell = '';
         if (hasActualQty) {
             actualQtyCell = `
-                <td class="p-3 px-4 text-center">
+                <td class="p-3 px-3 text-center min-w-[100px] w-28">
                     <span class="font-semibold text-blue-600">${item.actualQty !== null ? item.actualQty : '---'}</span>
                 </td>
             `;
         }
         
         row.innerHTML = `
-            <td class="p-3 px-4 font-bold text-slate-700">${item.code}</td>
-            <td class="p-3 px-4 text-slate-600">${item.partNo}</td>
-            <td class="p-3 px-4 text-slate-600">${item.desc}</td>
-            <td class="p-3 px-4">
+            <td class="p-3 px-4 font-bold text-slate-700 min-w-[130px] break-words">${item.code}</td>
+            <td class="p-3 px-4 text-slate-600 min-w-[130px] break-words">${item.partNo}</td>
+            <td class="p-3 px-4 text-slate-600 min-w-[180px] break-words">${item.desc}</td>
+            <td class="p-3 px-3 text-center min-w-[80px] w-24">
                 <input
                     type="text"
                     value="${escapeHtml(item.unit || '')}"
                     maxlength="50"
                     oninput="updateItemUnit(${index}, this.value)"
-                    class="w-full min-w-[80px] px-2 py-1 border border-slate-200 rounded text-center uppercase focus:ring-1 focus:ring-maroon focus:border-maroon outline-none bg-white"
+                    class="w-full min-w-[70px] px-2 py-1 border border-slate-200 rounded text-center uppercase focus:ring-1 focus:ring-maroon focus:border-maroon outline-none bg-white"
                     placeholder="UNIT"
                     autocomplete="off"
                 >
             </td>
-            <td class="p-3 px-4">
-                <input type="number" value="${item.qty}" min="${editingNoteId ? 1 : 0}" oninput="updateItemQty(${index}, this.value)" class="w-full px-2 py-1 border border-slate-200 rounded text-center focus:ring-1 focus:ring-maroon focus:border-maroon outline-none bg-white">
+            <td class="p-3 px-2 text-center min-w-[110px] w-28">
+                <input type="number" value="${item.qty}" min="${editingNoteId ? 1 : 0}" oninput="updateItemQty(${index}, this.value)" style="min-width: 90px;" class="w-full min-w-[90px] px-2 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-slate-800 focus:ring-2 focus:ring-maroon/20 focus:border-maroon outline-none bg-white shadow-sm">
             </td>
             ${actualQtyCell}
-            <td class="p-3 px-4">
+            <td class="p-3 px-4 min-w-[170px] w-48">
                 <div class="flex items-center space-x-1">
                     <select onchange="updateItemCurrency(${index}, this.value)" class="px-1 py-1 border border-slate-200 rounded text-[10px] focus:ring-1 focus:ring-maroon outline-none bg-slate-50">
                         <option value="PHP" ${item.currency === 'PHP' ? 'selected' : ''}>PHP</option>
                         <option value="TWD" ${item.currency === 'TWD' ? 'selected' : ''}>TWD</option>
                         <option value="USD" ${item.currency === 'USD' ? 'selected' : ''}>USD</option>
                     </select>
-                    <div class="flex items-center flex-1 border border-slate-200 rounded bg-white px-2 focus-within:ring-1 focus-within:ring-maroon min-w-[120px]">
+                    <div class="flex items-center flex-1 border border-slate-200 rounded bg-white px-2 focus-within:ring-1 focus-within:ring-maroon min-w-[110px]">
                         <span class="text-[10px] text-slate-400 font-bold mr-1 pointer-events-none">${currencySymbols[item.currency]}</span>
                         <input type="number" value="${item.cost}" min="0" step="0.01" oninput="updateItemCost(${index}, this.value)" class="w-full py-1 text-right outline-none text-xs bg-white" onclick="this.select()">
                     </div>
                 </div>
             </td>
-            <td class="p-3 px-4 text-right font-bold text-maroon" id="subtotal-${index}">${currencySymbols[item.currency]} ${(hasActualQty && item.actualSubTotal ? item.actualSubTotal : item.subTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td class="p-3 px-4 text-center">
+            <td class="p-3 px-4 text-right font-bold text-maroon min-w-[110px] w-32" id="subtotal-${index}">${currencySymbols[item.currency]} ${(hasActualQty && item.actualSubTotal ? item.actualSubTotal : item.subTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td class="p-3 px-4 text-center min-w-[70px] w-20">
                 ${item.processed
                     ? `<button onclick="confirmDeleteProcessedItem(${index})" class="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Item already processed — requires password to delete">
                         <i data-lucide="shield-off" class="w-4 h-4"></i>
@@ -2312,13 +2312,13 @@ function populateReviewData() {
 
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td class="p-3 px-4 font-bold text-slate-700">${item.code}</td>
-            <td class="p-3 px-4">${item.partNo}</td>
-            <td class="p-3 px-4">${item.desc}</td>
-            <td class="p-3 px-4 uppercase text-slate-500">${item.unit}</td>
-            <td class="p-3 px-4 text-center font-bold">${item.qty}</td>
-            <td class="p-3 px-4 text-right">${symbol} ${item.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-            <td class="p-3 px-4 text-right font-bold text-maroon">${symbol} ${item.subTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+            <td class="p-3 px-4 font-bold text-slate-700 min-w-[130px] break-words">${item.code}</td>
+            <td class="p-3 px-4 min-w-[130px] break-words">${item.partNo}</td>
+            <td class="p-3 px-4 min-w-[180px] break-words">${item.desc}</td>
+            <td class="p-3 px-3 uppercase text-slate-500 text-center min-w-[80px] w-24">${item.unit}</td>
+            <td class="p-3 px-3 text-center font-bold text-slate-800 min-w-[100px] w-28">${item.qty}</td>
+            <td class="p-3 px-4 text-right min-w-[120px] w-36">${symbol} ${item.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+            <td class="p-3 px-4 text-right font-bold text-maroon min-w-[120px] w-36">${symbol} ${item.subTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
         `;
         tbody.appendChild(row);
     });
