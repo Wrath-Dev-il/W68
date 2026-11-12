@@ -2649,6 +2649,15 @@ window.goToEditStep = function(step) {
     const totalSteps = 3;
     if (step < 1 || step > totalSteps) return;
     
+    // Validate transaction date before leaving Step 1
+    if (step > 1 && window.editState.currentStep === 1) {
+        const txDate = document.getElementById('edit-transaction-date')?.value || '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) {
+            alert('Please select a valid Transaction Date before proceeding.');
+            return;
+        }
+    }
+
     window.editState.currentStep = step;
     
     // Hide all steps
@@ -2924,8 +2933,9 @@ function populateEditPrintLayout() {
     
     const dateEl = editStep3.querySelector('#cr-date');
     if (dateEl) {
-        const today = new Date();
-        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const selectedDate = document.getElementById('edit-transaction-date')?.value || window.editState?.originalData?.date || '';
+        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
     
     // Get current values from Step 2 table

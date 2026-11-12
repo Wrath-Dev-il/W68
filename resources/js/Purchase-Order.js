@@ -866,9 +866,7 @@ function renderPurchaseNoteItems(items) {
             <td class="p-3 px-4 text-center">
                 <input type="number" min="0" value="${item.actual_quantity ?? item.quantity}" oninput="updateCalculations()" class="item-actual-qty w-20 px-2 py-1.5 border border-maroon/30 rounded text-center focus:ring-1 focus:ring-maroon bg-maroon/5 font-bold text-maroon">
             </td>
-            <td class="p-3 px-4 text-center">
-                <input type="text" value="${item.unit || ''}" oninput="updateCalculations()" class="item-unit w-20 px-2 py-1.5 border border-slate-200 rounded text-center focus:ring-1 focus:ring-maroon/20" maxlength="50">
-            </td>
+            <td class="p-3 px-4 text-center text-slate-500">${item.unit || ''}</td>
             <td class="p-3 px-4">
                 <input type="number" value="${item.unit_price}" oninput="updateCalculations()" class="item-unit-cost w-32 px-2 py-1.5 border border-slate-200 rounded focus:ring-1 focus:ring-maroon/20">
             </td>
@@ -1022,9 +1020,8 @@ function populatePrintLayout() {
     }
     
     if (dateEl) {
-        const selectedDate = document.getElementById('proceed-transaction-date')?.value;
-        const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
-        dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const today = new Date();
+        dateEl.textContent = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         console.log('Date:', dateEl.textContent);
     }
     
@@ -1763,7 +1760,6 @@ async function finalizePO() {
             const actualQtyStr = String(row.querySelector('.item-actual-qty')?.value || '0').replace(/,/g, '');
             const unitPriceStr = String(row.querySelector('.item-unit-cost')?.value || '0').replace(/,/g, '');
             const discStr = String(row.querySelector('.item-disc')?.value || '0').replace(/,/g, '');
-            const unit = String(row.querySelector('.item-unit')?.value || '').trim();
 
             const qty = parseFloat(qtyStr) || 0;
             const actualQty = parseFloat(actualQtyStr) || 0;
@@ -1791,7 +1787,7 @@ async function finalizePO() {
                     quantity: qty,
                     actual_quantity: actualQty,
                     unit_price: unitPrice,
-                    unit: unit || matchedPOItem?.unit || '',
+                    unit: matchedPOItem?.unit || '',
                     discount_percent: disc,
                     discount_amount: discountAmount,
                     subtotal: subtotal,
@@ -2137,10 +2133,10 @@ window.openEditHistoryModal = async function(poId) {
         document.getElementById('edit-supplier-name').value = result.note?.supplier_name || '';
         document.getElementById('edit-control-no').value = result.note?.receiving_no || '';
         document.getElementById('edit-pn-no').value = result.note?.po_number || '';
-        const editDateInput = document.getElementById('edit-transaction-date');
-        if (editDateInput) {
+        const editTransactionDate = document.getElementById('edit-transaction-date');
+        if (editTransactionDate) {
             const savedTransactionDate = result.note?.date || result.note?.transaction_date || result.note?.created_at || '';
-            editDateInput.value = String(savedTransactionDate).slice(0, 10);
+            editTransactionDate.value = String(savedTransactionDate).slice(0, 10);
         }
         document.getElementById('edit-currency').value = window.editState.currency;
         document.getElementById('edit-conv-rate').value = window.editState.conversionRate;
@@ -2653,6 +2649,15 @@ window.goToEditStep = function(step) {
     const totalSteps = 3;
     if (step < 1 || step > totalSteps) return;
     
+    // Validate transaction date before leaving Step 1
+    if (step > 1 && window.editState.currentStep === 1) {
+        const txDate = document.getElementById('edit-transaction-date')?.value || '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) {
+            alert('Please select a valid Transaction Date before proceeding.');
+            return;
+        }
+    }
+
     window.editState.currentStep = step;
     
     // Hide all steps
@@ -2928,7 +2933,7 @@ function populateEditPrintLayout() {
     
     const dateEl = editStep3.querySelector('#cr-date');
     if (dateEl) {
-        const selectedDate = document.getElementById('edit-transaction-date')?.value;
+        const selectedDate = document.getElementById('edit-transaction-date')?.value || window.editState?.originalData?.date || '';
         const dateValue = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
         dateEl.textContent = dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
@@ -3163,8 +3168,8 @@ window.confirmSaveEdit = async function() {
 
         const payload = {
             po_id: window.editState.poId,
-            receiving_no: document.getElementById('edit-control-no')?.value || '',
             date: transactionDate,
+            receiving_no: document.getElementById('edit-control-no')?.value || '',
             currency: document.getElementById('edit-currency')?.value || 'PHP',
             conversion_rate: parseFloat(document.getElementById('edit-conv-rate')?.value) || 1,
             additional_discount_percent: addlDiscPercent,

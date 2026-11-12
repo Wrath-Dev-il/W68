@@ -12618,6 +12618,8 @@ Route::get('/admin/purchase/purchase-order/po-items/{poId}', function (Request $
         $invoiceNumbers = array_filter(explode(',', (string) ($po->supplier_invoice_number ?? '')));
         $invoiceNumbers = array_values(array_map('trim', $invoiceNumbers));
 
+        $formattedDate = $po->date ? (is_string($po->date) ? substr(trim($po->date), 0, 10) : $po->date->format('Y-m-d')) : ($po->created_at ? $po->created_at->format('Y-m-d') : '');
+
         return response()->json([
             'success' => true,
             'items' => $items,
@@ -12632,6 +12634,8 @@ Route::get('/admin/purchase/purchase-order/po-items/{poId}', function (Request $
                 'conversion_rate' => $convRate,
                 'additional_discount_percent' => (float) ($po->additional_discount_percent ?? 0),
                 'invoice_numbers' => $invoiceNumbers,
+                'date' => $formattedDate,
+                'transaction_date' => $formattedDate,
             ],
         ]);
     } catch (\Exception $e) {
@@ -13651,14 +13655,41 @@ $legacyLedgerTransactionNumbers = collect([
     ->values()
     ->all();
 
-$po->update([
+        $normalizedDate = !empty($data['date'])
+            ? substr(trim((string) $data['date']), 0, 10)
+            : ($po->date ? (is_string($po->date) ? substr(trim($po->date), 0, 10) : $po->date->format('Y-m-d')) : now()->toDateString());
+
+        $po->update([
             'receiving_number' => $data['receiving_no'] ?? $po->receiving_number,
-            'date' => $data['date'] ?? $po->date,
+            'date' => $normalizedDate,
             'currency' => $data['currency'],
             'conversion_rate' => $data['conversion_rate'] ?? $po->conversion_rate,
             'additional_discount_percent' => $data['additional_discount_percent'] ?? $po->additional_discount_percent,
             'supplier_invoice_number' => isset($data['invoice_numbers']) && is_array($data['invoice_numbers']) ? implode(', ', $data['invoice_numbers']) : ($data['invoice_numbers'] ?? $po->supplier_invoice_number),
         ]);
+
+        \App\Models\ProductLedger::whereIn('source_type', ['purchase_order', 'purchase-order'])
+            ->where('source_id', $po->id)
+            ->update(['date' => $normalizedDate]);
+
+        $possibleSupplierTransNumbers = collect(array_merge(
+            [(string) $po->po_number, (string) ($data['receiving_no'] ?? $po->receiving_number), (string) $po->reference_number],
+            $legacyLedgerTransactionNumbers
+        ))->map(fn ($v) => trim((string) $v))->filter(fn ($v) => $v !== '')->unique()->values()->all();
+
+        \App\Models\SupplierLedger::where('source_purchase_order_id', $po->id)
+            ->orWhere(function ($sq) use ($po, $possibleSupplierTransNumbers) {
+                $sq->where('supplier_id', $po->supplier_id)
+                   ->where(function ($tq) use ($possibleSupplierTransNumbers) {
+                       $tq->whereIn('transaction_code', $possibleSupplierTransNumbers)
+                          ->orWhereIn('reference_no', $possibleSupplierTransNumbers);
+                   })
+                   ->where('module_type', 'Purchase Order');
+            })
+            ->update([
+                'date' => $normalizedDate,
+                'source_purchase_order_id' => $po->id,
+            ]);
 
         $totalAmount = 0;
         $actualTotalAmount = 0;

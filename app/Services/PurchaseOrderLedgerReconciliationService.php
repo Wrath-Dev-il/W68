@@ -47,6 +47,9 @@ class PurchaseOrderLedgerReconciliationService
 
         $createdLedgers = 0;
         $updatedLedgers = 0;
+        $formattedPoDate = !empty($po->date)
+            ? (is_string($po->date) ? substr(trim($po->date), 0, 10) : $po->date->format('Y-m-d'))
+            : now()->toDateString();
 
         foreach ($items as $item) {
             $ledger = $this->matchProductLedger(
@@ -74,7 +77,7 @@ class PurchaseOrderLedgerReconciliationService
                 'source_item_id' => (int) $item->id,
                 'processed_actual_qty' => (float) $item->actual_quantity,
                 'transaction_type' => 'IN',
-                'date' => $po->date ?? now()->toDateString(),
+                'date' => $formattedPoDate,
                 'transaction_number' => $ledgerTransactionNumber,
                 'reference_number' => $ledgerReferenceNumber,
                 'entity_name' => $po->supplier?->name ?? '',
@@ -100,6 +103,11 @@ class PurchaseOrderLedgerReconciliationService
             }
         }
 
+        // Ensure all remaining product ledger entries linked to this PO have the updated date
+        ProductLedger::whereIn('source_type', ['purchase_order', 'purchase-order'])
+            ->where('source_id', $po->id)
+            ->update(['date' => $formattedPoDate]);
+
         // Permanent physical deletion. This deliberately bypasses Eloquent
         // model deletion hooks and any future SoftDeletes configuration.
         $deletedLedgers = $this->hardDeleteProductLedgers($unmatchedLedgerIds->keys()->all());
@@ -108,7 +116,7 @@ class PurchaseOrderLedgerReconciliationService
             $this->recalculateProductBalance((int) $productId);
         }
 
-        $supplierResult = $this->rebuildSupplierLedger($po, $items);
+        $supplierResult = $this->rebuildSupplierLedger($po, $items, $legacyTransactionNumbers);
         $this->syncProductMaster($items, $affectedProductIds);
 
         return [
@@ -243,26 +251,38 @@ class PurchaseOrderLedgerReconciliationService
             });
     }
 
-    private function rebuildSupplierLedger(PurchaseOrder $po, Collection $items): array
+    private function rebuildSupplierLedger(PurchaseOrder $po, Collection $items, array $legacyTransactionNumbers = []): array
     {
         $supplierLedger = SupplierLedger::where('source_purchase_order_id', $po->id)
             ->lockForUpdate()
             ->first();
 
         if (!$supplierLedger) {
-            $supplierLedger = SupplierLedger::where('transaction_code', $po->po_number)
-                ->where('supplier_id', $po->supplier_id)
+            $transCodes = collect(array_merge(
+                [(string) $po->po_number, (string) $po->receiving_number, (string) $po->reference_number, (string) $po->supplier_invoice_number],
+                $legacyTransactionNumbers
+            ))->map(fn ($v) => trim((string) $v))->filter(fn ($v) => $v !== '')->unique()->values()->all();
+
+            $supplierLedger = SupplierLedger::where('supplier_id', $po->supplier_id)
+                ->where(function ($q) use ($transCodes) {
+                    $q->whereIn('transaction_code', $transCodes)
+                      ->orWhereIn('reference_no', $transCodes);
+                })
                 ->where('module_type', 'Purchase Order')
                 ->orderByDesc('id')
                 ->lockForUpdate()
                 ->first();
         }
 
+        $formattedPoDate = !empty($po->date)
+            ? (is_string($po->date) ? substr(trim($po->date), 0, 10) : $po->date->format('Y-m-d'))
+            : now()->toDateString();
+
         $parentTotal = $this->money($po->actual_total_amount);
         $parentPayload = [
             'source_purchase_order_id' => (int) $po->id,
             'supplier_id' => (int) $po->supplier_id,
-            'date' => $po->date ?? now()->toDateString(),
+            'date' => $formattedPoDate,
             'transaction_code' => (string) $po->po_number,
             'module_type' => 'Purchase Order',
             'title' => 'Purchase Order Processing - ' . ($po->status ?: 'Updated'),
