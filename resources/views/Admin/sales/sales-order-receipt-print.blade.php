@@ -1068,7 +1068,7 @@
 
             if ($rawPrintDate !== '') {
                 try {
-                    $displayPrintDate = \Carbon\Carbon::parse($rawPrintDate)->format('d-m-Y');
+                    $displayPrintDate = \Carbon\Carbon::parse($rawPrintDate)->format('m-d-Y');
                 } catch (\Throwable $dateFormatError) {
                     $displayPrintDate = $rawPrintDate;
 
