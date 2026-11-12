@@ -31288,7 +31288,6 @@ Route::post('/admin/reports/sales-report/print-soa', function (\Illuminate\Http\
             $soQuery->whereRaw("DATE({$invoiceDateSql}) BETWEEN ? AND ?", [$dateFrom, $dateTo]);
         }
 
-        // W68_SOA_VAT_REMARKS_20261112 — Also fetch is_vat and remarks for VAT/remarks in SOA print
         $localInvoices = $soQuery->select(
                 DB::raw("'sales_order' as source_type"),
                 'so.id as source_id',
@@ -31300,8 +31299,7 @@ Route::post('/admin/reports/sales-report/print-soa', function (\Illuminate\Http\
                 'sn.sales_number as sales_note_no',
                 'sn.net_total as sales_note_amount',
                 DB::raw("{$invoiceDateSql} as invoice_date"),
-                'so.is_vat',
-                DB::raw("COALESCE(so.remarks, '') as row_remarks")
+                DB::raw("'' as row_remarks")
             )
             ->orderBy('so.customer_id')
             ->orderByRaw($invoiceDateSql)
@@ -31382,7 +31380,6 @@ foreach (array_chunk($onlineReportIds, 1000) as $reportIdChunk) {
                 ->leftJoin('sales_notes as sn', 'sn.id', '=', 'so.sales_note_id')
                 ->where('so.order_number', 'LIKE', 'ONL-%')
                 ->whereIn('so.status', ['Confirmed', 'Closed'])
-                // W68_SOA_VAT_REMARKS_20261112 — Also fetch is_vat and remarks for online invoices
                 ->get([
                     'so.id',
                     'so.order_number',
@@ -31391,8 +31388,6 @@ foreach (array_chunk($onlineReportIds, 1000) as $reportIdChunk) {
                     'so.customer_id',
                     'so.customer_name',
                     'sn.salesman',
-                    'so.is_vat',
-                    'so.remarks',
                 ]);
 
             foreach ($onlineOrders as $order) {
@@ -31453,7 +31448,6 @@ foreach (array_chunk($onlineReportIds, 1000) as $reportIdChunk) {
             if (!is_array($addresses)) $addresses = [];
             $address = trim((string) ($addresses[(string) $invoiceIndex] ?? $addresses[$invoiceIndex] ?? ''));
 
-            // W68_SOA_VAT_REMARKS_20261112 — Carry is_vat and remarks from matched online order
             $onlineInvoices->push((object) [
                 'source_type' => 'online_report',
                 'source_id' => $reportId,
@@ -31465,8 +31459,7 @@ foreach (array_chunk($onlineReportIds, 1000) as $reportIdChunk) {
                 'sales_note_no' => null,
                 'sales_note_amount' => null,
                 'invoice_date' => $invoiceDate,
-                'is_vat' => $order->is_vat ?? null,
-                'row_remarks' => trim((string) ($order->remarks ?? '')) !== '' ? trim((string) ($order->remarks ?? '')) : $address,
+                'row_remarks' => $address,
             ]);
         }
 
@@ -31581,12 +31574,6 @@ foreach (array_chunk($onlineReportIds, 1000) as $reportIdChunk) {
                 $amount = round((float) ($doc->amount ?? 0), 2);
                 if ($sourceId <= 0 || $invoiceNo === '' || $amount < 0) continue;
 
-                // W68_SOA_VAT_REMARKS_20261112 — If invoice has 12% VAT, show the 12% VAT price (literally whole 12%, not 1.12)
-                $isVat = (int) ($doc->is_vat ?? 0);
-                if ($isVat === 1) {
-                    $amount = round($amount * 0.12, 2);
-                }
-
                 $settlementKey = $sourceType === 'online_report'
                     ? $sourceType . ':' . $sourceId . ':' . $normalizeInvKey($invoiceNo)
                     : $sourceType . ':' . $sourceId;
@@ -31637,7 +31624,8 @@ $customerTotalBalance += $balance;
                     'debits' => $amount,
                     'credits' => $credit,
                     'balance' => $balance,
-                    // W68_SOA_VAT_REMARKS_20261112 — Show sales order remarks in SOA print
+                    // Remarks are the Online Report Address only. Do not print Sales Note,
+                    // Product Ledger, Payment, Return, or "Invoice: ..." remarks here.
                     'remarks' => trim((string) ($doc->row_remarks ?? '')),
                     'sort_key' => $dateStr . '|' . $invoiceNo . '|' . $sourceType . '|' . $sourceId,
                 ];
