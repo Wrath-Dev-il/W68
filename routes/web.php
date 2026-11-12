@@ -11441,6 +11441,64 @@ Route::get('/admin/inventory/adjustment/adjusted', function (\Illuminate\Http\Re
     ]);
 })->name('admin.inv-adjust.adjusted');
 
+// W68_INVENTORY_ADJUSTMENT_RECALCULATE_STOCK_20261112
+// Helper to recalculate running balance_stock and sync product master after adjustment changes
+if (!function_exists('hatdogRecalculateProductLedgerStock')) {
+    function hatdogRecalculateProductLedgerStock(int $productId): int
+    {
+        if ($productId <= 0) {
+            return 0;
+        }
+
+        $ledgerDb = DB::connection('ledger');
+        $masterDb = DB::connection('masterlist');
+
+        $rows = $ledgerDb->table('product_ledgers')
+            ->where('product_id', $productId)
+            ->orderBy('date', 'asc')
+            ->orderByRaw("COALESCE(created_at, '1970-01-01 00:00:00') ASC")
+            ->orderBy('id', 'asc')
+            ->get(['id', 'quantity_in', 'quantity_out', 'balance_stock']);
+
+        $runningBalance = 0;
+        foreach ($rows as $r) {
+            $runningBalance += (int) ($r->quantity_in ?? 0) - (int) ($r->quantity_out ?? 0);
+            if ((int) ($r->balance_stock ?? 0) !== $runningBalance) {
+                $ledgerDb->table('product_ledgers')->where('id', $r->id)->update([
+                    'balance_stock' => $runningBalance,
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        // Check if there is still a newest inventory adjustment for actual_qty
+        $latestAdjustment = $ledgerDb->table('product_ledgers')
+            ->where('product_id', $productId)
+            ->where('reference_number', 'INVENTORY-ADJUSTMENT')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first(['balance_stock', 'oum']);
+
+        $restoreQty = $latestAdjustment
+            ? (int) $latestAdjustment->balance_stock
+            : $runningBalance;
+
+        $updateData = [
+            'on_hand' => $runningBalance,
+            'actual_qty' => $restoreQty,
+            'updated_at' => now(),
+        ];
+
+        if ($latestAdjustment && trim((string) ($latestAdjustment->oum ?? '')) !== '') {
+            $updateData['unit'] = trim((string) $latestAdjustment->oum);
+        }
+
+        $masterDb->table('products')->where('id', $productId)->update($updateData);
+
+        return $runningBalance;
+    }
+}
+
 // Inventory Adjustment - edit a ledger adjustment row
 Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\Http\Request $request, $id) {
     $user = session('user');
@@ -11468,12 +11526,7 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
         return response()->json(['success' => false, 'message' => 'Product not found.'], 404);
     }
 
-    $latestAdjustmentId = $ledgerDb->table('product_ledgers')
-        ->where('product_id', $row->product_id)
-        ->where('reference_number', 'INVENTORY-ADJUSTMENT')
-        ->orderByDesc('created_at')
-        ->orderByDesc('id')
-        ->value('id');
+    $productId = (int) $row->product_id;
 
     $ledgerDb->beginTransaction();
     $masterDb->beginTransaction();
@@ -11502,14 +11555,8 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
             'updated_at' => now(),
         ]);
 
-        // Keep the product master synchronized only when editing its newest adjustment.
-        if ((int) $latestAdjustmentId === (int) $row->id) {
-            $masterDb->table('products')->where('id', $row->product_id)->update([
-                'actual_qty' => (int) $validated['adjusted_qty'],
-                'unit' => $unit,
-                'updated_at' => now(),
-            ]);
-        }
+        // Recalculate running balance_stock for all ledger rows of this product
+        $recalculatedBalance = hatdogRecalculateProductLedgerStock($productId);
 
         $actor = hatdogAuditActor($user);
         hatdogWriteAuditTrail([
@@ -11536,6 +11583,7 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
                     'quantity_out' => $quantityOut,
                     'adjusted_qty' => $newBalance,
                     'unit' => $unit,
+                    'recalculated_balance' => $recalculatedBalance,
                 ],
             ],
         ]);
@@ -11543,7 +11591,17 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
         $ledgerDb->commit();
         $masterDb->commit();
 
-        return response()->json(['success' => true, 'message' => 'Adjustment updated successfully.']);
+        try {
+            \App\Services\ProductStockSyncService::syncProduct($productId);
+        } catch (\Throwable $syncError) {
+            // Keep going
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Adjustment updated and balance stock recalculated successfully.',
+            'balance_stock' => $recalculatedBalance,
+        ]);
     } catch (\Throwable $e) {
         if ($ledgerDb->transactionLevel() > 0) $ledgerDb->rollBack();
         if ($masterDb->transactionLevel() > 0) $masterDb->rollBack();
@@ -11552,7 +11610,7 @@ Route::patch('/admin/inventory/adjustment/adjusted/{id}', function (\Illuminate\
 })->name('admin.inv-adjust.adjusted.update');
 
 // Inventory Adjustment - delete a ledger adjustment row
-Route::delete('/admin/inventory/adjustment/adjusted/{id}/delete', function ($id) {
+Route::match(['POST', 'DELETE'], '/admin/inventory/adjustment/adjusted/{id}/delete', function ($id) {
     $user = session('user');
     if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
 
@@ -11569,43 +11627,17 @@ Route::delete('/admin/inventory/adjustment/adjusted/{id}/delete', function ($id)
     }
 
     $product = $masterDb->table('products')->where('id', $row->product_id)->first();
-    $latestAdjustmentId = $ledgerDb->table('product_ledgers')
-        ->where('product_id', $row->product_id)
-        ->where('reference_number', 'INVENTORY-ADJUSTMENT')
-        ->orderByDesc('created_at')
-        ->orderByDesc('id')
-        ->value('id');
-
-    $previousAdjustment = null;
-    if ((int) $latestAdjustmentId === (int) $row->id) {
-        $previousAdjustment = $ledgerDb->table('product_ledgers')
-            ->where('product_id', $row->product_id)
-            ->where('reference_number', 'INVENTORY-ADJUSTMENT')
-            ->where('id', '<>', $row->id)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->first(['balance_stock', 'oum']);
-    }
+    $productId = (int) $row->product_id;
 
     $ledgerDb->beginTransaction();
     $masterDb->beginTransaction();
 
     try {
+        // Delete the adjustment record
         $ledgerDb->table('product_ledgers')->where('id', $row->id)->delete();
 
-        // If the deleted row was the newest adjustment, restore the prior adjusted stock.
-        if ($product && (int) $latestAdjustmentId === (int) $row->id) {
-            $restoreQty = $previousAdjustment ? (int) $previousAdjustment->balance_stock : (int) ($product->on_hand ?? 0);
-            $restoreUnit = $previousAdjustment && trim((string) ($previousAdjustment->oum ?? '')) !== ''
-                ? trim((string) $previousAdjustment->oum)
-                : trim((string) ($product->unit ?? ''));
-
-            $masterDb->table('products')->where('id', $row->product_id)->update([
-                'actual_qty' => $restoreQty,
-                'unit' => $restoreUnit,
-                'updated_at' => now(),
-            ]);
-        }
+        // Recalculate running balance_stock and sync product master
+        $recalculatedBalance = hatdogRecalculateProductLedgerStock($productId);
 
         if ($product) {
             $actor = hatdogAuditActor($user);
@@ -11625,6 +11657,9 @@ Route::delete('/admin/inventory/adjustment/adjusted/{id}/delete', function ($id)
                         'unit' => (string) ($row->oum ?? ''),
                         'transaction_number' => (string) ($row->transaction_number ?? ''),
                     ],
+                    'after' => [
+                        'recalculated_balance' => $recalculatedBalance,
+                    ],
                 ],
             ]);
         }
@@ -11632,7 +11667,17 @@ Route::delete('/admin/inventory/adjustment/adjusted/{id}/delete', function ($id)
         $ledgerDb->commit();
         $masterDb->commit();
 
-        return response()->json(['success' => true, 'message' => 'Adjustment deleted successfully.']);
+        try {
+            \App\Services\ProductStockSyncService::syncProduct($productId);
+        } catch (\Throwable $syncError) {
+            // Keep going
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Adjustment deleted and balance stock recalculated successfully.',
+            'balance_stock' => $recalculatedBalance,
+        ]);
     } catch (\Throwable $e) {
         if ($ledgerDb->transactionLevel() > 0) $ledgerDb->rollBack();
         if ($masterDb->transactionLevel() > 0) $masterDb->rollBack();
