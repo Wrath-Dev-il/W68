@@ -17561,6 +17561,20 @@ Route::get('/admin/sales/sales-order/history', function () {
                     'total_amount' => $so->total_amount,
                     'remarks' => $historyRemarks,
                     'status' => $so->status ?? 'Confirmed',
+                    'is_online' => str_starts_with(strtoupper(trim((string) $so->order_number)), 'ONL-')
+                        || in_array(strtoupper(trim((string) ($so->customer_name ?? ''))), [
+                            'LAZADA ONLINE BUYERS',
+                            'SHOPEE ONLINE BUYERS',
+                            'SHOPPE ONLINE',
+                            'SHOPPEE ONLINE',
+                            'TIKTOK SHOP',
+                            'TIKTOK ONLINE BUYERS',
+                            'ONLINE',
+                            'VARIOUS ONLINE SHOPEE',
+                            'VARIOUS ONLINE LAZADA',
+                        ], true)
+                        || stripos((string) ($so->customer_name ?? ''), 'online') !== false
+                        || stripos((string) ($so->remarks ?? ''), 'online') !== false,
                 ];
             });
         return response()->json(['success' => true, 'orders' => $orders]);
@@ -17676,6 +17690,20 @@ Route::get('/admin/sales/sales-order/history-data', function (Request $request) 
                     'total_amount' => $so->total_amount,
                     'remarks' => $historyRemarks,
                     'status' => $so->status ?? 'Confirmed',
+                    'is_online' => str_starts_with(strtoupper(trim((string) $so->order_number)), 'ONL-')
+                        || in_array(strtoupper(trim((string) ($so->customer_name ?? ''))), [
+                            'LAZADA ONLINE BUYERS',
+                            'SHOPEE ONLINE BUYERS',
+                            'SHOPPE ONLINE',
+                            'SHOPPEE ONLINE',
+                            'TIKTOK SHOP',
+                            'TIKTOK ONLINE BUYERS',
+                            'ONLINE',
+                            'VARIOUS ONLINE SHOPEE',
+                            'VARIOUS ONLINE LAZADA',
+                        ], true)
+                        || stripos((string) ($so->customer_name ?? ''), 'online') !== false
+                        || stripos((string) ($so->remarks ?? ''), 'online') !== false,
                 ];
             });
         return response()->json([
@@ -18190,6 +18218,22 @@ Route::get('/admin/sales/sales-order/detail/{id}', function (Request $request, $
                     'waybill_date' => $salesOrder->waybill_date,
                     'status' => $salesOrder->status,
                     'is_vat' => (int) ($salesOrder->is_vat ?? 0),
+                    'is_online' => (bool) (
+                        str_starts_with(strtoupper(trim((string) $salesOrder->order_number)), 'ONL-')
+                        || in_array(strtoupper(trim((string) ($salesOrder->customer_name ?? ''))), [
+                            'LAZADA ONLINE BUYERS',
+                            'SHOPEE ONLINE BUYERS',
+                            'SHOPPE ONLINE',
+                            'SHOPPEE ONLINE',
+                            'TIKTOK SHOP',
+                            'TIKTOK ONLINE BUYERS',
+                            'ONLINE',
+                            'VARIOUS ONLINE SHOPEE',
+                            'VARIOUS ONLINE LAZADA',
+                        ], true)
+                        || stripos((string) ($salesOrder->customer_name ?? ''), 'online') !== false
+                        || stripos((string) ($salesOrder->remarks ?? ''), 'online') !== false
+                    ),
                     'is_rush' => $salesOrder->salesNote
                         ? (bool) $salesOrder->salesNote->is_rush
                         : false,
