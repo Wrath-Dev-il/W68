@@ -31650,8 +31650,57 @@ $customerTotalBalance += $balance;
             return response()->json(['success' => false, 'message' => 'No data to display.'], 422);
         }
 
-        // ---- Build paginated pages (max ~35 rows per A4 page) ----
-        $ROWS_PER_PAGE = 35;
+        // W68_SOA_PAGINATION_FIX_20261112
+        // Smart pagination that respects real A4 height:
+        // Page 1 has Company Header + Customer Box (~60mm), leaving space for max ~26 rows.
+        // Subsequent middle pages have no Customer Box (~40mm), fitting max ~32 rows.
+        // Last page includes the Payment Summary (~60mm), fitting max ~30 rows.
+        // Balances rows across pages so middle/end pages don't overflow or have lone orphan rows.
+        $paginateCustomerTransactions = static function (array $txns): array {
+            $total = count($txns);
+            if ($total === 0) return [];
+
+            // Case 1: Fits entirely on a single page (with customer box + payment summary)
+            if ($total <= 25) {
+                return [$txns];
+            }
+
+            // Case 2: Fits on 2 pages (page 1: max 26, page 2: max 30 -> total max 56)
+            if ($total <= 56) {
+                $page1Count = (int) min(26, ceil($total / 2));
+                return [
+                    array_slice($txns, 0, $page1Count),
+                    array_slice($txns, $page1Count),
+                ];
+            }
+
+            // Case 3: 3 or more pages
+            $chunks = [];
+            $offset = 0;
+            $firstPageCount = 26;
+            $chunks[] = array_slice($txns, 0, $firstPageCount);
+            $offset += $firstPageCount;
+
+            while ($offset < $total) {
+                $rem = $total - $offset;
+                if ($rem <= 30) {
+                    $chunks[] = array_slice($txns, $offset);
+                    break;
+                }
+                if ($rem <= 62) {
+                    $pCount = (int) min(32, ceil($rem / 2));
+                    $chunks[] = array_slice($txns, $offset, $pCount);
+                    $offset += $pCount;
+                    $chunks[] = array_slice($txns, $offset);
+                    break;
+                }
+                $chunks[] = array_slice($txns, $offset, 32);
+                $offset += 32;
+            }
+
+            return $chunks;
+        };
+
         $pages = [];
 
         foreach ($customerSections as $section) {
@@ -31659,7 +31708,7 @@ $customerTotalBalance += $balance;
             $txns = $section['transactions'];
             $totalBalance = $section['total_balance'];
 
-            $chunks = array_chunk($txns, $ROWS_PER_PAGE);
+            $chunks = $paginateCustomerTransactions($txns);
             $chunkCount = count($chunks);
 
             foreach ($chunks as $chunkIndex => $chunk) {

@@ -17,12 +17,20 @@
         }
         .page {
             page-break-after: always;
+            page-break-inside: avoid;
+            break-inside: avoid;
             display: flex;
             flex-direction: column;
-            min-height: 267mm;
+            min-height: 255mm;
+            box-sizing: border-box;
         }
         .page:last-child {
             page-break-after: auto;
+        }
+
+        table.soa-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .statement-table-wrapper {
@@ -195,6 +203,15 @@
             #sales-report-print-document,
             #sales-report-print-document[contenteditable="true"] {
                 outline: none !important;
+            }
+            .page {
+                page-break-after: always !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                min-height: 255mm !important;
+            }
+            .page:last-child {
+                page-break-after: auto !important;
             }
         }
     </style>
