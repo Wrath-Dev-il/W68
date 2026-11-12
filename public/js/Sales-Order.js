@@ -476,36 +476,25 @@ window.isProceedVatOn = function () {
 window.isEditVatOn = function () {
     return !!document.getElementById('edit-so-vat-toggle')?.checked;
 };
-// W68_SALES_ORDER_VAT_TOGGLE_20261106
-// The Print Receipt options follow the VAT state:
-//   VAT off -> only the Sale's Order receipt can be printed.
-//   VAT on  -> only the Sale's Invoice receipt can be printed.
-// W68_SO_HISTORY_ONLINE_PRINT_CHOICES_20261112
-// In Sales Order History, if the invoice is ONLINE, provide both choices:
-// Sale's Invoice AND Sale's Order in Print Receipt.
-window.applyPrintTypeVatGate = function (isVat, isOnline = false) {
+// W68_PRINT_RECEIPT_ALWAYS_BOTH_CHOICES_20261112
+// Allow the user to print either Sale's Order or Sale's Invoice even though
+// the 12% VAT toggle button is checked or not, both in Sales Order History
+// and after Sales Order Processing.
+window.applyPrintTypeVatGate = function (isVat) {
     const invoiceLabel = document.getElementById('print-type-invoice-label');
     const orderLabel = document.getElementById('print-type-order-label');
     const invoiceRadio = document.querySelector('input[name="receipt-print-type"][value="invoice"]');
     const orderRadio = document.querySelector('input[name="receipt-print-type"][value="order"]');
 
-    if (isOnline) {
-        if (invoiceLabel) invoiceLabel.style.display = '';
-        if (orderLabel) orderLabel.style.display = '';
-        if (isVat) {
-            if (invoiceRadio) invoiceRadio.checked = true;
-        } else {
-            if (orderRadio) orderRadio.checked = true;
-        }
-        return;
-    }
+    // Both choices are ALWAYS visible and selectable:
+    if (invoiceLabel) invoiceLabel.style.display = '';
+    if (orderLabel) orderLabel.style.display = '';
 
-    if (invoiceLabel) invoiceLabel.style.display = isVat ? '' : 'none';
-    if (orderLabel) orderLabel.style.display = isVat ? 'none' : '';
+    // Default selection follows whether VAT is checked:
     if (isVat) {
         if (invoiceRadio) invoiceRadio.checked = true;
-    } else if (orderRadio) {
-        orderRadio.checked = true;
+    } else {
+        if (orderRadio) orderRadio.checked = true;
     }
 };
 
@@ -1132,45 +1121,17 @@ window._printSource = 'proceed';
 window.openHistoryPrintModal = async function(orderId) {
     window._printSource = 'history';
     window._historyPrintOrderId = orderId;
-    // W68_SALES_ORDER_VAT_TOGGLE_20261106
-    // Resolve the order's VAT state so a VAT Sales Order can only print the Sale's Invoice.
-    // W68_SO_HISTORY_ONLINE_PRINT_CHOICES_20261112
-    // If the invoice is ONLINE, allow choosing both Sale's Invoice and Sale's Order.
     let isVat = false;
-    let isOnline = false;
-
-    const cachedRow = window._historyOrdersById?.[orderId];
-    if (cachedRow) {
-        isOnline = !!(
-            cachedRow.is_online ||
-            /^ONL-/i.test(cachedRow.sales_number || '') ||
-            ['LAZADA ONLINE BUYERS', 'SHOPEE ONLINE BUYERS', 'SHOPPE ONLINE', 'SHOPPEE ONLINE', 'TIKTOK SHOP', 'TIKTOK ONLINE BUYERS', 'ONLINE', 'VARIOUS ONLINE SHOPEE', 'VARIOUS ONLINE LAZADA'].includes((cachedRow.customer_name || '').toUpperCase().trim()) ||
-            /online/i.test(cachedRow.customer_name || '') ||
-            /online/i.test(cachedRow.remarks || '')
-        );
-    }
 
     try {
         const url = (window.salesOrderRoutes?.detailUrl || '/admin/sales/sales-order/detail/:id').replace(':id', orderId);
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const r = await res.json();
         isVat = !!(r && r.success && r.order && Number(r.order.is_vat) === 1);
-        if (r && r.success && r.order) {
-            const ord = r.order;
-            isOnline = !!(
-                ord.is_online ||
-                isOnline ||
-                /^ONL-/i.test(ord.sales_number || '') ||
-                /^ONL-/i.test(ord.order_number || '') ||
-                ['LAZADA ONLINE BUYERS', 'SHOPEE ONLINE BUYERS', 'SHOPPE ONLINE', 'SHOPPEE ONLINE', 'TIKTOK SHOP', 'TIKTOK ONLINE BUYERS', 'ONLINE', 'VARIOUS ONLINE SHOPEE', 'VARIOUS ONLINE LAZADA'].includes((ord.customer_name || '').toUpperCase().trim()) ||
-                /online/i.test(ord.customer_name || '') ||
-                /online/i.test(ord.remarks || '')
-            );
-        }
     } catch (e) {
         console.error('VAT state lookup failed:', e);
     }
-    if (typeof window.applyPrintTypeVatGate === 'function') window.applyPrintTypeVatGate(isVat, isOnline);
+    if (typeof window.applyPrintTypeVatGate === 'function') window.applyPrintTypeVatGate(isVat);
     toggleModal('print-receipt-modal', true);
 };
 
@@ -1196,17 +1157,7 @@ window.submitPrintReceipt = async function() {
 
             // W68_SALES_ORDER_VAT_TOGGLE_20261106 - printed documents show the VAT-inclusive price.
             isVat = Number(note.is_vat) === 1;
-            const isOnline = !!(
-                note.is_online ||
-                /^ONL-/i.test(note.sales_number || '') ||
-                /^ONL-/i.test(note.order_number || '') ||
-                ['LAZADA ONLINE BUYERS', 'SHOPEE ONLINE BUYERS', 'SHOPPE ONLINE', 'SHOPPEE ONLINE', 'TIKTOK SHOP', 'TIKTOK ONLINE BUYERS', 'ONLINE', 'VARIOUS ONLINE SHOPEE', 'VARIOUS ONLINE LAZADA'].includes((note.customer_name || '').toUpperCase().trim()) ||
-                /online/i.test(note.customer_name || '') ||
-                /online/i.test(note.remarks || '')
-            );
             const vatMult = isVat ? 1.12 : 1;
-            // Only force 'invoice' for non-online VAT orders; online orders respect the user's modal choice.
-            if (isVat && !isOnline) printType = 'invoice';
 
             // Read additional discount rate from stored items
             addlDiscRate = (note.items && note.items.length > 0) ? parseFloat(note.items[0].additional_discount) || 0 : 0;
@@ -1253,7 +1204,6 @@ window.submitPrintReceipt = async function() {
 
         // W68_SALES_ORDER_VAT_TOGGLE_20261106 - printed documents show the VAT-inclusive price.
         isVat = window._processedIsVat === true || (window._processedIsVat === undefined && window.isProceedVatOn());
-        if (isVat) printType = 'invoice';
         const proceedVatMult = isVat ? 1.12 : 1;
 
         addlDisc = parseFloat(document.getElementById('proceed-addl-discount')?.value) || 0;
