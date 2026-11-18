@@ -919,12 +919,16 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
                 $reflectedClosure = new \ReflectionFunction($targetAction);
                 $closureParams = $reflectedClosure->getParameters();
                 $args = [];
+                $positionalValues = array_values($routeParameters);
+                $pos = 0;
                 foreach ($closureParams as $param) {
                     $paramName = $param->getName();
-                    if (isset($routeParameters[$paramName])) {
+                    if (array_key_exists($paramName, $routeParameters)) {
                         $args[] = $routeParameters[$paramName];
-                    } elseif ($paramName === 'request' || $param->getType()?->getName() === 'Illuminate\\Http\\Request') {
+                    } elseif ($paramName === 'request' || ($param->hasType() && is_a((string) ($param->getType() instanceof \ReflectionNamedType ? $param->getType()->getName() : ''), \Illuminate\Http\Request::class, true))) {
                         $args[] = request();
+                    } elseif (isset($positionalValues[$pos])) {
+                        $args[] = $positionalValues[$pos++];
                     } elseif ($param->isDefaultValueAvailable()) {
                         $args[] = $param->getDefaultValue();
                     } else {
@@ -26366,6 +26370,14 @@ Route::get('/admin/payments/data', function () {
 })->name('admin.payments.data');
 
 Route::get('/admin/payments/customer/{customerId}', function ($customerId) {
+    // W68_PAYMENTS_RUNTIME_GUARD
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(120);
+    gc_enable();
+    foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+        try { DB::connection($connectionName)->disableQueryLog(); } catch (\Throwable $ignored) {}
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -26652,6 +26664,14 @@ Route::get('/admin/payments/customer/{customerId}', function ($customerId) {
 })->name('admin.payments.customer');
 
 Route::get('/admin/payments/customer/{customerId}/returns', function (Request $request, $customerId) {
+    // W68_PAYMENTS_RUNTIME_GUARD
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(120);
+    gc_enable();
+    foreach (['accounting', 'sales', 'masterlist', 'ledger'] as $connectionName) {
+        try { DB::connection($connectionName)->disableQueryLog(); } catch (\Throwable $ignored) {}
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
