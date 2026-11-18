@@ -890,7 +890,15 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
         // Payments data is a large read-only aggregation. For Regular/Special,
         // call the already-registered Admin route Closure directly instead of
         // booting a nested Laravel HTTP request via app()->handle().
-        if ($adminRouteName === 'admin.payments.data') {
+        // W68_PAYMENTS_CUSTOMER_DIRECT_PROXY_FIX_20261118
+        // Extended to cover admin.payments.customer and admin.payments.customer.returns
+        // which also run heavy Online Report resolution (e.g. Shopee with dual IDs).
+        $directProxyRoutes = [
+            'admin.payments.data',
+            'admin.payments.customer',
+            'admin.payments.customer.returns',
+        ];
+        if (in_array($adminRouteName, $directProxyRoutes, true)) {
             @ini_set('memory_limit', '1024M');
             @set_time_limit(120);
 
@@ -903,11 +911,27 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
                 }
             }
 
-            $targetRoute = app('router')->getRoutes()->getByName('admin.payments.data');
+            $targetRoute = app('router')->getRoutes()->getByName($adminRouteName);
             $targetAction = $targetRoute ? $targetRoute->getAction('uses') : null;
 
             if ($targetAction instanceof \Closure) {
-                return $targetAction();
+                // Pass route parameters to the closure
+                $reflectedClosure = new \ReflectionFunction($targetAction);
+                $closureParams = $reflectedClosure->getParameters();
+                $args = [];
+                foreach ($closureParams as $param) {
+                    $paramName = $param->getName();
+                    if (isset($routeParameters[$paramName])) {
+                        $args[] = $routeParameters[$paramName];
+                    } elseif ($paramName === 'request' || $param->getType()?->getName() === 'Illuminate\\Http\\Request') {
+                        $args[] = request();
+                    } elseif ($param->isDefaultValueAvailable()) {
+                        $args[] = $param->getDefaultValue();
+                    } else {
+                        $args[] = null;
+                    }
+                }
+                return $targetAction(...$args);
             }
         }
         $currentRequest = request();
