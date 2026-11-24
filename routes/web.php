@@ -897,6 +897,8 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
             'admin.payments.data',
             'admin.payments.customer',
             'admin.payments.customer.returns',
+            'admin.sales-report.print-soa',
+            'admin.sales-report.print-data',
         ];
         if (in_array($adminRouteName, $directProxyRoutes, true)) {
             @ini_set('memory_limit', '1024M');
@@ -29825,6 +29827,7 @@ Route::get('/admin/reports/inventory-reports', function () {
 })->name('admin.inventory-reports');
 
 Route::get('/admin/reports/sales-report', function () {
+    @ini_set('memory_limit', '512M');
     $user = session('user');
     if (!$user) return redirect()->route('login');
     return view('Admin.Reports.sales-report');
@@ -30981,6 +30984,7 @@ Route::post('/admin/reports/top-products/data', function (\Illuminate\Http\Reque
 })->name('admin.top-products.data');
 
 Route::get('/admin/reports/sales-report/customers', function (\Illuminate\Http\Request $request) {
+    @ini_set('memory_limit', '512M');
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -31002,6 +31006,7 @@ Route::get('/admin/reports/sales-report/customers', function (\Illuminate\Http\R
 })->name('admin.sales-report.customers');
 
 Route::get('/admin/reports/sales-report/descriptions', function (\Illuminate\Http\Request $request) {
+    @ini_set('memory_limit', '512M');
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -31023,6 +31028,7 @@ Route::get('/admin/reports/sales-report/descriptions', function (\Illuminate\Htt
 })->name('admin.sales-report.descriptions');
 
 Route::get('/admin/reports/sales-report/categories', function (\Illuminate\Http\Request $request) {
+    @ini_set('memory_limit', '512M');
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -31044,6 +31050,7 @@ Route::get('/admin/reports/sales-report/categories', function (\Illuminate\Http\
 })->name('admin.sales-report.categories');
 
 Route::get('/admin/reports/sales-report/agents', function (\Illuminate\Http\Request $request) {
+    @ini_set('memory_limit', '512M');
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -31065,6 +31072,22 @@ Route::get('/admin/reports/sales-report/agents', function (\Illuminate\Http\Requ
 })->name('admin.sales-report.agents');
 
 Route::post('/admin/reports/sales-report/print-data', function (\Illuminate\Http\Request $request) {
+    // W68_SALES_REPORT_DATA_MEMORY_GUARD
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(180);
+    if (function_exists('gc_enable')) {
+        gc_enable();
+    }
+    foreach (['mysql', 'system', 'masterlist', 'sales', 'ledger', 'accounting', 'purchase'] as $connection) {
+        try {
+            DB::connection($connection)->disableQueryLog();
+        } catch (\Throwable $ignored) {
+        }
+    }
+    if (function_exists('gc_collect_cycles')) {
+        gc_collect_cycles();
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
@@ -31287,6 +31310,22 @@ Route::post('/admin/reports/sales-report/print-data', function (\Illuminate\Http
 })->name('admin.sales-report.print-data');
 
 Route::post('/admin/reports/sales-report/print-soa', function (\Illuminate\Http\Request $request) {
+    // W68_SALES_REPORT_SOA_MEMORY_GUARD
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(180);
+    if (function_exists('gc_enable')) {
+        gc_enable();
+    }
+    foreach (['mysql', 'system', 'masterlist', 'sales', 'ledger', 'accounting', 'purchase'] as $connection) {
+        try {
+            DB::connection($connection)->disableQueryLog();
+        } catch (\Throwable $ignored) {
+        }
+    }
+    if (function_exists('gc_collect_cycles')) {
+        gc_collect_cycles();
+    }
+
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 

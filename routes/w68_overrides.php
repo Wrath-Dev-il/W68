@@ -507,7 +507,11 @@ $w68InvokeAdminSalesReportSoa = function (Request $request, array $allowedTypes)
      * only for this report request, turn off query logs on the data
      * connections, and collect old cycles before invoking the legacy action.
      */
-    @ini_set('memory_limit', '512M');
+    @ini_set('memory_limit', '1024M');
+    @set_time_limit(180);
+    if (function_exists('gc_enable')) {
+        gc_enable();
+    }
 
     foreach (['mysql', 'system', 'masterlist', 'sales', 'ledger', 'accounting', 'purchase'] as $connection) {
         try {

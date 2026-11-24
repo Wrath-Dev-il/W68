@@ -314,6 +314,11 @@ async function printStatementOfAccount() {
             return;
         }
 
+        if (!res.ok) {
+            showSalesReportToast('Server error (' + res.status + '). Please try again.');
+            return;
+        }
+
         const html = await res.text();
         if (!html || html.trim().length < 50) {
             showSalesReportToast('Empty response from server.');
