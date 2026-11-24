@@ -776,3 +776,246 @@ Artisan::command('soa:auto-send', function () {
 Schedule::command('soa:auto-send')
     ->everyMinute()
     ->withoutOverlapping(10);
+
+Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without modifying data} {--product-code=48674-26040-N : Target product code} {--product-id= : Target product ID override} {--all-sh-lz : Also update all other SH and LZ invoices across product_ledgers}', function () {
+    $dryRun = (bool) $this->option('dry-run');
+    $targetProductCode = trim((string) ($this->option('product-code') ?? '48674-26040-N'));
+    $forcedProductId = $this->option('product-id') ? (int) $this->option('product-id') : null;
+    $updateAllShLz = (bool) $this->option('all-sh-lz');
+
+    $this->info('====================================================================');
+    $this->info('  W68 PRODUCT LEDGER ADJUSTMENT & RECALCULATION');
+    $this->info('====================================================================');
+    $this->line('Mode: ' . ($dryRun ? 'DRY-RUN (preview only, no changes written)' : 'LIVE EXECUTION (changes will be saved)'));
+    $this->line("Target Product Code: {$targetProductCode}");
+
+    $productId = $forcedProductId;
+    if (!$productId) {
+        $product = null;
+        try {
+            $product = DB::connection('masterlist')->table('products')
+                ->where(function ($q) use ($targetProductCode) {
+                    $q->whereRaw('LOWER(TRIM(product_code)) = ?', [strtolower($targetProductCode)])
+                      ->orWhereRaw('LOWER(TRIM(part_number)) = ?', [strtolower($targetProductCode)])
+                      ->orWhereRaw('LOWER(TRIM(product_code2)) = ?', [strtolower($targetProductCode)])
+                      ->orWhereRaw('LOWER(TRIM(pricelist_code)) = ?', [strtolower($targetProductCode)]);
+                })
+                ->first();
+        } catch (\Throwable $e) {}
+
+        if (!$product) {
+            try {
+                $product = DB::table('products')
+                    ->where(function ($q) use ($targetProductCode) {
+                        $q->whereRaw('LOWER(TRIM(product_code)) = ?', [strtolower($targetProductCode)])
+                          ->orWhereRaw('LOWER(TRIM(part_number)) = ?', [strtolower($targetProductCode)]);
+                    })
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
+
+        if ($product) {
+            $productId = (int) $product->id;
+        }
+    }
+
+    if (!$productId) {
+        $this->error("ERROR: Product '{$targetProductCode}' not found. Please provide --product-id=<ID>.");
+        return 1;
+    }
+
+    $this->line("Target Product ID: {$productId}");
+
+    // Resolve Customers
+    $shopeeCustomer = null;
+    $lazadaCustomer = null;
+    try {
+        $shopeeCustomer = DB::connection('masterlist')->table('customers')
+            ->where(function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['shopee online buyers'])
+                  ->orWhereRaw('LOWER(TRIM(name)) LIKE ?', ['%shopee online%']);
+            })->first();
+
+        $lazadaCustomer = DB::connection('masterlist')->table('customers')
+            ->where(function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['lazada online buyers'])
+                  ->orWhereRaw('LOWER(TRIM(name)) LIKE ?', ['%lazada online%']);
+            })->first();
+    } catch (\Throwable $e) {}
+
+    $shopeeCustomerId = $shopeeCustomer ? (int) $shopeeCustomer->id : null;
+    $shopeeCustomerName = 'SHOPEE ONLINE BUYERS';
+    $lazadaCustomerId = $lazadaCustomer ? (int) $lazadaCustomer->id : null;
+    $lazadaCustomerName = 'LAZADA ONLINE BUYERS';
+
+    $rows = DB::connection('ledger')->table('product_ledgers')
+        ->where('product_id', $productId)
+        ->orderBy('date', 'asc')
+        ->orderBy('id', 'asc')
+        ->get();
+
+    if ($rows->isEmpty()) {
+        $this->warn("No ledger entries found for product #{$productId}.");
+        return 0;
+    }
+
+    $qtyOutAdjustedCount = 0;
+    $shopeeUpdatedCount = 0;
+    $lazadaUpdatedCount = 0;
+    $balanceUpdatedCount = 0;
+    $runningBalance = 0;
+    $updates = [];
+
+    foreach ($rows as $row) {
+        $rowId = (int) $row->id;
+        $date = (string) $row->date;
+        $year = (int) date('Y', strtotime($date));
+        $refNum = trim((string) ($row->reference_number ?? ''));
+        $transNum = trim((string) ($row->transaction_number ?? ''));
+        $currentName = trim((string) ($row->entity_name ?? ''));
+        $currentOum = trim((string) ($row->oum ?? ''));
+        $currentQtyIn = (float) ($row->quantity_in ?? 0);
+        $currentQtyOut = (float) ($row->quantity_out ?? 0);
+        $currentBalance = (float) ($row->balance_stock ?? 0);
+        $remarks = (string) ($row->remarks ?? '');
+
+        $newQtyOut = $currentQtyOut;
+        $newOum = $currentOum;
+        $newName = $currentName;
+        $newCustomerId = $row->customer_id ?? null;
+        $newRemarks = $remarks;
+
+        $isOut = ($currentQtyOut > 0) || (strtoupper(trim((string) $row->transaction_type)) === 'OUT');
+        $is2023or2024 = ($year === 2023 || $year === 2024);
+        $isModified = false;
+
+        // 2023-2024 OUT: 4 = 1, OUM = 'SET'
+        if ($is2023or2024 && $isOut) {
+            $alreadyAdjusted = str_contains($remarks, '[4=1 SET]');
+            if (!$alreadyAdjusted && $currentQtyOut > 0) {
+                $newQtyOut = round($currentQtyOut / 4, 4);
+                if (floor($newQtyOut) == $newQtyOut) {
+                    $newQtyOut = (int) $newQtyOut;
+                }
+                $newOum = 'SET';
+                $newRemarks = trim($remarks . " [4=1 SET: qty_out {$currentQtyOut} -> {$newQtyOut}]");
+                $qtyOutAdjustedCount++;
+                $isModified = true;
+            } elseif (!$alreadyAdjusted && $currentOum !== 'SET') {
+                $newOum = 'SET';
+                $isModified = true;
+            }
+        }
+
+        // Invoice SH / LZ check
+        $isCashWord = preg_match('/\b(cash|gcash)\b/i', $refNum) || preg_match('/\b(cash|gcash)\b/i', $transNum);
+        $hasSh = !$isCashWord && (
+            stripos($refNum, 'SH') !== false ||
+            stripos($transNum, 'SH') !== false ||
+            stripos($remarks, 'shopee') !== false
+        );
+
+        $hasLz = (
+            stripos($refNum, 'LZ') !== false ||
+            stripos($transNum, 'LZ') !== false ||
+            stripos($remarks, 'lazada') !== false
+        );
+
+        if ($hasSh && $newName !== $shopeeCustomerName) {
+            $newName = $shopeeCustomerName;
+            $newCustomerId = $shopeeCustomerId ?? $row->customer_id;
+            $shopeeUpdatedCount++;
+            $isModified = true;
+        } elseif ($hasLz && $newName !== $lazadaCustomerName) {
+            $newName = $lazadaCustomerName;
+            $newCustomerId = $lazadaCustomerId ?? $row->customer_id;
+            $lazadaUpdatedCount++;
+            $isModified = true;
+        }
+
+        $runningBalance = $runningBalance + $currentQtyIn - $newQtyOut;
+        $newBalanceStock = (int) round($runningBalance);
+
+        if ((int) round($currentBalance) !== $newBalanceStock) {
+            $balanceUpdatedCount++;
+            $isModified = true;
+        }
+
+        $updates[] = [
+            'id' => $rowId,
+            'quantity_out' => $newQtyOut,
+            'oum' => $newOum,
+            'entity_name' => $newName,
+            'customer_id' => $newCustomerId,
+            'balance_stock' => $newBalanceStock,
+            'remarks' => $newRemarks,
+            'is_modified' => $isModified,
+        ];
+    }
+
+    $this->line('');
+    $this->info("Summary for product #{$productId}:");
+    $this->line("  2023-2024 OUT transactions adjusted (OUM=SET, Qty/4): {$qtyOutAdjustedCount}");
+    $this->line("  Invoices with SH set to 'SHOPEE ONLINE BUYERS':        {$shopeeUpdatedCount}");
+    $this->line("  Invoices with LZ set to 'LAZADA ONLINE BUYERS':        {$lazadaUpdatedCount}");
+    $this->line("  Ledger Balance Stock recalculations:                  {$balanceUpdatedCount}");
+    $this->line("  Final Stock Balance:                                  {$runningBalance}");
+
+    if ($dryRun) {
+        $this->warn("\n[DRY RUN] No records were modified. Run without --dry-run to commit changes.");
+        return 0;
+    }
+
+    DB::connection('ledger')->transaction(function () use ($updates, $updateAllShLz, $shopeeCustomerName, $shopeeCustomerId, $lazadaCustomerName, $lazadaCustomerId) {
+        $now = now();
+        $count = 0;
+        foreach ($updates as $u) {
+            if (!$u['is_modified']) continue;
+            DB::connection('ledger')->table('product_ledgers')->where('id', $u['id'])->update([
+                'quantity_out' => $u['quantity_out'],
+                'oum' => $u['oum'],
+                'entity_name' => $u['entity_name'],
+                'customer_id' => $u['customer_id'],
+                'balance_stock' => $u['balance_stock'],
+                'remarks' => $u['remarks'],
+                'updated_at' => $now,
+            ]);
+            $count++;
+        }
+
+        if ($updateAllShLz) {
+            DB::connection('ledger')->table('product_ledgers')
+                ->where(function ($q) {
+                    $q->where('reference_number', 'LIKE', '%SH%')->orWhere('transaction_number', 'LIKE', '%SH%');
+                })
+                ->where('reference_number', 'NOT LIKE', '%CASH%')
+                ->where('transaction_number', 'NOT LIKE', '%CASH%')
+                ->where(function ($q) use ($shopeeCustomerName) {
+                    $q->whereNull('entity_name')->orWhere('entity_name', '!=', $shopeeCustomerName);
+                })
+                ->update(['entity_name' => $shopeeCustomerName, 'customer_id' => $shopeeCustomerId, 'updated_at' => $now]);
+
+            DB::connection('ledger')->table('product_ledgers')
+                ->where(function ($q) {
+                    $q->where('reference_number', 'LIKE', '%LZ%')->orWhere('transaction_number', 'LIKE', '%LZ%');
+                })
+                ->where(function ($q) use ($lazadaCustomerName) {
+                    $q->whereNull('entity_name')->orWhere('entity_name', '!=', $lazadaCustomerName);
+                })
+                ->update(['entity_name' => $lazadaCustomerName, 'customer_id' => $lazadaCustomerId, 'updated_at' => $now]);
+        }
+    });
+
+    $finalOnHand = (int) round($runningBalance);
+    try {
+        DB::connection('masterlist')->table('products')->where('id', $productId)->update([
+            'on_hand' => $finalOnHand,
+            'updated_at' => now(),
+        ]);
+        \App\Services\ProductStockSyncService::clearProductMasterStatsCache();
+        $this->info("Synced products.on_hand to {$finalOnHand}.");
+    } catch (\Throwable $e) {}
+
+    $this->info('SUCCESS! Product ledger adjusted and stock balance recalculated.');
+    return 0;
+})->purpose('Fix 2023-2024 OUT transactions (OUM=SET, Qty/4), map SH/LZ invoices to Shopee/Lazada Online Buyers, and recalculate running stock balance for product 48674-26040-N.');
