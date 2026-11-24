@@ -168,6 +168,7 @@ if ($totalRows === 0) {
 }
 
 $qtyOutAdjustedCount = 0;
+$zeroTo1Count = 0;
 $shopeeUpdatedCount = 0;
 $lazadaUpdatedCount = 0;
 $balanceUpdatedCount = 0;
@@ -203,21 +204,33 @@ foreach ($rows as $index => $row) {
 
     $isModified = false;
 
-    // A. 2023 & 2024 OUT Adjustment: 4 = 1 and OUM = 'SET'
-    if ($is2023or2024 && $isOut) {
-        $alreadyAdjusted = str_contains($remarks, '[4=1 SET]');
+    // A. 2023 & 2024 OUT Adjustment: 4 = 1, 0 = 1, and OUM = 'SET'
+    $isOutMovement = $isOut
+        || str_contains($remarks, '[4=1 SET]')
+        || str_contains($remarks, 'qty_out')
+        || ($currentQtyIn == 0 && ($refNum !== '' || $transNum !== '' || $hasSh || $hasLz));
 
-        if (!$alreadyAdjusted && $currentQtyOut > 0) {
-            $newQtyOut = round($currentQtyOut / 4, 4);
-            // If whole integer, cast to int
-            if (floor($newQtyOut) == $newQtyOut) {
-                $newQtyOut = (int) $newQtyOut;
+    if ($is2023or2024 && $isOutMovement) {
+        $alreadyAdjusted = str_contains($remarks, '[4=1 SET]') || str_contains($remarks, '[0=1 SET]');
+
+        if ($currentQtyOut <= 0) {
+            // Rule: 0 = 1 in 2023 and 2024
+            $newQtyOut = 1;
+            $newOum = 'SET';
+            if (!str_contains($remarks, '[0=1 SET]')) {
+                $newRemarks = trim($remarks . " [0=1 SET]");
             }
+            $zeroTo1Count++;
+            $isModified = true;
+        } elseif (!$alreadyAdjusted && $currentQtyOut > 0) {
+            // Rule: 4 = 1, minimum 1 (0 = 1)
+            $calculated = round($currentQtyOut / 4, 4);
+            $newQtyOut = max(1, (int) round($calculated));
             $newOum = 'SET';
             $newRemarks = trim($remarks . " [4=1 SET: qty_out {$currentQtyOut} -> {$newQtyOut}]");
             $qtyOutAdjustedCount++;
             $isModified = true;
-        } elseif (!$alreadyAdjusted && $currentOum !== 'SET') {
+        } elseif ($alreadyAdjusted && $newOum !== 'SET') {
             $newOum = 'SET';
             $isModified = true;
         }
@@ -296,6 +309,7 @@ foreach ($rows as $index => $row) {
 echo str_repeat("-", 100) . "\n";
 echo "Summary of planned changes for product #{$productId}:\n";
 echo "  2023-2024 OUT transactions adjusted (OUM=SET, Qty/4): {$qtyOutAdjustedCount}\n";
+echo "  2023-2024 OUT transactions adjusted (0 = 1, OUM=SET): {$zeroTo1Count}\n";
 echo "  SH Invoices updated to 'SHOPEE ONLINE BUYERS':        {$shopeeUpdatedCount}\n";
 echo "  LZ Invoices updated to 'LAZADA ONLINE BUYERS':        {$lazadaUpdatedCount}\n";
 echo "  Ledger Balance Stock recalculations:                  {$balanceUpdatedCount}\n";

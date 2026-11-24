@@ -860,6 +860,7 @@ Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without 
     }
 
     $qtyOutAdjustedCount = 0;
+    $zeroTo1Count = 0;
     $shopeeUpdatedCount = 0;
     $lazadaUpdatedCount = 0;
     $balanceUpdatedCount = 0;
@@ -889,24 +890,6 @@ Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without 
         $is2023or2024 = ($year === 2023 || $year === 2024);
         $isModified = false;
 
-        // 2023-2024 OUT: 4 = 1, OUM = 'SET'
-        if ($is2023or2024 && $isOut) {
-            $alreadyAdjusted = str_contains($remarks, '[4=1 SET]');
-            if (!$alreadyAdjusted && $currentQtyOut > 0) {
-                $newQtyOut = round($currentQtyOut / 4, 4);
-                if (floor($newQtyOut) == $newQtyOut) {
-                    $newQtyOut = (int) $newQtyOut;
-                }
-                $newOum = 'SET';
-                $newRemarks = trim($remarks . " [4=1 SET: qty_out {$currentQtyOut} -> {$newQtyOut}]");
-                $qtyOutAdjustedCount++;
-                $isModified = true;
-            } elseif (!$alreadyAdjusted && $currentOum !== 'SET') {
-                $newOum = 'SET';
-                $isModified = true;
-            }
-        }
-
         // Invoice SH / LZ check
         $isCashWord = preg_match('/\b(cash|gcash)\b/i', $refNum) || preg_match('/\b(cash|gcash)\b/i', $transNum);
         $hasSh = !$isCashWord && (
@@ -920,6 +903,38 @@ Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without 
             stripos($transNum, 'LZ') !== false ||
             stripos($remarks, 'lazada') !== false
         );
+
+        // 2023-2024 OUT: 4 = 1, 0 = 1, and OUM = 'SET'
+        $isOutMovement = $isOut
+            || str_contains($remarks, '[4=1 SET]')
+            || str_contains($remarks, 'qty_out')
+            || ($currentQtyIn == 0 && ($refNum !== '' || $transNum !== '' || $hasSh || $hasLz));
+
+        if ($is2023or2024 && $isOutMovement) {
+            $alreadyAdjusted = str_contains($remarks, '[4=1 SET]') || str_contains($remarks, '[0=1 SET]');
+
+            if ($currentQtyOut <= 0) {
+                // Rule: 0 = 1 in 2023 and 2024
+                $newQtyOut = 1;
+                $newOum = 'SET';
+                if (!str_contains($remarks, '[0=1 SET]')) {
+                    $newRemarks = trim($remarks . " [0=1 SET]");
+                }
+                $zeroTo1Count++;
+                $isModified = true;
+            } elseif (!$alreadyAdjusted && $currentQtyOut > 0) {
+                // Rule: 4 = 1, minimum 1 (0 = 1)
+                $calculated = round($currentQtyOut / 4, 4);
+                $newQtyOut = max(1, (int) round($calculated));
+                $newOum = 'SET';
+                $newRemarks = trim($remarks . " [4=1 SET: qty_out {$currentQtyOut} -> {$newQtyOut}]");
+                $qtyOutAdjustedCount++;
+                $isModified = true;
+            } elseif ($alreadyAdjusted && $newOum !== 'SET') {
+                $newOum = 'SET';
+                $isModified = true;
+            }
+        }
 
         if ($hasSh && $newName !== $shopeeCustomerName) {
             $newName = $shopeeCustomerName;
@@ -956,6 +971,7 @@ Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without 
     $this->line('');
     $this->info("Summary for product #{$productId}:");
     $this->line("  2023-2024 OUT transactions adjusted (OUM=SET, Qty/4): {$qtyOutAdjustedCount}");
+    $this->line("  2023-2024 OUT transactions adjusted (0 = 1, OUM=SET): {$zeroTo1Count}");
     $this->line("  Invoices with SH set to 'SHOPEE ONLINE BUYERS':        {$shopeeUpdatedCount}");
     $this->line("  Invoices with LZ set to 'LAZADA ONLINE BUYERS':        {$lazadaUpdatedCount}");
     $this->line("  Ledger Balance Stock recalculations:                  {$balanceUpdatedCount}");
