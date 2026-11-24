@@ -37,9 +37,12 @@ function debounce(func, wait) {
     };
 }
 
-const debouncedFetch = debounce(() => fetchProducts(1), 300);
+const debouncedFetch = debounce(() => fetchProducts(1), 350);
 
-const debouncedAdjustedFetch = debounce(() => fetchAdjusted(1), 300);
+const debouncedAdjustedFetch = debounce(() => fetchAdjusted(1), 350);
+
+let fetchProductsController = null;
+let lastSearchFilterKey = '';
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -427,15 +430,9 @@ window.confirmDeleteAdjustment = function() {
 };
 
 function setupColumnSearchListeners() {
-    document.querySelectorAll('.col-search-input').forEach((input, index) => {
+    document.querySelectorAll('.col-search-input').forEach((input) => {
         input.addEventListener('input', () => {
-            const inputs = document.querySelectorAll('.col-search-input');
-            searchFilters.code = inputs[0]?.value.trim() || '';
-            searchFilters.part = inputs[1]?.value.trim() || '';
-            searchFilters.desc = inputs[2]?.value.trim() || '';
-            searchFilters.app  = inputs[3]?.value.trim() || '';
-            searchFilters.qty  = inputs[4]?.value.trim() || '';
-            debouncedFetch();
+            window.filterAdjTable();
         });
     });
 }
@@ -444,6 +441,14 @@ window.fetchProducts = function(page = 1) {
     currentPage = page;
     const tbody = document.getElementById('adjustment-tbody');
     if (!tbody) return;
+
+    // Abort previous in-flight request if user is still typing
+    if (fetchProductsController) {
+        try {
+            fetchProductsController.abort();
+        } catch (_) {}
+    }
+    fetchProductsController = new AbortController();
 
     tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400 italic"><div class="flex items-center justify-center space-x-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-maroon"></i><span>Loading products...</span></div></td></tr>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -459,7 +464,9 @@ window.fetchProducts = function(page = 1) {
     if (searchFilters.app)  params.append('search[app]', searchFilters.app);
     if (searchFilters.qty)  params.append('search[qty]', searchFilters.qty);
 
-    fetch(`${window.adjustmentRoutes.fetch}?${params.toString()}`)
+    fetch(`${window.adjustmentRoutes.fetch}?${params.toString()}`, {
+        signal: fetchProductsController.signal
+    })
         .then(res => res.json())
         .then(r => {
             if (r.success) {
@@ -473,6 +480,7 @@ window.fetchProducts = function(page = 1) {
             }
         })
         .catch(err => {
+            if (err.name === 'AbortError') return;
             console.error(err);
             tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-red-400 italic">Error loading data.</td></tr>';
         });
@@ -582,11 +590,23 @@ function renderPagination(pagination) {
 
 window.filterAdjTable = function() {
     const inputs = document.querySelectorAll('.col-search-input');
-    searchFilters.code = inputs[0]?.value.trim() || '';
-    searchFilters.part = inputs[1]?.value.trim() || '';
-    searchFilters.desc = inputs[2]?.value.trim() || '';
-    searchFilters.app  = inputs[3]?.value.trim() || '';
-    searchFilters.qty  = inputs[4]?.value.trim() || '';
+    const code = inputs[0]?.value.trim() || '';
+    const part = inputs[1]?.value.trim() || '';
+    const desc = inputs[2]?.value.trim() || '';
+    const app  = inputs[3]?.value.trim() || '';
+    const qty  = inputs[4]?.value.trim() || '';
+
+    const filterKey = `${code}|${part}|${desc}|${app}|${qty}`;
+    if (filterKey === lastSearchFilterKey) {
+        return;
+    }
+    lastSearchFilterKey = filterKey;
+
+    searchFilters.code = code;
+    searchFilters.part = part;
+    searchFilters.desc = desc;
+    searchFilters.app  = app;
+    searchFilters.qty  = qty;
     debouncedFetch();
 }
 

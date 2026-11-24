@@ -899,6 +899,7 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
             'admin.payments.customer.returns',
             'admin.sales-report.print-soa',
             'admin.sales-report.print-data',
+            'admin.inv-adjust.data',
         ];
         if (in_array($adminRouteName, $directProxyRoutes, true)) {
             @ini_set('memory_limit', '1024M');
@@ -11207,63 +11208,162 @@ Route::get('/admin/inventory/adjustment/data', function (\Illuminate\Http\Reques
     $user = session('user');
     if (!$user) return response()->json(['error' => 'Unauthorized'], 403);
 
-    $page = (int) $request->query('page', 1);
+    @ini_set('memory_limit', '512M');
+    @set_time_limit(60);
+
+    try {
+        \Illuminate\Support\Facades\DB::connection('masterlist')->disableQueryLog();
+    } catch (\Throwable $ignored) {}
+
+    $page = max(1, (int) $request->query('page', 1));
     $perPage = 50;
 
     $search = $request->query('search', []);
-    $query = \App\Models\Product::query();
+    $search = is_array($search) ? $search : [];
 
-    // Filters
-    if (!empty($search['code'])) {
-        $query->where('product_code', 'LIKE', '%' . $search['code'] . '%');
-    }
-    if (!empty($search['part'])) {
-        $query->where('part_number', 'LIKE', '%' . $search['part'] . '%');
-    }
-    if (!empty($search['desc'])) {
-        $query->where('description', 'LIKE', '%' . $search['desc'] . '%');
-    }
-    if (!empty($search['app'])) {
-        $query->where('application', 'LIKE', '%' . $search['app'] . '%');
-    }
-    if (!empty($search['qty'])) {
-        $query->where('on_hand', 'LIKE', '%' . $search['qty'] . '%');
+    $code = trim((string) ($search['code'] ?? ''));
+    $part = trim((string) ($search['part'] ?? ''));
+    $desc = trim((string) ($search['desc'] ?? ''));
+    $app  = trim((string) ($search['app'] ?? ''));
+    $qty  = trim((string) ($search['qty'] ?? ''));
+
+    $status = trim((string) $request->query('status', 'All'));
+    $hasStatusFilter = ($status !== '' && strtolower($status) !== 'all');
+
+    // 1. Cached Global Dashboard Stats (avoids 3 full-table scans on every search request)
+    $stats = \Illuminate\Support\Facades\Cache::remember('admin_inv_adjust_stats_summary', 180, function () {
+        try {
+            $row = \Illuminate\Support\Facades\DB::connection('masterlist')->table('products')
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as new_count,
+                    SUM(CASE WHEN status = 'Old' THEN 1 ELSE 0 END) as old_count
+                ")
+                ->first();
+
+            return [
+                'total' => (int) ($row->total ?? 0),
+                'new'   => (int) ($row->new_count ?? 0),
+                'old'   => (int) ($row->old_count ?? 0),
+            ];
+        } catch (\Throwable $e) {
+            return ['total' => 0, 'new' => 0, 'old' => 0];
+        }
+    });
+
+    // 2. Build Query using DB query builder on masterlist (avoids heavy Eloquent hydration and large blobs)
+    $query = \Illuminate\Support\Facades\DB::connection('masterlist')->table('products');
+
+    $hasFilters = false;
+
+    if ($code !== '') {
+        $hasFilters = true;
+        $cleanCode = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $code);
+        $query->where(function ($q) use ($cleanCode) {
+            $q->where('product_code', 'LIKE', $cleanCode . '%')
+              ->orWhere('product_code', 'LIKE', '%' . $cleanCode . '%')
+              ->orWhere('product_code2', 'LIKE', '%' . $cleanCode . '%');
+        });
     }
 
-    // Status filters (e.g. New / Old status)
-    $status = $request->query('status', 'All');
-    if ($status !== 'All') {
+    if ($part !== '') {
+        $hasFilters = true;
+        $cleanPart = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $part);
+        $query->where(function ($q) use ($cleanPart) {
+            $q->where('part_number', 'LIKE', $cleanPart . '%')
+              ->orWhere('part_number', 'LIKE', '%' . $cleanPart . '%');
+        });
+    }
+
+    if ($desc !== '') {
+        $hasFilters = true;
+        $cleanDesc = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $desc);
+        $query->where('description', 'LIKE', '%' . $cleanDesc . '%');
+    }
+
+    if ($app !== '') {
+        $hasFilters = true;
+        $cleanApp = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $app);
+        $query->where('application', 'LIKE', '%' . $cleanApp . '%');
+    }
+
+    if ($qty !== '') {
+        $hasFilters = true;
+        if (is_numeric($qty)) {
+            $query->where('on_hand', (int) $qty);
+        } else {
+            $cleanQty = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $qty);
+            $query->whereRaw('CAST(on_hand AS CHAR) LIKE ?', ['%' . $cleanQty . '%']);
+        }
+    }
+
+    if ($hasStatusFilter) {
+        $hasFilters = true;
         $query->where('status', $status);
     }
 
-    $totalMatching = $query->count();
+    // 3. Fast Total Count
+    if (!$hasFilters) {
+        $totalMatching = (int) ($stats['total'] ?? 0);
+    } elseif (!$code && !$part && !$desc && !$app && !$qty && $hasStatusFilter) {
+        $statusLower = strtolower($status);
+        if ($statusLower === 'new') {
+            $totalMatching = (int) ($stats['new'] ?? 0);
+        } elseif ($statusLower === 'old') {
+            $totalMatching = (int) ($stats['old'] ?? 0);
+        } else {
+            $totalMatching = (int) $query->count();
+        }
+    } else {
+        $totalMatching = (int) $query->count();
+    }
+
     $lastPage = max(1, (int) ceil($totalMatching / $perPage));
     $page = max(1, min($page, $lastPage));
     $skip = ($page - 1) * $perPage;
 
-    $products = $query->skip($skip)->take($perPage)->get();
+    // 4. Select ONLY needed lightweight columns (no images, no blobs, no unused text)
+    $products = $query
+        ->select([
+            'id',
+            'product_code',
+            'status',
+            'part_number',
+            'description',
+            'application',
+            'on_hand',
+            'actual_qty',
+            'unit'
+        ])
+        ->orderBy('id', 'asc')
+        ->skip($skip)
+        ->take($perPage)
+        ->get();
+
+    $items = [];
+    foreach ($products as $p) {
+        $actualQty = $p->actual_qty;
+        $onHand = (int) ($p->on_hand ?? 0);
+        $diff = is_null($actualQty) ? 0 : (((int) $actualQty) - $onHand);
+
+        $items[] = [
+            'id' => (int) $p->id,
+            'code' => (string) ($p->product_code ?? ''),
+            'status' => (string) ($p->status ?? 'Old'),
+            'name' => (string) ($p->part_number ?? '---'),
+            'desc' => (string) ($p->description ?? '---'),
+            'app' => (string) ($p->application ?? '---'),
+            'onHand' => $onHand,
+            'computerStock' => $onHand,
+            'actualQty' => is_null($actualQty) ? 0 : (int) $actualQty,
+            'unit' => trim((string) ($p->unit ?? '')),
+            'diff' => $diff,
+        ];
+    }
 
     return response()->json([
         'success' => true,
-        'products' => $products->map(function ($p) {
-            $actualQty = $p->actual_qty;
-            $onHand = $p->on_hand ?? 0;
-            $diff = is_null($actualQty) ? 0 : ($actualQty - $onHand);
-
-            return [
-                'id' => $p->id,
-                'code' => $p->product_code,
-                'status' => $p->status,
-                'name' => $p->part_number ?? '---',
-                'desc' => $p->description ?? '---',
-                'app' => $p->application ?? '---',
-                'onHand' => $onHand,
-                'computerStock' => (int) $onHand,
-                'actualQty' => $actualQty ?? 0,
-                'unit' => trim((string) ($p->unit ?? '')),
-                'diff' => $diff,
-            ];
-        }),
+        'products' => $items,
         'pagination' => [
             'current_page' => $page,
             'last_page' => $lastPage,
@@ -11272,11 +11372,7 @@ Route::get('/admin/inventory/adjustment/data', function (\Illuminate\Http\Reques
             'from' => $totalMatching > 0 ? $skip + 1 : 0,
             'to' => min($skip + $perPage, $totalMatching),
         ],
-        'stats' => [
-            'total' => \App\Models\Product::count(),
-            'new' => \App\Models\Product::where('status', 'New')->count(),
-            'old' => \App\Models\Product::where('status', 'Old')->count(),
-        ]
+        'stats' => $stats,
     ]);
 })->name('admin.inv-adjust.data');
 
