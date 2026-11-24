@@ -1035,3 +1035,193 @@ Artisan::command('ledger:fix-product-48674 {--dry-run : Preview changes without 
     $this->info('SUCCESS! Product ledger adjusted and stock balance recalculated.');
     return 0;
 })->purpose('Fix 2023-2024 OUT transactions (OUM=SET, Qty/4), map SH/LZ invoices to Shopee/Lazada Online Buyers, and recalculate running stock balance for product 48674-26040-N.');
+
+Artisan::command('ledger:fix-product-mr589597 {--dry-run : Preview changes without modifying data} {--product-code=mr-589597 : Target product code} {--product-id= : Target product ID override}', function () {
+    $dryRun = (bool) $this->option('dry-run');
+    $targetProductCode = trim((string) ($this->option('product-code') ?? 'mr-589597'));
+    $forcedProductId = $this->option('product-id') ? (int) $this->option('product-id') : null;
+
+    $this->info('====================================================================');
+    $this->info("  W68 PRODUCT LEDGER ADJUSTMENT: {$targetProductCode} (2023-2024)");
+    $this->info('====================================================================');
+    $this->line('Mode: ' . ($dryRun ? 'DRY-RUN (preview only, no changes written)' : 'LIVE EXECUTION (changes will be saved)'));
+    $this->line("Target Product Code: {$targetProductCode}");
+
+    $productId = $forcedProductId;
+    if (!$productId) {
+        $product = null;
+        try {
+            $clean = strtolower($targetProductCode);
+            $noDash = str_replace('-', '', $clean);
+            $product = DB::connection('masterlist')->table('products')
+                ->where(function ($q) use ($clean, $noDash) {
+                    $q->whereRaw('LOWER(TRIM(product_code)) = ?', [$clean])
+                      ->orWhereRaw('LOWER(TRIM(part_number)) = ?', [$clean])
+                      ->orWhereRaw('LOWER(TRIM(product_code2)) = ?', [$clean])
+                      ->orWhereRaw('LOWER(TRIM(pricelist_code)) = ?', [$clean])
+                      ->orWhereRaw("REPLACE(LOWER(TRIM(product_code)), '-', '') = ?", [$noDash])
+                      ->orWhereRaw("REPLACE(LOWER(TRIM(part_number)), '-', '') = ?", [$noDash]);
+                })
+                ->first();
+        } catch (\Throwable $e) {}
+
+        if (!$product) {
+            try {
+                $product = DB::table('products')
+                    ->where(function ($q) use ($clean) {
+                        $q->whereRaw('LOWER(TRIM(product_code)) = ?', [$clean])
+                          ->orWhereRaw('LOWER(TRIM(part_number)) = ?', [$clean]);
+                    })
+                    ->first();
+            } catch (\Throwable $e) {}
+        }
+
+        if ($product) {
+            $productId = (int) $product->id;
+        }
+    }
+
+    if (!$productId) {
+        $this->error("ERROR: Product '{$targetProductCode}' not found. Please provide --product-id=<ID>.");
+        return 1;
+    }
+
+    $onHandCurrent = $product->on_hand ?? 'N/A';
+    $this->line("Target Product ID: {$productId} (Current On Hand: {$onHandCurrent} - PRESERVED)");
+
+    $prevRow = DB::connection('ledger')->table('product_ledgers')
+        ->where('product_id', $productId)
+        ->where('date', '<', '2023-01-01')
+        ->orderByDesc('date')
+        ->orderByDesc('id')
+        ->first();
+
+    $runningBalance = $prevRow ? (float) $prevRow->balance_stock : 0;
+    $this->line("Baseline balance before 2023: {$runningBalance}");
+
+    $rows = DB::connection('ledger')->table('product_ledgers')
+        ->where('product_id', $productId)
+        ->where('date', '>=', '2023-01-01')
+        ->where('date', '<=', '2024-12-31')
+        ->orderBy('date', 'asc')
+        ->orderBy('id', 'asc')
+        ->get();
+
+    if ($rows->isEmpty()) {
+        $this->warn("No ledger entries found in 2023-2024 for product #{$productId}.");
+        return 0;
+    }
+
+    $matchedCount = 0;
+    $qtyOutAdjustedCount = 0;
+    $oumAdjustedCount = 0;
+    $balanceUpdatedCount = 0;
+    $updates = [];
+
+    foreach ($rows as $row) {
+        $rowId = (int) $row->id;
+        $date = (string) $row->date;
+        $refNum = trim((string) ($row->reference_number ?? ''));
+        $transNum = trim((string) ($row->transaction_number ?? ''));
+        $currentOum = trim((string) ($row->oum ?? ''));
+        $currentQtyIn = (float) ($row->quantity_in ?? 0);
+        $currentQtyOut = (float) ($row->quantity_out ?? 0);
+        $currentBalance = (float) ($row->balance_stock ?? 0);
+        $remarks = (string) ($row->remarks ?? '');
+        $sourceType = strtolower(trim((string) ($row->source_type ?? '')));
+        $transType = strtoupper(trim((string) ($row->transaction_type ?? '')));
+
+        $newQtyOut = $currentQtyOut;
+        $newOum = $currentOum;
+        $newRemarks = $remarks;
+        $isModified = false;
+
+        $isOnlineReport = (stripos($remarks, 'Online Report Generation') !== false)
+            || in_array($sourceType, ['online_report', 'online-report'], true);
+
+        $isChginvc = ($transType === 'CHGINVC')
+            || (stripos($remarks, 'CHGINVC') !== false)
+            || (stripos($transNum, 'CHGINVC') !== false)
+            || (stripos($refNum, 'CHGINVC') !== false);
+
+        $isTargetType = ($isOnlineReport || $isChginvc);
+        $isOut = ($currentQtyOut > 0) || ($transType === 'OUT') || ($transType === 'CHGINVC');
+        $isOumPc = (strtolower($currentOum) === 'pc');
+
+        if ($isTargetType && $isOut) {
+            $matchedCount++;
+            if ($isOumPc) {
+                $newOum = 'SET';
+                $oumAdjustedCount++;
+                if (!str_contains($remarks, '[2=1 SET]')) {
+                    if ($currentQtyOut > 0) {
+                        $calculated = round($currentQtyOut / 2, 4);
+                        $newQtyOut = max(1, (int) round($calculated));
+                        $newRemarks = trim($remarks . " [2=1 SET: qty_out {$currentQtyOut} -> {$newQtyOut}]");
+                        $qtyOutAdjustedCount++;
+                    }
+                }
+                $isModified = true;
+            } elseif (strtolower($currentOum) === 'set' && !str_contains($remarks, '[2=1 SET]')) {
+                if ($currentQtyOut == 2) {
+                    $newQtyOut = 1;
+                    $newRemarks = trim($remarks . " [2=1 SET: qty_out {$currentQtyOut} -> 1]");
+                    $qtyOutAdjustedCount++;
+                    $isModified = true;
+                }
+            }
+        }
+
+        $runningBalance = $runningBalance + $currentQtyIn - $newQtyOut;
+        $newBalanceStock = (int) round($runningBalance);
+
+        if ((int) round($currentBalance) !== $newBalanceStock) {
+            $balanceUpdatedCount++;
+            $isModified = true;
+        }
+
+        $updates[] = [
+            'id' => $rowId,
+            'quantity_out' => $newQtyOut,
+            'oum' => $newOum,
+            'balance_stock' => $newBalanceStock,
+            'remarks' => $newRemarks,
+            'is_modified' => $isModified,
+        ];
+    }
+
+    $this->line('');
+    $this->info("Summary for product #{$productId} (2023-2024):");
+    $this->line("  Matched Online Report / CHGINVC OUT rows: {$matchedCount}");
+    $this->line("  Rows with OUM changed from PC/pc to SET:   {$oumAdjustedCount}");
+    $this->line("  Rows with Quantity OUT adjusted (2 = 1):  {$qtyOutAdjustedCount}");
+    $this->line("  2023-2024 Balance Stock recalculated:     {$balanceUpdatedCount}");
+    $this->line("  2025-2026 rows affected:                  0 (EXPLICITLY UNTOUCHED)");
+    $this->line("  Latest balance on_hand:                   {$onHandCurrent} (EXPLICITLY PRESERVED)");
+
+    if ($dryRun) {
+        $this->warn("\n[DRY RUN] No records were modified. Run without --dry-run to commit changes.");
+        return 0;
+    }
+
+    DB::connection('ledger')->transaction(function () use ($updates) {
+        $now = now();
+        $count = 0;
+        foreach ($updates as $u) {
+            if (!$u['is_modified']) continue;
+            DB::connection('ledger')->table('product_ledgers')->where('id', $u['id'])->update([
+                'quantity_out' => $u['quantity_out'],
+                'oum' => $u['oum'],
+                'balance_stock' => $u['balance_stock'],
+                'remarks' => $u['remarks'],
+                'updated_at' => $now,
+            ]);
+            $count++;
+        }
+        echo "Updated {$count} rows in 2023-2024.\n";
+    });
+
+    $this->info('SUCCESS! 2023-2024 ledger adjustments completed. 2025-2026 rows and on_hand were NOT touched.');
+    return 0;
+})->purpose('Adjust 2023-2024 Online Report & CHGINVC OUT transactions (OUM PC->SET, 2=1) for product mr-589597 and recalculate 2023-2024 balance only.');
+
