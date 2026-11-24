@@ -4,41 +4,53 @@
     The overlay is hidden from print output and exposes window.W68Loader.show()/hide().
 --}}
 <div id="w68-global-loader" class="w68-global-loader" aria-hidden="true">
-    <div class="w68-loader-stage" role="status" aria-label="Loading">
-        <svg id="w68-loader-svg" class="w68-loader-svg" viewBox="0 0 750 260" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <defs>
-                <linearGradient id="w68-maroon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#a31c3f" />
-                    <stop offset="40%" stop-color="#800020" />
-                    <stop offset="100%" stop-color="#4a0011" />
-                </linearGradient>
-                <linearGradient id="w68-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#FFF5C0" />
-                    <stop offset="30%" stop-color="#FFD700" />
-                    <stop offset="70%" stop-color="#D4AF37" />
-                    <stop offset="100%" stop-color="#996515" />
-                </linearGradient>
-            </defs>
+    <div class="w68-loader-inner">
+        <div class="w68-loader-stage" role="status" aria-label="Loading">
+            <svg id="w68-loader-svg" class="w68-loader-svg" viewBox="0 0 750 260" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="w68-maroon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#a31c3f" />
+                        <stop offset="40%" stop-color="#800020" />
+                        <stop offset="100%" stop-color="#4a0011" />
+                    </linearGradient>
+                    <linearGradient id="w68-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#FFF5C0" />
+                        <stop offset="30%" stop-color="#FFD700" />
+                        <stop offset="70%" stop-color="#D4AF37" />
+                        <stop offset="100%" stop-color="#996515" />
+                    </linearGradient>
+                </defs>
 
-            <g opacity="0.10" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M 45 95 C 45 60, 65 55, 75 80 L 105 175 C 115 200, 130 200, 140 170 L 165 105 C 175 80, 185 80, 195 105 L 215 170 C 225 200, 240 200, 250 175 L 275 90 C 282 68, 298 75, 285 100 C 275 120, 290 120, 305 100" stroke="#800020" stroke-width="16" fill="none" />
-                <path d="M 430 70 C 390 70, 355 105, 345 150 C 338 185, 350 215, 385 218 C 420 220, 445 195, 445 165 C 445 135, 415 125, 380 132 C 352 138, 345 158, 345 165" stroke="#d4af37" stroke-width="16" fill="none" />
-                <path d="M 585 135 C 550 120, 530 98, 530 78 C 530 52, 555 42, 580 42 C 610 42, 630 58, 630 80 C 630 102, 605 122, 570 135 C 525 150, 505 172, 505 198 C 505 225, 535 238, 575 238 C 620 238, 645 220, 645 192 C 645 160, 610 142, 570 135" stroke="#d4af37" stroke-width="16" fill="none" />
-            </g>
+                <g opacity="0.10" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M 45 95 C 45 60, 65 55, 75 80 L 105 175 C 115 200, 130 200, 140 170 L 165 105 C 175 80, 185 80, 195 105 L 215 170 C 225 200, 240 200, 250 175 L 275 90 C 282 68, 298 75, 285 100 C 275 120, 290 120, 305 100" stroke="#800020" stroke-width="16" fill="none" />
+                    <path d="M 430 70 C 390 70, 355 105, 345 150 C 338 185, 350 215, 385 218 C 420 220, 445 195, 445 165 C 445 135, 415 125, 380 132 C 352 138, 345 158, 345 165" stroke="#d4af37" stroke-width="16" fill="none" />
+                    <path d="M 585 135 C 550 120, 530 98, 530 78 C 530 52, 555 42, 580 42 C 610 42, 630 58, 630 80 C 630 102, 605 122, 570 135 C 525 150, 505 172, 505 198 C 505 225, 535 238, 575 238 C 620 238, 645 220, 645 192 C 645 160, 610 142, 570 135" stroke="#d4af37" stroke-width="16" fill="none" />
+                </g>
 
-            <g stroke-linecap="round" stroke-linejoin="round">
-                <path id="w68-path-w" class="w68-maroon-glow" d="M 45 95 C 45 60, 65 55, 75 80 L 105 175 C 115 200, 130 200, 140 170 L 165 105 C 175 80, 185 80, 195 105 L 215 170 C 225 200, 240 200, 250 175 L 275 90 C 282 68, 298 75, 285 100 C 275 120, 290 120, 305 100" stroke="url(#w68-maroon-grad)" stroke-width="16" fill="none" />
-                <path id="w68-path-6" class="w68-gold-glow" d="M 430 70 C 390 70, 355 105, 345 150 C 338 185, 350 215, 385 218 C 420 220, 445 195, 445 165 C 445 135, 415 125, 380 132 C 352 138, 345 158, 345 165" stroke="url(#w68-gold-grad)" stroke-width="16" fill="none" />
-                <path id="w68-path-8" class="w68-gold-glow" d="M 585 135 C 550 120, 530 98, 530 78 C 530 52, 555 42, 580 42 C 610 42, 630 58, 630 80 C 630 102, 605 122, 570 135 C 525 150, 505 172, 505 198 C 505 225, 535 238, 575 238 C 620 238, 645 220, 645 192 C 645 160, 610 142, 570 135" stroke="url(#w68-gold-grad)" stroke-width="16" fill="none" />
-            </g>
+                <g stroke-linecap="round" stroke-linejoin="round">
+                    <path id="w68-path-w" class="w68-maroon-glow" d="M 45 95 C 45 60, 65 55, 75 80 L 105 175 C 115 200, 130 200, 140 170 L 165 105 C 175 80, 185 80, 195 105 L 215 170 C 225 200, 240 200, 250 175 L 275 90 C 282 68, 298 75, 285 100 C 275 120, 290 120, 305 100" stroke="url(#w68-maroon-grad)" stroke-width="16" fill="none" />
+                    <path id="w68-path-6" class="w68-gold-glow" d="M 430 70 C 390 70, 355 105, 345 150 C 338 185, 350 215, 385 218 C 420 220, 445 195, 445 165 C 445 135, 415 125, 380 132 C 352 138, 345 158, 345 165" stroke="url(#w68-gold-grad)" stroke-width="16" fill="none" />
+                    <path id="w68-path-8" class="w68-gold-glow" d="M 585 135 C 550 120, 530 98, 530 78 C 530 52, 555 42, 580 42 C 610 42, 630 58, 630 80 C 630 102, 605 122, 570 135 C 525 150, 505 172, 505 198 C 505 225, 535 238, 575 238 C 620 238, 645 220, 645 192 C 645 160, 610 142, 570 135" stroke="url(#w68-gold-grad)" stroke-width="16" fill="none" />
+                </g>
 
-            <g id="w68-pen-tip" opacity="0">
-                <circle id="w68-pen-aura" cx="0" cy="0" r="14" fill="#FFD700" opacity="0.35" />
-                <circle id="w68-pen-dot" cx="0" cy="0" r="6" fill="#FFFFFF" stroke="#FFD700" stroke-width="2.5" />
-                <circle id="w68-sparkle-1" cx="0" cy="0" r="2.5" fill="#FFF2B2" />
-                <circle id="w68-sparkle-2" cx="0" cy="0" r="2" fill="#D4AF37" />
-            </g>
-        </svg>
+                <g id="w68-pen-tip" opacity="0">
+                    <circle id="w68-pen-aura" cx="0" cy="0" r="14" fill="#FFD700" opacity="0.35" />
+                    <circle id="w68-pen-dot" cx="0" cy="0" r="6" fill="#FFFFFF" stroke="#FFD700" stroke-width="2.5" />
+                    <circle id="w68-sparkle-1" cx="0" cy="0" r="2.5" fill="#FFF2B2" />
+                    <circle id="w68-sparkle-2" cx="0" cy="0" r="2" fill="#D4AF37" />
+                </g>
+            </svg>
+        </div>
+
+        <div id="w68-loader-progress-box" class="w68-loader-progress-box" style="display: none;">
+            <div class="w68-loader-progress-labels">
+                <span id="w68-loader-progress-title" class="w68-loader-progress-title">Preparing Report...</span>
+                <span id="w68-loader-progress-percent" class="w68-loader-progress-percent">0%</span>
+            </div>
+            <div class="w68-loader-progress-track">
+                <div id="w68-loader-progress-bar" class="w68-loader-progress-bar" style="width: 0%;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -48,6 +60,7 @@
         inset: 0;
         z-index: 2147483647;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 24px;
@@ -57,7 +70,7 @@
         -webkit-backdrop-filter: none;
         opacity: 1;
         visibility: visible;
-        transition: opacity 180ms ease, visibility 180ms ease;
+        transition: opacity 180ms ease, visibility 180ms ease, background 200ms ease;
         pointer-events: all;
         user-select: none;
     }
@@ -66,6 +79,22 @@
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
+    }
+
+    .w68-global-loader.w68-with-progress {
+        background: rgba(15, 23, 42, 0.78) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+    }
+
+    .w68-loader-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 680px;
     }
 
     .w68-loader-stage {
@@ -80,6 +109,74 @@
         width: 100%;
         height: 100%;
         overflow: visible;
+    }
+
+    .w68-loader-progress-box {
+        width: min(480px, 86vw);
+        padding: 14px 20px;
+        background: rgba(30, 41, 59, 0.85);
+        border: 1.5px solid rgba(212, 175, 55, 0.45);
+        border-radius: 16px;
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(128, 0, 32, 0.35);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .w68-loader-progress-labels {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    .w68-loader-progress-title {
+        color: #f8fafc;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+
+    .w68-loader-progress-percent {
+        color: #FFD700;
+        font-size: 15px;
+        font-weight: 900;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.55);
+    }
+
+    .w68-loader-progress-track {
+        width: 100%;
+        height: 10px;
+        background: rgba(15, 23, 42, 0.7);
+        border-radius: 9999px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+
+    .w68-loader-progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #800020 0%, #a31c3f 30%, #D4AF37 70%, #FFD700 100%);
+        transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 0 14px rgba(255, 215, 0, 0.65);
+        position: relative;
+    }
+
+    .w68-loader-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; bottom: 0; right: 0;
+        background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+        animation: w68ProgressShimmer 1.5s infinite;
+    }
+
+    @keyframes w68ProgressShimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
     }
 
     .w68-maroon-glow {
@@ -133,6 +230,10 @@
     const penAura = document.getElementById('w68-pen-aura');
     const sparkle1 = document.getElementById('w68-sparkle-1');
     const sparkle2 = document.getElementById('w68-sparkle-2');
+    const progressBox = document.getElementById('w68-loader-progress-box');
+    const progressBar = document.getElementById('w68-loader-progress-bar');
+    const progressPercent = document.getElementById('w68-loader-progress-percent');
+    const progressTitle = document.getElementById('w68-loader-progress-title');
 
     if (!loader || paths.length !== 3) return;
 
@@ -255,6 +356,8 @@
         } else {
             loader.classList.add('w68-loader-hidden');
             loader.setAttribute('aria-hidden', 'true');
+            loader.classList.remove('w68-with-progress');
+            if (progressBox) progressBox.style.display = 'none';
             stopAnimation();
         }
     }
@@ -269,8 +372,36 @@
         renderVisibility();
     }
 
+    function setProgress(percent, title) {
+        const clamped = Math.min(100, Math.max(0, Math.round(Number(percent) || 0)));
+        if (progressBar) progressBar.style.width = clamped + '%';
+        if (progressPercent) progressPercent.textContent = clamped + '%';
+        if (title && progressTitle) progressTitle.textContent = String(title);
+    }
+
+    function showProgress(percent, title) {
+        visibleReasons.add('progress');
+        loader.classList.add('w68-with-progress');
+        if (progressBox) progressBox.style.display = 'flex';
+        setProgress(percent !== undefined ? percent : 0, title);
+        renderVisibility();
+    }
+
+    function hideProgress() {
+        visibleReasons.delete('progress');
+        if (!visibleReasons.has('progress')) {
+            loader.classList.remove('w68-with-progress');
+            if (progressBox) progressBox.style.display = 'none';
+            setProgress(0, '');
+        }
+        renderVisibility();
+    }
+
     function forceHide() {
         visibleReasons.clear();
+        loader.classList.remove('w68-with-progress');
+        if (progressBox) progressBox.style.display = 'none';
+        setProgress(0, '');
         renderVisibility();
     }
 
@@ -308,6 +439,9 @@
         show: show,
         hide: hide,
         forceHide: forceHide,
+        showProgress: showProgress,
+        setProgress: setProgress,
+        hideProgress: hideProgress,
         isVisible: function () {
             return visibleReasons.size > 0;
         },
@@ -426,6 +560,8 @@
     // Never allow the overlay into browser print/print-preview.
     window.addEventListener('beforeprint', function () {
         loader.classList.add('w68-loader-hidden');
+        loader.classList.remove('w68-with-progress');
+        if (progressBox) progressBox.style.display = 'none';
         loader.setAttribute('aria-hidden', 'true');
         stopAnimation();
     });

@@ -642,6 +642,14 @@
                 return html;
             }
 
+            function crRestorePrintBtn() {
+                var pBtn = document.getElementById('cr-print-btn');
+                if (pBtn) {
+                    pBtn.disabled = false;
+                    pBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                }
+            }
+
             function crDoPrint(items) {
                 var printHtml = items ? crRenderPrintHtml(items) : document.getElementById('cr-print-container').innerHTML;
                 var genLabel = (document.getElementById('cr-print-generated-label') || {}).textContent || '';
@@ -651,9 +659,12 @@
                 }
                 var win = window.open('', '_blank');
                 if (!win) {
+                    if (window.W68Loader) window.W68Loader.hideProgress();
+                    crRestorePrintBtn();
                     alert('Pop-up blocked! Please allow pop-ups for this site and try again.');
                     return;
                 }
+                if (window.W68Loader) window.W68Loader.setProgress(96, 'Writing print layout...');
                 win.document.write('<!DOCTYPE html><html><head><style>' +
                     'body { font-family: "Courier New", monospace; margin: 0; padding: 0; }' +
                     'table { width: 100%; border-collapse: collapse; table-layout: fixed; }' +
@@ -672,10 +683,31 @@
                     '</body></html>');
                 win.document.close();
                 win.focus();
-                setTimeout(function() { win.print(); }, 250);
+
+                if (window.W68Loader) window.W68Loader.setProgress(100, 'Opening print dialog...');
+
+                setTimeout(function() {
+                    if (window.W68Loader) window.W68Loader.hideProgress();
+                    crRestorePrintBtn();
+                    try {
+                        win.print();
+                    } catch (e) {
+                        console.error('Print trigger error:', e);
+                    }
+                }, 350);
             }
 
             function crPrintAll() {
+                var printBtn = document.getElementById('cr-print-btn');
+                if (printBtn) {
+                    printBtn.disabled = true;
+                    printBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                }
+
+                if (window.W68Loader) {
+                    window.W68Loader.showProgress(10, 'Initializing C.S.I Report print...');
+                }
+
                 var tbody = document.getElementById('cr-report-tbody');
 
                 // If Generate already loaded every row for the current filters (for example,
@@ -687,7 +719,12 @@
                     && crTotalItems === crData.length
                     && crTotalItems > 0
                 ) {
-                    crDoPrint(crData);
+                    if (window.W68Loader) {
+                        window.W68Loader.setProgress(50, 'Compiling report tables (' + crData.length + ' items)...');
+                    }
+                    setTimeout(function () {
+                        crDoPrint(crData);
+                    }, 80);
                     return;
                 }
 
@@ -711,20 +748,67 @@
                 var pricelistCode = document.getElementById('cr-pricelist-code')?.value || '';
                 if (pricelistCode) params.set('pricelist_code', pricelistCode);
 
+                var curProgress = 15;
+                var progressStages = [
+                    { at: 22, text: 'Querying product records...' },
+                    { at: 38, text: 'Calculating latest supplier costs...' },
+                    { at: 56, text: 'Aggregating 3-year sales history...' },
+                    { at: 72, text: 'Compiling stock on hand & unit measures...' },
+                    { at: 85, text: 'Finalizing C.S.I report records...' }
+                ];
+                var progressInterval = setInterval(function () {
+                    if (curProgress < 85) {
+                        curProgress += Math.max(1, Math.floor((86 - curProgress) * 0.12));
+                        var label = 'Preparing C.S.I Report data (' + curProgress + '%)...';
+                        for (var i = 0; i < progressStages.length; i++) {
+                            if (curProgress >= progressStages[i].at) {
+                                label = progressStages[i].text;
+                            }
+                        }
+                        if (window.W68Loader) {
+                            window.W68Loader.setProgress(curProgress, label);
+                        }
+                    }
+                }, 220);
+
                 fetch('{{ route("admin.cost-report.data") }}?' + params.toString())
-                    .then(function (r) { return r.text().then(function (t) { return JSON.parse(t); }); })
+                    .then(function (r) {
+                        return r.text().then(function (t) {
+                            try {
+                                return JSON.parse(t);
+                            } catch (e) {
+                                throw new Error('Invalid JSON response: ' + t.substring(0, 100));
+                            }
+                        });
+                    })
                     .then(function (res) {
+                        clearInterval(progressInterval);
                         if (!res.success || !res.items) {
+                            if (window.W68Loader) window.W68Loader.hideProgress();
+                            crRestorePrintBtn();
                             tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">' + (res.error || 'Failed to load.') + '</td></tr>';
                             return;
+                        }
+                        if (window.W68Loader) {
+                            window.W68Loader.setProgress(90, 'Rendering ' + res.items.length + ' report items...');
                         }
                         crRenderTable(res.items);
                         var info = document.getElementById('cr-report-info');
                         if (res.stats) info.textContent = 'Items: ' + (res.stats.total_items || 0);
-                        crDoPrint(res.items);
+
+                        if (window.W68Loader) {
+                            window.W68Loader.setProgress(95, 'Preparing printable layout...');
+                        }
+                        setTimeout(function () {
+                            crDoPrint(res.items);
+                        }, 50);
                     })
-                    .catch(function () {
-                        tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">Error loading data.</td></tr>';
+                    .catch(function (err) {
+                        clearInterval(progressInterval);
+                        if (window.W68Loader) window.W68Loader.hideProgress();
+                        crRestorePrintBtn();
+                        console.error('Cost report print error:', err);
+                        tbody.innerHTML = '<tr><td colspan="11" class="py-10 text-center text-slate-400 text-sm">Error loading data for print.</td></tr>';
                     });
             }
 
