@@ -900,6 +900,7 @@ if (!function_exists('hatdogRegularProxyToAdminRoute')) {
             'admin.sales-report.print-soa',
             'admin.sales-report.print-data',
             'admin.inv-adjust.data',
+            'admin.prod-master.data',
         ];
         if (in_array($adminRouteName, $directProxyRoutes, true)) {
             @ini_set('memory_limit', '1024M');
@@ -7618,14 +7619,14 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
     }
 
     foreach ($searchMap as $jsCol => $dbCol) {
-        if (!empty($search[$jsCol])) {
-            $term = $escapeLike($search[$jsCol]);
+        if (isset($search[$jsCol]) && trim((string) $search[$jsCol]) !== '') {
+            $term = $escapeLike(trim((string) $search[$jsCol]));
             if ($jsCol === 'onHand') {
                 $query->whereRaw('CAST(on_hand AS CHAR) like ?', ['%' . $term . '%']);
             } elseif ($jsCol === 'restockLevel') {
                 $query->whereRaw('CAST(Re_order_level AS CHAR) like ?', ['%' . $term . '%']);
             } elseif ($jsCol === 'priceOnline') {
-                $query->whereRaw('price_online LIKE ?', ['%' . $term . '%']);
+                $query->whereRaw('CAST(price_online AS CHAR) LIKE ?', ['%' . $term . '%']);
             } else {
                 $query->where($dbCol, 'like', '%' . $term . '%');
             }

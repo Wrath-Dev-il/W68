@@ -22,6 +22,11 @@ let ledgerSearchFilters = {};
 let currentSortColumn = null;
 let currentSortDirection = 'asc';
 
+// AbortController and sequence counter for fetchProducts — cancels stale
+// in-flight requests so only the latest search response is rendered.
+let fetchProductsController = null;
+let fetchProductsRequestId = 0;
+
 // Image Carousel State
 window.pendingProductImages = []; // Array of base64 strings
 window.coverImageIndex = 0; // Index of the cover image
@@ -115,7 +120,7 @@ function setupEventListeners() {
     const debouncedFilter = debounce(() => fetchProducts(1), 300);
     
     document.querySelectorAll(".column-search-input").forEach(input => {
-        input.addEventListener("input", (e) => {
+        const handleColumnSearchChange = (e) => {
             const col =
                 e.target.getAttribute("data-col") ||
                 e.target.getAttribute("data-search-key") ||
@@ -124,9 +129,19 @@ function setupEventListeners() {
 
             if (!col) return;
 
-            filters.search[col] = e.target.value.toLowerCase().trim();
+            const nextVal = e.target.value.toLowerCase().trim();
+            if ((filters.search[col] || '') === nextVal) return;
+
+            if (nextVal) {
+                filters.search[col] = nextVal;
+            } else {
+                delete filters.search[col];
+            }
             debouncedFilter();
-        });
+        };
+
+        input.addEventListener("input", handleColumnSearchChange);
+        input.addEventListener("change", handleColumnSearchChange);
 
         // Keyboard friendly: navigate left/right arrow key across main table search inputs
         input.addEventListener("keydown", function(e) {
@@ -213,11 +228,21 @@ function setupEventListeners() {
 }
 
 async function fetchProducts(page = 1) {
+    // Cancel any previous in-flight request so a stale (slower) response can
+    // never overwrite the results of the latest search.
+    if (fetchProductsController) {
+        try { fetchProductsController.abort(); } catch (e) {}
+    }
+    fetchProductsController = new AbortController();
+    const currentController = fetchProductsController;
+    const requestId = ++fetchProductsRequestId;
+    const emptyColspan = window.productMasterWarehouseReadOnly ? 14 : 15;
+
     const tbody = document.getElementById("product-tbody");
     if (tbody) {
         tbody.innerHTML = `
             <tr>
-<td colspan="14" class="py-12 text-center text-slate-400 italic">
+                <td colspan="${emptyColspan}" class="py-12 text-center text-slate-400 italic">
                     <div class="flex items-center justify-center space-x-2">
                         <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
                         <span>Fetching products...</span>
@@ -225,7 +250,66 @@ async function fetchProducts(page = 1) {
                 </td>
             </tr>
         `;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    try {
+        const params = new URLSearchParams({
+            page: page,
+            perPage: 50,
+            tab: currentTab
+        });
+
+        // Add search filters
+        Object.entries(filters.search).forEach(([col, val]) => {
+            if (val) params.append(`search[${col}]`, val);
+        });
+        window.getSelectedPricelistFields().forEach((field) => {
+            params.append('pricelist_code_fields[]', field);
+        });
+
+        // Add sort params
+        if (currentSortColumn) {
+            params.append('sort_by', currentSortColumn);
+            params.append('sort_direction', currentSortDirection);
+        }
+
+        const response = await fetch(`${window.prodRoutes.fetch}?${params.toString()}`, {
+            signal: currentController.signal
+        });
+        if (currentController.signal.aborted || requestId !== fetchProductsRequestId) {
+            return;
+        }
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+        const result = await response.json();
+        if (currentController.signal.aborted || requestId !== fetchProductsRequestId) {
+            return;
+        }
+
+        if (result.pagination) {
+            products = result.pagination.data;
+            renderProductTable();
+            renderPagination(result.pagination);
+            updateSortIndicators();
+
+            // Update stats cards if present
+            if (result.stats) {
+                if (document.getElementById('card-count-total')) document.getElementById('card-count-total').innerText = result.stats.total;
+                if (document.getElementById('card-count-newly')) document.getElementById('card-count-newly').innerText = result.stats.newly;
+                if (document.getElementById('card-count-low')) document.getElementById('card-count-low').innerText = result.stats.low;
+            }
+        }
+    } catch (error) {
+        if (error?.name === 'AbortError' || currentController.signal.aborted || requestId !== fetchProductsRequestId) {
+            return;
+        }
+        console.error('Error fetching products:', error);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="${emptyColspan}" class="py-12 text-center text-red-400 italic">Error loading products. Please try again.</td></tr>`;
+        }
+    }
 }
 
 // W68_PRODUCT_MASTER_ENTER_PRIMARY_ACTIONS_20260928
@@ -585,53 +669,6 @@ if (!window.__productMasterKeyboardNavBound) {
     });
 }
 
-    try {
-        const params = new URLSearchParams({
-            page: page,
-            perPage: 50,
-            tab: currentTab
-        });
-
-        // Add search filters
-        Object.entries(filters.search).forEach(([col, val]) => {
-            if (val) params.append(`search[${col}]`, val);
-        });
-        window.getSelectedPricelistFields().forEach((field) => {
-            params.append('pricelist_code_fields[]', field);
-        });
-
-        // Add sort params
-        if (currentSortColumn) {
-            params.append('sort_by', currentSortColumn);
-            params.append('sort_direction', currentSortDirection);
-        }
-
-        const response = await fetch(`${window.prodRoutes.fetch}?${params.toString()}`);
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}`);
-        }
-        const result = await response.json();
-        
-        if (result.pagination) {
-            products = result.pagination.data;
-            renderProductTable();
-            renderPagination(result.pagination);
-            updateSortIndicators();
-            
-            // Update stats cards if present
-            if (result.stats) {
-                if (document.getElementById('card-count-total')) document.getElementById('card-count-total').innerText = result.stats.total;
-                if (document.getElementById('card-count-newly')) document.getElementById('card-count-newly').innerText = result.stats.newly;
-                if (document.getElementById('card-count-low')) document.getElementById('card-count-low').innerText = result.stats.low;
-            }
-        }
-    } catch (error) {
-        console.error('Error fetching products:', error);
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="14" class="py-12 text-center text-red-400 italic">Error loading products. Please try again.</td></tr>`;
-        }
-    }
-}
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({
         '&': '&amp;',
@@ -2861,6 +2898,19 @@ window.applySpecificSearch = function() {
     if (pricelistCode) filters.search.pricelistCode = pricelistCode;
     if (category) filters.search.category = category;
     if (date) filters.search.dateAdded = date;
+
+    // Keep table column search inputs visually in sync with active filters
+    document.querySelectorAll('#page-prod-master-root .column-search-input').forEach((input) => {
+        const col =
+            input.getAttribute('data-col') ||
+            input.getAttribute('data-search-key') ||
+            input.getAttribute('data-field') ||
+            input.getAttribute('data-column');
+        if (col === 'productCode') input.value = code;
+        else if (col === 'partNumber') input.value = part;
+        else if (col === 'category') input.value = category;
+        else input.value = '';
+    });
 
     const selectAll = document.getElementById('select-all-checkbox');
     if (selectAll) selectAll.checked = false;
