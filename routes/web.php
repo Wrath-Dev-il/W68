@@ -496,11 +496,7 @@ if (!function_exists('hatdogWriteAuditTrail')) {
 if (!function_exists('hatdogAuditTrailPurgeTarget')) {
     function hatdogAuditTrailPurgeTarget(?\Carbon\Carbon $reference = null): \Carbon\Carbon
     {
-        $reference = $reference
-            ? $reference->copy()->timezone('Asia/Manila')
-            : \Carbon\Carbon::now('Asia/Manila');
-
-        return $reference->copy()->endOfMonth()->setTime(22, 0, 0);
+        return \App\Support\AuditTrailPurge::targetFor($reference);
     }
 }
 
@@ -706,67 +702,7 @@ if (!function_exists('hatdogBuildAdminDashboardTableData')) {
 if (!function_exists('hatdogPurgeAuditTrailIfDue')) {
     function hatdogPurgeAuditTrailIfDue(): array
     {
-        $nowManila = \Carbon\Carbon::now('Asia/Manila');
-        $targetAt = hatdogAuditTrailPurgeTarget($nowManila);
-        $nextTargetAt = hatdogAuditTrailPurgeTarget($nowManila->copy()->addMonthNoOverflow()->startOfMonth());
-        $cacheKey = 'audit_trail:auto_delete:' . $targetAt->format('Y-m-d-His') . '-asia-manila';
-
-        if ($nowManila->lt($targetAt)) {
-            return [
-                'due_at' => $targetAt->toIso8601String(),
-                'purged' => false,
-                'already_purged' => false,
-                'deleted_count' => 0,
-            ];
-        }
-
-        if (!\Illuminate\Support\Facades\Schema::connection('ledger')->hasTable('audit_trails')) {
-            return [
-                'due_at' => $targetAt->toIso8601String(),
-                'purged' => false,
-                'already_purged' => false,
-                'deleted_count' => 0,
-            ];
-        }
-
-        try {
-            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
-                $cachedValue = \Illuminate\Support\Facades\Cache::get($cacheKey);
-                return [
-                    'due_at' => $nextTargetAt->toIso8601String(),
-                    'purged' => false,
-                    'already_purged' => true,
-                    'deleted_count' => (int) (($cachedValue['deleted_count'] ?? 0)),
-                ];
-            }
-        } catch (\Throwable $e) {
-            // Continue even if cache is unavailable.
-        }
-
-        $deletedCount = (int) \Illuminate\Support\Facades\DB::connection('ledger')
-            ->table('audit_trails')
-            ->delete();
-
-        try {
-            \Illuminate\Support\Facades\Cache::put($cacheKey, [
-                'deleted_count' => $deletedCount,
-                'purged_at' => now()->toDateTimeString(),
-            ], now()->addDays(7));
-        } catch (\Throwable $e) {
-            // The delete already happened, so cache failures can be ignored here.
-        }
-
-        \Illuminate\Support\Facades\Log::info('Audit trail auto-delete executed.', [
-            'target_at' => $targetAt->toDateTimeString(),
-            'deleted_count' => $deletedCount,
-        ]);
-
-        return [
-            'due_at' => $nextTargetAt->toIso8601String(),
-            'purged' => true,
-            'already_purged' => false,
-            'deleted_count' => $deletedCount,
-        ];
+        return \App\Support\AuditTrailPurge::purgeIfDue();
     }
 }
 

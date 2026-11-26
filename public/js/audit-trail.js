@@ -46,8 +46,15 @@
 
     let purgeCountdownTimer = null;
     let purgeRefreshTimer = null;
+    let serverClockOffsetMs = 0;
+    let purgeStatusHoldUntilMs = 0;
     const MAX_TIMEOUT_MS = 2147483647;
     const PURGE_REFRESH_STEP_MS = 60 * 60 * 1000;
+    const PURGE_RETRY_DELAY_MS = 2000;
+
+    function nowServerAlignedMs() {
+        return Date.now() + serverClockOffsetMs;
+    }
  
      function safeStr(v) {
          if (v === null || v === undefined) return '';
@@ -185,14 +192,18 @@
             return;
         }
 
-        const remainingMs = purgeAt.getTime() - Date.now();
+        const remainingMs = purgeAt.getTime() - nowServerAlignedMs();
         if (remainingMs <= 0) {
-            setPurgeStatusText('Deletion time reached. Waiting for purge confirmation...');
+            if (Date.now() >= purgeStatusHoldUntilMs) {
+                setPurgeStatusText('Deletion time reached. Waiting for purge confirmation...');
+            }
             setPurgeCountdownText('00:00:00');
             return;
         }
 
-        setPurgeStatusText('Audit Trail will auto delete all logs every end of month at 10:00 PM Manila time.');
+        if (Date.now() >= purgeStatusHoldUntilMs) {
+            setPurgeStatusText('Audit Trail will auto delete all logs every end of month at 10:00 PM Manila time.');
+        }
         setPurgeCountdownText(formatRemaining(remainingMs));
     }
 
@@ -204,17 +215,24 @@
 
     function applyAutoPurgeState(autoPurge) {
         if (!autoPurge || typeof autoPurge !== 'object') return;
-        if (autoPurge.due_at) {
-            syncPurgeTarget(autoPurge.due_at);
+
+        if (autoPurge.server_now) {
+            const parsedServerNow = Date.parse(autoPurge.server_now);
+            if (!Number.isNaN(parsedServerNow)) {
+                serverClockOffsetMs = parsedServerNow - Date.now();
+            }
         }
 
         if (autoPurge.purged) {
+            purgeStatusHoldUntilMs = Date.now() + 8000;
             setPurgeStatusText(`Month-end auto delete completed. Deleted ${safeStr(autoPurge.deleted_count || 0)} audit logs. Countdown reset for next month.`);
-            return;
+        } else if (autoPurge.already_purged) {
+            purgeStatusHoldUntilMs = Date.now() + 8000;
+            setPurgeStatusText('This month already finished its auto delete. Countdown now points to next month end at 10:00 PM Manila time.');
         }
 
-        if (autoPurge.already_purged) {
-            setPurgeStatusText('This month already finished its auto delete. Countdown now points to next month end at 10:00 PM Manila time.');
+        if (autoPurge.due_at) {
+            syncPurgeTarget(autoPurge.due_at);
             return;
         }
 
@@ -231,24 +249,25 @@
         const purgeAt = new Date(purgeAtRaw);
         if (Number.isNaN(purgeAt.getTime())) return;
 
-        const delayMs = purgeAt.getTime() - Date.now();
-        if (delayMs <= 0) {
-            state.page = 1;
-            loadData();
-            return;
-        }
+        const delayMs = purgeAt.getTime() - nowServerAlignedMs();
+        const waitMs = delayMs <= 0
+            ? PURGE_RETRY_DELAY_MS
+            : Math.min(delayMs + 500, PURGE_REFRESH_STEP_MS, MAX_TIMEOUT_MS);
 
-        const safeStepMs = Math.min(delayMs + 500, PURGE_REFRESH_STEP_MS, MAX_TIMEOUT_MS);
         purgeRefreshTimer = window.setTimeout(() => {
-            const remainingMs = purgeAt.getTime() - Date.now();
+            const remainingMs = purgeAt.getTime() - nowServerAlignedMs();
             if (remainingMs <= 0) {
-                state.page = 1;
-                loadData();
+                if (!state.isLoading) {
+                    state.page = 1;
+                    loadData();
+                } else {
+                    scheduleAutoPurgeRefresh();
+                }
                 return;
             }
 
             scheduleAutoPurgeRefresh();
-        }, safeStepMs);
+        }, waitMs);
     }
 
     function syncPurgeTarget(raw) {

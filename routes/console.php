@@ -724,6 +724,25 @@ Schedule::command('archive:purge-expired')
     ->timezone('Asia/Manila')
     ->withoutOverlapping(15);
 
+/* W68_AUDIT_TRAIL_AUTO_PURGE_20261126 */
+Artisan::command('audit-trail:purge-due', function () {
+    $result = \App\Support\AuditTrailPurge::purgeIfDue();
+
+    $this->info(
+        'Audit trail purge check complete. Purged: '
+        . (!empty($result['purged']) ? 'yes' : 'no')
+        . ', Deleted: ' . (int) ($result['deleted_count'] ?? 0)
+        . ', Next due: ' . ($result['due_at'] ?? 'n/a')
+    );
+
+    return 0;
+})->purpose('Delete expired Audit Trail rows up to month-end 10:00 PM Manila time (catching up missed prior months).');
+
+Schedule::command('audit-trail:purge-due')
+    ->everyTenMinutes()
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping(10);
+
 Schedule::command('data-ups:run')
     ->dailyAt('18:00')
     ->timezone('Asia/Manila')
