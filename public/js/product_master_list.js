@@ -105,47 +105,68 @@ window.addEventListener("DOMContentLoaded", () => {
 
 function debounce(func, wait) {
     let timeout;
-    return function executedFunction(...args) {
+    function executedFunction(...args) {
         const later = () => {
-            clearTimeout(timeout);
+            timeout = null;
             func(...args);
         };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
+    }
+    executedFunction.cancel = () => {
+        if (timeout) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
     };
+    return executedFunction;
 }
 
 function setupEventListeners() {
     // Column Searches with Debounce
     const debouncedFilter = debounce(() => fetchProducts(1), 300);
-    
+
+    const syncColumnSearchInput = (inputEl) => {
+        const col =
+            inputEl.getAttribute("data-col") ||
+            inputEl.getAttribute("data-search-key") ||
+            inputEl.getAttribute("data-field") ||
+            inputEl.getAttribute("data-column");
+
+        if (!col) return false;
+
+        const nextVal = inputEl.value.toLowerCase().trim();
+        if ((filters.search[col] || '') === nextVal) return false;
+
+        if (nextVal) {
+            filters.search[col] = nextVal;
+        } else {
+            delete filters.search[col];
+        }
+        return true;
+    };
+
     document.querySelectorAll(".column-search-input").forEach(input => {
         const handleColumnSearchChange = (e) => {
-            const col =
-                e.target.getAttribute("data-col") ||
-                e.target.getAttribute("data-search-key") ||
-                e.target.getAttribute("data-field") ||
-                e.target.getAttribute("data-column");
-
-            if (!col) return;
-
-            const nextVal = e.target.value.toLowerCase().trim();
-            if ((filters.search[col] || '') === nextVal) return;
-
-            if (nextVal) {
-                filters.search[col] = nextVal;
-            } else {
-                delete filters.search[col];
+            if (syncColumnSearchInput(e.target)) {
+                debouncedFilter();
             }
-            debouncedFilter();
         };
 
         input.addEventListener("input", handleColumnSearchChange);
         input.addEventListener("change", handleColumnSearchChange);
 
-        // Keyboard friendly: navigate left/right arrow key across main table search inputs
+        // Keyboard friendly: Enter searches immediately; arrow keys navigate across inputs
         input.addEventListener("keydown", function(e) {
             if (e.shiftKey || e.ctrlKey || e.altKey) return;
+
+            if (e.key === "Enter") {
+                e.preventDefault();
+                syncColumnSearchInput(this);
+                debouncedFilter.cancel();
+                fetchProducts(1);
+                return;
+            }
 
             if (e.key === "ArrowRight") {
                 const atEnd = this.selectionStart === this.value.length && this.selectionEnd === this.value.length;
@@ -275,7 +296,13 @@ async function fetchProducts(page = 1) {
         }
 
         const response = await fetch(`${window.prodRoutes.fetch}?${params.toString()}`, {
-            signal: currentController.signal
+            signal: currentController.signal,
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         });
         if (currentController.signal.aborted || requestId !== fetchProductsRequestId) {
             return;

@@ -7,6 +7,7 @@ use App\Models\ProductPriceCode;
 use App\Support\ProductPricelistCodeFields;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -79,7 +80,7 @@ class RegularProductMasterController extends Controller
         if (isset($search['pricelistCode']) && trim((string) $search['pricelistCode']) !== '') {
             ProductPricelistCodeFields::like(
                 $query,
-                (string) $search['pricelistCode'],
+                trim((string) $search['pricelistCode']),
                 ProductPricelistCodeFields::selected($request)
             );
         }
@@ -89,7 +90,7 @@ class RegularProductMasterController extends Controller
                 continue;
             }
 
-            $term = $escapeLike($search[$requestColumn]);
+            $term = $escapeLike(trim((string) $search[$requestColumn]));
 
             if ($requestColumn === 'onHand') {
                 $query->whereRaw('CAST(on_hand AS CHAR) LIKE ?', ['%' . $term . '%']);
@@ -185,30 +186,40 @@ class RegularProductMasterController extends Controller
             return $product;
         });
 
-        // HostForge-safe counters: this query stays completely inside the
-        // masterlist connection. No masterlist -> ledger SQL join is attempted.
-        $stats = DB::connection('masterlist')->selectOne(<<<'SQL'
-            SELECT
-                COUNT(*) AS total,
-                SUM(CASE WHEN p.status = 'Newly' THEN 1 ELSE 0 END) AS newly,
-                SUM(
-                    CASE
-                        WHEN p.Re_order_level IS NOT NULL
-                         AND COALESCE(p.on_hand, 0) <= p.Re_order_level
-                        THEN 1 ELSE 0
-                    END
-                ) AS low
-            FROM products p
-        SQL);
+        // HostForge-safe counters: cache for 30s (matching Admin) so typing in
+        // column search bars never triggers a full-table COUNT(*) on every keystroke.
+        $stats = Cache::remember('admin_product_master_stats_v4', now()->addSeconds(30), function () {
+            $row = DB::connection('masterlist')->selectOne(<<<'SQL'
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN p.status = 'Newly' THEN 1 ELSE 0 END) AS newly,
+                    SUM(
+                        CASE
+                            WHEN p.Re_order_level IS NOT NULL
+                             AND COALESCE(p.on_hand, 0) <= p.Re_order_level
+                            THEN 1 ELSE 0
+                        END
+                    ) AS low
+                FROM products p
+            SQL);
+
+            return [
+                'total' => (int) ($row->total ?? 0),
+                'newly' => (int) ($row->newly ?? 0),
+                'low' => (int) ($row->low ?? 0),
+            ];
+        });
 
         return response()->json([
             'pagination' => $pagination,
             'stats' => [
-                'total' => (int) ($stats->total ?? 0),
-                'newly' => (int) ($stats->newly ?? 0),
-                'low' => (int) ($stats->low ?? 0),
+                'total' => (int) ($stats['total'] ?? 0),
+                'newly' => (int) ($stats['newly'] ?? 0),
+                'low' => (int) ($stats['low'] ?? 0),
             ],
-        ]);
+        ])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
     }
 
     private function normalizeProductPicture(mixed $picture): mixed

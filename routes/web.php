@@ -7710,7 +7710,9 @@ Route::get('/admin/masterlist/product/data', function (Request $request) {
             'newly' => $totalNewly,
             'low' => $totalLow,
         ],
-    ]);
+    ])
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        ->header('Pragma', 'no-cache');
 })->name('admin.prod-master.data');
 
 // Create Product
