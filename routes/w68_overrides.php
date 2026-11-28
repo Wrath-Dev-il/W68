@@ -3875,3 +3875,48 @@ Route::get('/developer/data-ups/download-all/{filename?}', function ($filename =
         ], 500);
     }
 })->where('filename', '[^/]+')->name('developer.data-ups.download-all');
+
+/*
+|--------------------------------------------------------------------------
+| Cost Report optimization overrides (Admin, Regular, Special)
+|--------------------------------------------------------------------------
+|
+| W68_COST_REPORT_OPTIMIZATION_20261128
+| Routes all three Cost Report roles directly to CostReportController so
+| Regular/Special requests bypass nested app()->handle() proxying, lookup
+| dropdowns are cached, Product_Picture blobs are never selected, and
+| product_ledgers / purchase-cost queries run only on the active page chunk.
+|
+*/
+foreach ([
+    ['prefix' => 'admin', 'types' => null],
+    ['prefix' => 'regular', 'types' => [2, 3, 6]],
+    ['prefix' => 'special', 'types' => [2, 3]],
+] as $costReportRole) {
+    $prefix = $costReportRole['prefix'];
+    $defaults = $costReportRole['types'] !== null
+        ? ['allowed_types' => $costReportRole['types']]
+        : [];
+
+    $endpoints = [
+        'product-codes' => 'productCodes',
+        'part-numbers' => 'partNumbers',
+        'descriptions' => 'descriptions',
+        'applications' => 'applications',
+        'categories' => 'categories',
+        'pricelist-codes' => 'pricelistCodes',
+        'data' => 'data',
+    ];
+
+    foreach ($endpoints as $slug => $method) {
+        $route = Route::match(
+            ['GET', 'POST'],
+            "/{$prefix}/reports/cost-report/{$slug}",
+            [\App\Http\Controllers\CostReportController::class, $method]
+        )->name("{$prefix}.cost-report.{$slug}");
+
+        if ($defaults !== []) {
+            $route->defaults('allowed_types', $defaults['allowed_types']);
+        }
+    }
+}
